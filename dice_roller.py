@@ -1,5 +1,6 @@
 import random
 import re
+from telegram import ParseMode
 
 # Stat Roll command
 def statroll_command(update, context):
@@ -10,8 +11,7 @@ def statroll_command(update, context):
             raise IndexError
         
     except IndexError:
-        reply_name = update.message.from_user.username
-        context.bot.send_message(chat_id=update.effective_chat.id, text=f"@{reply_name} please supply a game name. Options are {', '.join(valid_games)}")
+        update.message.reply_text(f"Please supply a game name. Options are {', '.join(valid_games)}")
         return
 
     roll_string = "this should not appear"
@@ -73,43 +73,44 @@ def get_mythras_roll() -> str:
 # Diceroller commmand
 def roll_command(update, context):
     dice_roll = parse_diceroll(context.args)
-    reply_name = update.message.from_user.username
     
     if dice_roll is None:
-        context.bot.send_message(chat_id=update.effective_chat.id, text=f'@{reply_name} please use dice notation, e.g. "3d6 + 2"')
+        update.message.reply_text(f'Please use dice notation like a civilized humanoid, e.g. "3d6 + 2"')
         return
         
     num_dice, num_faces, modifier = dice_roll
     
     if num_dice > 50:
-        context.bot.send_message(chat_id=update.effective_chat.id, text=f"@{reply_name} can't use more than 50 dice in one roll")
+        update.message.reply_text(f"Keep it to 50 dice or fewer please, I'm not a god.")
         return
         
     if num_faces > 10000:
-        context.bot.send_message(chat_id=update.effective_chat.id, text=f"@{reply_name} can't have more than 10,000 sides on the dice")
+        update.message.reply_text(f"Keep it to 10,000 sides or fewer please, I'm not a god.")
         return
     
-    total = 0
     rolls = []
     for num in range(num_dice):
         this_roll = random.randint(1, num_faces)
-        total += this_roll
-        rolls.append(str(this_roll))
-    
-    roll_result = f"total was {total + modifier} on a {num_dice}d{num_faces}"
-    
-    if modifier > 0:
-        roll_result += f" + {modifier}"
-    
-    if modifier < 0:
-        roll_result += f" - {abs(modifier)}"
-    
-    if modifier != 0 or len(rolls) > 1:
-        roll_result += f" (rolled {', '.join(rolls)})"
+        rolls.append(this_roll)
         
-    context.bot.send_message(chat_id=update.effective_chat.id, text=f"@{reply_name} {roll_result}")
+    if modifier != 0 or num_dice > 1:
+        dice_text = ', '.join(str(x) for x in rolls)
+        dice_text = f"({dice_text})"
+    
+    else:
+        dice_text = ""
+    
+    username = update.message.from_user.username
+    update.message.reply_text(f"{username} rolled *{sum(rolls) + modifier}* {dice_text}", ParseMode.MARKDOWN)
 
 def parse_diceroll(dice_roll) -> list:
+    try:
+        if dice_roll[0].startswith("d"):
+            dice_roll[0] = f"1{dice_roll[0]}"
+            
+    except IndexError:
+        return
+        
     roll_data = re.split("d|(\+)|(-)", "".join(dice_roll), flags=re.IGNORECASE)
     roll_data = [x for x in roll_data if x is not None]
     
@@ -131,7 +132,6 @@ def parse_diceroll(dice_roll) -> list:
             
         if roll_data[2] == '-':
             modifier = -int(roll_data[3])
-            
         
     except (IndexError, ValueError) as e:
         if len(roll_data) != 2 or e is ValueError:

@@ -1,10 +1,6 @@
 __pycache__/
 Sounds/
-token.txt
-admins.txt
-playcounts.json
-sound_aliases.json
-ssh_connect.bat
-send.bat
-retrieve.bat
+*.txt
+*.json
+*.bat
 verify.py
