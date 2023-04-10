@@ -1,5 +1,6 @@
 __pycache__/
 Sounds/
+.idea/
 *.txt
 *.json
 *.bat
