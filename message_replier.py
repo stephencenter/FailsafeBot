@@ -31,4 +31,4 @@ async def girthbot_reply(update, context):
     
 async def monkey_reply(update, context):
     monkey_sound = "Sounds/monkey.mp3"
-    context.bot.send_voice(chat_id=update.effective_chat.id, voice=open(monkey_sound, 'rb'))
+    await context.bot.send_voice(chat_id=update.effective_chat.id, voice=open(monkey_sound, 'rb'))

@@ -1,6 +1,7 @@
 import os
 import json
 import random
+import telegram
 
 # This is the file that stores all of the sound aliases
 pth_alias_file = "sound_aliases.json"
@@ -228,8 +229,13 @@ async def soundlist_command(update, context):
     sorted_list = sorted(get_sound_dict().keys())
     list_string = ', '.join(sorted_list)
     count = len(sorted_list)
-    await context.bot.send_message(chat_id=update.effective_chat.id,
-                                   text=f"There are {count} sounds available to use:\n\n{list_string}")
+    try:
+        await context.bot.send_message(chat_id=update.effective_chat.id,
+                                       text=f"There are {count} sounds available to use:\n\n{list_string}")
+    except telegram.error.BadRequest:
+        await context.bot.send_message(chat_id=update.effective_chat.id,
+                                       text=f"There are {count} sounds available to use. If I try to tell you want they are it makes me crash and Stephen is too lazy to fix it so you're gonna have to just guess.")
+
 
 async def alias_command(update, context):
     # Get the username of the user that called this command

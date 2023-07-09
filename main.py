@@ -1,6 +1,7 @@
 import sound_player
 import dice_roller
 import message_replier
+import markov
 import logging
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHandler
 
@@ -16,7 +17,8 @@ Look upon my works, ye mighty, and despair:
 /random
 /newsounds
 /roll
-/pressf"""
+/pressf
+/wisdom"""
 #/statroll
 #/topsounds
 #/botsounds
@@ -50,6 +52,7 @@ def main():
         CommandHandler("statroll", dice_roller.statroll_command),
         CommandHandler("roll", dice_roller.roll_command),
         CommandHandler("pressf", pressf_command),
+        CommandHandler("wisdom", markov.wisdom_command),
         CommandHandler("help", help_command),
         MessageHandler(filters.TEXT & (~filters.COMMAND), message_replier.handle_message)
     ]
