@@ -1,8 +1,9 @@
+import logging
 import sound_player
 import dice_roller
 import message_replier
 import markov
-import logging
+import chat
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHandler
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -18,7 +19,8 @@ Look upon my works, ye mighty, and despair:
 /newsounds
 /roll
 /pressf
-/wisdom"""
+/wisdom
+/chat"""
 #/statroll
 #/topsounds
 #/botsounds
@@ -54,6 +56,7 @@ def main():
         CommandHandler("pressf", pressf_command),
         CommandHandler("wisdom", markov.wisdom_command),
         CommandHandler("help", help_command),
+        CommandHandler("chat", chat.chat_command),
         MessageHandler(filters.TEXT & (~filters.COMMAND), message_replier.handle_message)
     ]
 

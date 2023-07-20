@@ -14,9 +14,7 @@ def fix_apple(text):
 
     return text
 
-total = 1
 def clean_token(token):
-    global total
     pair_list = [
         ('(', ')'),
         ('[', ']'),
@@ -25,11 +23,12 @@ def clean_token(token):
     ]
 
     for pair in pair_list:
-        if token.startswith(":"):
+        if token.startswith(":") or token.endswith(":"):
             continue
 
         if token.startswith(pair[0]) and not token.endswith(pair[1]):
             token = token[1:]
+
 
         if token.endswith(pair[1]) and not token.startswith(pair[0]):
             token = token[:-1]
@@ -83,11 +82,9 @@ def build_markov_chain(message_list):
 
     print("Creating markov chain...")
     for message in tqdm(message_list):
-        token_list = message.split()
-
+        token_list = [clean_token(token) for token in message.split()]
+        
         for index, token in enumerate(token_list):
-            token = clean_token(token)
-
             if index == 0:
                 if null_token in markov_chain:
                     if token in markov_chain[null_token]:
@@ -138,5 +135,6 @@ def main():
         json.dump(markov_chain, f, indent=4, ensure_ascii=False)
 
     print(f"Markov chain written to file at '{output_path}'")
+    input()
 
 main()
