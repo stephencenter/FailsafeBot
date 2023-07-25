@@ -1,7 +1,5 @@
 __pycache__/
 Sounds/
-.idea/
-*.txt
-*.json
+Data/
 *.bat
 verify.py

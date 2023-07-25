@@ -2,6 +2,10 @@ import os
 import json
 from tqdm import tqdm
 
+
+input_path = 'Data/chat_data/'
+output_path = 'Data/markov_chain.json'
+
 def fix_apple(text):
     # Apple devices have an awful feature called 'smart punctuation' that we need to account for
     text = text.replace('‘', "'")
@@ -36,12 +40,11 @@ def clean_token(token):
     return token
 
 def load_chat_logs():
-    directory = "chat_logs"
     message_list = []
-    for file in os.listdir(directory):
+    for file in os.listdir(input_path):
         print(f"Processing {file}...")
 
-        with open(os.path.join(directory, file), 'r', encoding='utf-8') as f:
+        with open(os.path.join(input_path, file), 'r', encoding='utf-8') as f:
             chat_data = json.load(f)
 
         for message in tqdm(chat_data["messages"]):
@@ -130,7 +133,6 @@ def main():
     chat_data = load_chat_logs()
     markov_chain = build_markov_chain(chat_data)
 
-    output_path = 'markov_chain.json'
     with open(output_path, 'w', encoding='utf8') as f:
         json.dump(markov_chain, f, indent=4, ensure_ascii=False)
 

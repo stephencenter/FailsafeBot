@@ -1,7 +1,7 @@
 import json
 import numpy
 
-markov_path = "markov_chain.json"
+markov_path = "Data/markov_chain.json"
 NULL_TOKEN = "NULL_TOKEN"
 
 with open(markov_path, 'r', encoding='utf8') as f:
