@@ -125,7 +125,7 @@ async def roll_command(update, context):
         return
     
     rolls = []
-    for num in range(num_dice):
+    for _ in range(num_dice):
         this_roll = random.randint(1, num_faces)
         rolls.append(this_roll)
         

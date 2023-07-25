@@ -1,5 +1,7 @@
 import random
 
+responses_path = "Data/response_list.txt"
+
 async def handle_message(update, context):
     try:
         message_text = " ".join(update.message.text.lower().split())
@@ -15,7 +17,7 @@ async def handle_message(update, context):
     
 async def girthbot_reply(update, context):
     try:
-        with open("response_list.txt", encoding="utf-8") as f:
+        with open(responses_path, encoding="utf-8") as f:
             response_list = f.readlines()
             
     except FileNotFoundError:

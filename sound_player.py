@@ -3,11 +3,10 @@ import json
 import random
 import telegram
 
-# This is the file that stores all of the sound aliases
-pth_alias_file = "sound_aliases.json"
-
-# This is the file that stores all of the sound playcounts
-pth_count_file = "playcounts.json"
+sounds_path = "Sounds"
+alias_path = "Data/sound_aliases.json"
+playcounts_path = "Data/playcounts.json"
+admins_path = "Data/admins.txt"
 
 # This message is sent if the user doesn't provide a sound name
 txt_sound_not_provided = [
@@ -33,27 +32,24 @@ txt_no_permissions = [
 cached_sound_dict = dict()
 
 def get_sound_dict() -> dict:
-    # This is the directory where the sound files are located
-    pth_sounds_dir = "Sounds"
-
     # If any .mp3 files are in the main directory, move them to the Sounds directory
     for file in os.listdir():
         if file.endswith(".mp3"):
-            os.rename(file, f"{pth_sounds_dir}/{file}")
+            os.rename(file, f"{sounds_path}/{file}")
 
     # Create the sound dictionary. The keys will be the names of each sound, and the values will be the
     # path to that sound's file
     sound_dict = dict()
-    for file in os.listdir(pth_sounds_dir):
+    for file in os.listdir(sounds_path):
         if file.endswith(".mp3"):
-            sound_dict[file[:-4].lower()] = os.path.join(pth_sounds_dir, file)
+            sound_dict[file[:-4].lower()] = os.path.join(sounds_path, file)
 
     return sound_dict
 
 def get_alias_dict() -> dict:
     # Load a dictionary where the keys are aliases, and the values are the
     # sounds those aliases correspond to
-    with open(pth_alias_file) as f:
+    with open(alias_path) as f:
         return json.load(f)
 
 def get_playcount_dict() -> dict:
@@ -64,7 +60,7 @@ def get_playcount_dict() -> dict:
     playcount_dict = {x: 0 for x in sound_dict}
 
     try:
-        with open(pth_count_file) as f:
+        with open(playcounts_path) as f:
             playcount_dict = json.load(f)
 
     # If loading the stored dictionary fails, return the blank playcount dictionary
@@ -98,7 +94,7 @@ def get_playcount_dict() -> dict:
     # If the playcount dictionary had to be corrected, then we write the corrected
     # dictionary to a file
     if changed:
-        with open(pth_count_file, 'w') as f:
+        with open(playcounts_path, 'w') as f:
             json.dump(playcount_dict, f, indent=4)
 
     return playcount_dict
@@ -126,7 +122,7 @@ def update_playcount(sound_name):
     except KeyError:
         play_counts[sound_name] = 1
 
-    with open(pth_count_file, 'w') as f:
+    with open(playcounts_path, 'w') as f:
         json.dump(play_counts, f, indent=4)
 
 async def sound_command(update, context):
@@ -242,7 +238,7 @@ async def alias_command(update, context):
     username = update.message.from_user.username
 
     # Verify that the user is on the admin list
-    with open("admins.txt") as f:
+    with open() as f:
         admin_list = f.readlines()
 
     # If the user is not on the admin list, do not let them use this command
@@ -283,7 +279,7 @@ async def alias_command(update, context):
 
     alias_dict[new_alias] = sound_name
 
-    with open(pth_alias_file, "w") as f:
+    with open(alias_path, "w") as f:
         json.dump(alias_dict, f, indent=4)
 
     await update.message.reply_text(f"'{new_alias}' has been added as an alias for '{sound_name}'")
@@ -291,7 +287,7 @@ async def alias_command(update, context):
 async def delalias_command(update, context):
     username = update.message.from_user.username
 
-    with open("admins.txt") as f:
+    with open(admins_path) as f:
         admin_list = f.readlines()
 
     if username not in admin_list:
@@ -308,7 +304,7 @@ async def delalias_command(update, context):
         await update.message.reply_text(f"{alias_to_delete} isn't an alias for anything.")
         return
 
-    with open(pth_alias_file, 'w') as f:
+    with open(alias_path, 'w') as f:
         json.dump(alias_dict, f, indent=4)
 
     await update.message.reply_text(f"{alias_to_delete} is no longer assigned to a sound.")
