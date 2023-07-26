@@ -12,7 +12,7 @@ admins_path = "Data/admins.txt"
 txt_sound_not_provided = [
     "I'm afraid my mindreader unit has been malfunctioning lately, what sound did you want?",
     "Use your words please.",
-    "I don't think I have any sounds without a name unfortunately."
+    "I don't have any sounds without a name unfortunately."
 ]
 
 # This message is sent if the sound the user requests doesn't exist
@@ -25,8 +25,7 @@ txt_sound_not_found = [
 # This message is sent if the user tries to perform an action they aren't allowed to
 txt_no_permissions = [
     "You don't have the right, O you don't have the right.",
-    "You think I'd let just anyone do this?",
-    "Stephen's too paranoid to let anyone other than him do that."
+    "You think I'd let just anyone do this?"
 ]
 
 cached_sound_dict = dict()

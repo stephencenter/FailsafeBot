@@ -14,27 +14,32 @@ async def chat_command(update, context):
     if not context.args:
         return
     
+    # Load and set the OpenAI API key
     with open(apikey_path) as f:
         openai.api_key = f.readline().strip()
 
+    # Load the system prompt
     with open(prompt_path) as f:
         instructions = ''.join(f.readlines())
 
+    # Load the AI's memory (if it exists)
     try:
         with open(memory_path) as f:
             memory = json.load(f)
     except FileNotFoundError:
         memory = []
 
+    # Place the system prompt before the loaded memory to instruct the AI how to act
     messages = [{"role": "system", "content": instructions}] + memory
-    
+    sender = update.message.from_user["username"]
     user_msg = ' '.join(context.args)
-    if update.message.from_user["username"].lower() == "apollokalar":
-        sender = "Gabe"
-    else:
-        sender = update.message.from_user["first_name"]
 
-    prompt = f'{sender} just sent the following message in the group chat: "{user_msg}". Write a message that you will send into the group chat as a response.'
+    # Private chat and group chat messages get different prompts
+    if update.message.chat.type == "private":
+        prompt = f'{sender} just sent you following message in a private chat: "{user_msg}". Write a message that you will send to them privately as a response.'
+
+    else:
+        prompt = f'{sender} just sent the following message in the group chat: "{user_msg}". Write a message that you will send into the group chat as a response.'
     
     new_message = {"role": "user", "content": prompt}
     messages.append(new_message)
@@ -49,12 +54,16 @@ async def chat_command(update, context):
 
     response = chat.choices[0].message.content
     
+    # Remove quotation marks from the message if GPT decided to use them
     if response.startswith('"') and response.endswith('"'):
         response = response[1:-1]
 
     await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
+
+    # Add the new message to the AI's memory
     memory.append({"role": "assistant", "content": response})
 
+    # The AI's memory has a size limit to avoid it veering off track too much, and to keep API usage low
     if len(memory) > memory_size:
         memory = memory[len(memory) - memory_size:]
 
