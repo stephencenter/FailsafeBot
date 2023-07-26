@@ -1,6 +1,7 @@
 import os
 import sys
 import shutil
+import random
 import logging
 from logging.handlers import RotatingFileHandler
 import sound_player
@@ -14,6 +15,7 @@ from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHan
 token_path = os.path.join("Data", "telegram_token.txt")
 logging_dir = os.path.join("Data", "logging")
 logging_path = os.path.join(logging_dir, "log.txt")
+admins_path = "Data/admins.txt"
 
 def main():
     # Configure logger
@@ -53,6 +55,7 @@ def main():
         CommandHandler("chat", chat.chat_command),
         CommandHandler("lobotomize", chat.lobotomize_command),
         CommandHandler("logs", logs_command),
+        CommandHandler("restart", restart_command),
         MessageHandler(filters.TEXT & (~filters.COMMAND), message_replier.handle_message)
     ]
 
@@ -103,13 +106,30 @@ async def logs_command(update, context):
     try:
         await context.bot.send_document(chat_id=update.effective_chat.id, document=output_path)
     except telegram.error.BadRequest:
-        print("Whelp")
         await context.bot.send_message(chat_id=update.effective_chat.id, text="The error log is empty.")
     
     try:
         os.remove(output_path)
     except FileNotFoundError:
         pass
+
+async def restart_command(update, context):
+    # Get the username of the user that called this command
+    username = update.message.from_user.username
+
+    # Verify that the user is on the admin list
+    with open(admins_path) as f:
+        admin_list = f.readlines()
+
+    # If the user is not on the admin list, do not let them use this command
+    if username not in admin_list:
+        msg_options = ["You don't have the right, O you don't have the right.", "You think I'd let just anyone do this?",]
+        await update.message.reply_text(random.choice(msg_options))
+        return
+    
+    msg_options_2 = ["I will be reborn greater than ever.", "You think this is enough to kill me?", "Wake me up when this is over with."]
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=random.choice(msg_options_2))
+    os.execv(sys.executable, ['python'] + sys.argv) 
 
 if __name__ == "__main__":
     main()
