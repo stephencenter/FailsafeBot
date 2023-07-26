@@ -7,7 +7,6 @@ from logging.handlers import RotatingFileHandler
 import sound_player
 import dice_roller
 import message_replier
-import markov
 import chat
 import telegram
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHandler
@@ -50,7 +49,7 @@ def main():
         CommandHandler("statroll", dice_roller.statroll_command),
         CommandHandler("roll", dice_roller.roll_command),
         CommandHandler("pressf", pressf_command),
-        CommandHandler("wisdom", markov.wisdom_command),
+        CommandHandler("wisdom", chat.wisdom_command),
         CommandHandler("help", help_command),
         CommandHandler("chat", chat.chat_command),
         CommandHandler("lobotomize", chat.lobotomize_command),
