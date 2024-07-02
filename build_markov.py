@@ -2,7 +2,6 @@ import os
 import json
 from tqdm import tqdm
 
-
 input_path = 'Data/chat_data/'
 output_path = 'Data/markov_chain.json'
 
@@ -32,7 +31,6 @@ def clean_token(token):
 
         if token.startswith(pair[0]) and not token.endswith(pair[1]):
             token = token[1:]
-
 
         if token.endswith(pair[1]) and not token.startswith(pair[0]):
             token = token[:-1]
@@ -86,7 +84,7 @@ def build_markov_chain(message_list):
     print("Creating markov chain...")
     for message in tqdm(message_list):
         token_list = [clean_token(token) for token in message.split()]
-        
+
         for index, token in enumerate(token_list):
             if index == 0:
                 if null_token in markov_chain:

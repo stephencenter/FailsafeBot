@@ -1,7 +1,7 @@
 import os
 import json
 import random
-import telegram
+import memory
 
 sounds_path = "Sounds"
 alias_path = "Data/sound_aliases.json"
@@ -27,8 +27,6 @@ txt_no_permissions = [
     "You don't have the right, O you don't have the right.",
     "You think I'd let just anyone do this?"
 ]
-
-cached_sound_dict = dict()
 
 def get_sound_dict() -> dict:
     # If any .mp3 files are in the main directory, move them to the Sounds directory
@@ -98,7 +96,7 @@ def get_playcount_dict() -> dict:
 
     return playcount_dict
 
-def get_aliases(sound_name, sound_dict, alias_dict) -> list or None:
+def get_aliases(sound_name, sound_dict, alias_dict) -> list:
     alias_list = []
 
     if sound_name not in sound_dict:
@@ -125,12 +123,6 @@ def update_playcount(sound_name):
         json.dump(play_counts, f, indent=4)
 
 async def sound_command(update, context):
-    # The bot has a 1 in 1000 chance of refusing to play a sound.
-    # Have to keep the users on their toes
-    if random.randint(1, 1000) == 555:
-        await update.message.reply_text(f"You know, I'm just not feeling it right now.")
-        return
-
     # Get the dictionary of all sounds and the paths they're located at
     sound_dict = get_sound_dict()
 
@@ -154,6 +146,16 @@ async def sound_command(update, context):
         await update.message.reply_text(random.choice(txt_sound_not_found))
         return
 
+    user_prompt = memory.generate_user_prompt(f"Can you play the {sound_name} sound for me?", update)
+
+    # The bot has a 1 in 1000 chance of refusing to play a sound.
+    # Have to keep the users on their toes
+    if random.randint(1, 1000) == 555:
+        response = "You know, I'm just not feeling it right now."
+        await update.message.reply_text(response)
+        memory.append_to_memory(user_prompt, response)
+        return
+
     # If the sound was requested in a non-private chat, then we'll update the
     # playcount for this sound
     if update.message.chat.type != "private":
@@ -162,82 +164,50 @@ async def sound_command(update, context):
     # Load the sound and send it to the user
     with open(sound_dict[sound_name], 'rb') as sound_file:
         await context.bot.send_voice(chat_id=update.effective_chat.id, voice=sound_file)
+        memory.append_to_memory(user_prompt, "Sure, here you go.")
 
 async def randomsound_command(update, context):
+    user_prompt = memory.generate_user_prompt("Can you play a random sound for me?", update)
+
     # The bot has a 1 in 1000 chance of refusing to play a sound.
     # Have to keep the users on their toes
     if random.randint(1, 1000) == 555:
-        await update.message.reply_text(f"You know, I'm just not feeling it right now.")
+        response = "You know, I'm just not feeling it right now."
+        await update.message.reply_text(response)
+        memory.append_to_memory(user_prompt, response)
         return
 
     # Get the dictionary of all sounds and the paths they're located at
     sound_dict = get_sound_dict()
     sound_name = random.choice(list(sound_dict.keys()))
 
-    # If the sound was requested in a non-private chat, then we'll update the
-    # playcount for this sound
+    # If the sound was requested in a group chat, then we update the playcount for this sound
     if update.message.chat.type != "private":
         update_playcount(sound_name)
+
+    memory.append_to_memory(user_prompt, f"Sure, here you go. The sound I chose is called '{sound_name}'.")
 
     # Load the sound and send it to the user
     with open(sound_dict[sound_name], 'rb') as f:
         await context.bot.send_voice(chat_id=update.effective_chat.id, voice=f)
 
-async def playcount_command(update, context):
-    if not context.args or context.args[0].isspace():
-        await update.message.reply_text(random.choice(txt_sound_not_provided))
-        return
-
-    sound_name = context.args[0].lower()
-
-    sound_aliases = get_alias_dict()
-    if sound_name in sound_aliases:
-        sound_name = sound_aliases[sound_name]
-
-    if sound_name not in get_sound_dict():
-        await update.message.reply_text(random.choice(txt_sound_not_found))
-        return
-
-    playcount = get_playcount_dict()[sound_name]
-    await context.bot.send_message(chat_id=update.effective_chat.id,
-                                   text=f"/sound {sound_name} has been used {playcount} times")
-
-async def topsounds_command(update, context):
-    play_counts = get_playcount_dict()
-    list_size = 20
-    top_sounds = sorted(play_counts, key=lambda x: play_counts[x], reverse=True)[:list_size]
-
-    message = "\n".join(f"    {sound} @ {play_counts[sound]} plays" for sound in top_sounds)
-    await context.bot.send_message(chat_id=update.effective_chat.id,
-                                   text=f"The {list_size} most used sounds are:\n{message}")
-
-async def botsounds_command(update, context):
-    play_counts = get_playcount_dict()
-    list_size = 20
-    bot_sounds = sorted(play_counts, key=lambda x: play_counts[x])[:list_size]
-
-    message = "\n".join(f"    {sound} @ {play_counts[sound]} plays" for sound in bot_sounds)
-    await context.bot.send_message(chat_id=update.effective_chat.id,
-                                   text=f"The {list_size} least used sounds are:\n{message}")
-
 async def soundlist_command(update, context):
     sorted_list = sorted(get_sound_dict().keys())
     list_string = ', '.join(sorted_list)
     count = len(sorted_list)
-    try:
-        await context.bot.send_message(chat_id=update.effective_chat.id,
-                                       text=f"There are {count} sounds available to use:\n\n{list_string}")
-    except telegram.error.BadRequest:
-        await context.bot.send_message(chat_id=update.effective_chat.id,
-                                       text=f"There are {count} sounds available to use. If I try to tell you want they are it makes me crash and Stephen is too lazy to fix it so you're gonna have to just guess.")
 
+    user_prompt = memory.generate_user_prompt("How many sounds are available to use? Can you list them for me?", update)
+    response = f"There are {count} sounds available to use. If I try to tell you want they are it makes me crash and Stephen is too lazy to fix it so you're gonna have to just guess."
+    memory.append_to_memory(user_prompt, response)
+
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
 
 async def alias_command(update, context):
     # Get the username of the user that called this command
     username = update.message.from_user.username
 
     # Verify that the user is on the admin list
-    with open() as f:
+    with open(admins_path) as f:
         admin_list = f.readlines()
 
     # If the user is not on the admin list, do not let them use this command
@@ -316,7 +286,7 @@ async def newsounds_command(update, context):
     list_string = ', '.join(new_sounds)
 
     if new_count == 0:
-        await update.message.reply_text(f"There are no new sounds available.")
+        await update.message.reply_text("There are no new sounds available.")
 
     elif new_count == 1:
         await update.message.reply_text(f"There is one new sound available: {list_string}")
@@ -356,7 +326,7 @@ async def search_command(update, context):
     try:
         search_string = context.args[0].lower()
     except IndexError:
-        await update.message.reply_text(f"What sound do you want me to search for?")
+        await update.message.reply_text("What sound do you want me to search for?")
         return
 
     sound_dict = get_sound_dict()
@@ -383,3 +353,40 @@ async def search_command(update, context):
 
     else:
         await update.message.reply_text(f"There are no sounds matching '{search_string}'")
+
+async def playcount_command(update, context):
+    if not context.args or context.args[0].isspace():
+        await update.message.reply_text(random.choice(txt_sound_not_provided))
+        return
+
+    sound_name = context.args[0].lower()
+
+    sound_aliases = get_alias_dict()
+    if sound_name in sound_aliases:
+        sound_name = sound_aliases[sound_name]
+
+    if sound_name not in get_sound_dict():
+        await update.message.reply_text(random.choice(txt_sound_not_found))
+        return
+
+    playcount = get_playcount_dict()[sound_name]
+    await context.bot.send_message(chat_id=update.effective_chat.id,
+                                   text=f"/sound {sound_name} has been used {playcount} times")
+
+async def topsounds_command(update, context):
+    play_counts = get_playcount_dict()
+    list_size = 20
+    top_sounds = sorted(play_counts, key=lambda x: play_counts[x], reverse=True)[:list_size]
+
+    message = "\n".join(f"    {sound} @ {play_counts[sound]} plays" for sound in top_sounds)
+    await context.bot.send_message(chat_id=update.effective_chat.id,
+                                   text=f"The {list_size} most used sounds are:\n{message}")
+
+async def botsounds_command(update, context):
+    play_counts = get_playcount_dict()
+    list_size = 20
+    bot_sounds = sorted(play_counts, key=lambda x: play_counts[x])[:list_size]
+
+    message = "\n".join(f"    {sound} @ {play_counts[sound]} plays" for sound in bot_sounds)
+    await context.bot.send_message(chat_id=update.effective_chat.id,
+                                   text=f"The {list_size} least used sounds are:\n{message}")

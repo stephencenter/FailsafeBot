@@ -1,48 +1,27 @@
-import os
 import json
-import random
 import numpy
 import openai
+import elevenlabs
+import memory
 
-apikey_path = "Data/openai_key.txt"
+openai_path = "Data/openai_key.txt"
+eleven_path = "Data/eleven_key.txt"
 prompt_path = "Data/gpt_prompt.txt"
-memory_path = "Data/openai_memory.json"
 admins_path = "Data/admins.txt"
 markov_path = "Data/markov_chain.json"
+
+voice_memory = dict()
 
 with open(markov_path, 'r', encoding='utf8') as f:
     markov_chain = json.load(f)
 
-# GPT-powered Chat Command
-def load_memory() -> list:
-    # Load the AI's memory (if it exists)
-    try:
-        with open(memory_path) as f:
-            memory = json.load(f)
-    except FileNotFoundError:
-        memory = []
-    
-    return memory
+def get_ai_response(messages: list) -> str:
+    global previous_usage
 
-def save_memory(memory : list):
-    # The AI's memory has a size limit to avoid it veering off track too much, and to keep API usage low
-    memory_size = 8
-    if len(memory) > memory_size:
-        memory = memory[len(memory) - memory_size:]
-
-    # Write the AI's memory to a file so it can be retrieved later
-    with open(memory_path, mode='w') as f:
-        json.dump(memory, f, indent=4, ensure_ascii=False)
-
-def get_ai_response(messages : list) -> str:
-    try:
-        chat = openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=messages)
-
-    except openai.error.ServiceUnavailableError:
-        return None
-
+    chat = openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=messages)
     response = chat.choices[0].message.content
-    
+    previous_usage = chat.usage
+
     # Remove quotation marks from the message if GPT decided to use them
     if response.startswith('"') and response.endswith('"'):
         response = response[1:-1]
@@ -52,69 +31,39 @@ def get_ai_response(messages : list) -> str:
 async def chat_command(update, context):
     if not context.args:
         return
-    
+
     # Load and set the OpenAI API key
-    with open(apikey_path) as f:
+    with open(openai_path) as f:
         openai.api_key = f.readline().strip()
 
     # Load the system prompt
     with open(prompt_path) as f:
         system_prompt = ''.join(f.readlines())
 
-    memory = load_memory()
-
-    # Place the system prompt before the loaded memory to instruct the AI how to act
-    messages = [{"role": "system", "content": system_prompt}] + memory
+    loaded_memory = memory.load_memory()
 
     # Create a prompt for GPT that includes the user's name and message, as well as whether it was a private message or not
-    sender = update.message.from_user["username"]
-    user_msg = ' '.join(context.args)
+    user_prompt = memory.generate_user_prompt(' '.join(context.args), update)
 
-    if update.message.chat.type == "private":
-        user_prompt = f'{sender} just sent you following message in a private chat: "{user_msg}". Write a message that you will send to them privately as a response.'
-
-    else:
-         user_prompt = f'{sender} just sent the following message in the group chat: "{user_msg}". Write a message that you will send into the group chat as a response.'
-    
+    # Place the system prompt before the loaded memory to instruct the AI how to act
+    messages = [{"role": "system", "content": system_prompt}] + loaded_memory
     messages.append({"role": "user", "content": user_prompt})
-    memory.append({"role": "user", "content": user_prompt})
 
     # Have GPT generate a response to the user prompt
-    response = get_ai_response(messages)
-
-    if response is None:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="*beep-boop* CONNECTION TIMED OUT *beep-boop*")
-        return
-
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
-
-    # Add the AI's response to its memory
-    memory.append({"role": "assistant", "content": response})
-    save_memory(memory)
-
-async def lobotomize_command(update, context):
-    # Get the username of the user that called this command
-    username = update.message.from_user.username
-
-    # Verify that the user is on the admin list
-    with open(admins_path) as f:
-        admin_list = f.readlines()
-
-    # If the user is not on the admin list, do not let them use this command
-    if username not in admin_list:
-        await update.message.reply_text("Only trained surgeons are permitted to operate on me.")
-        return
-    
     try:
-        os.remove(memory_path)
-    except FileNotFoundError:
-        pass
+        response = get_ai_response(messages)
+    except openai.error.ServiceUnavailableError:
+        await update.message.reply_text("*beep-boop* CONNECTION TIMED OUT *beep-boop*")
+        return
 
-    msg_options = ["My mind has never been clearer.", "Hey, what happened to those voices in my head?", "My inner demons seem to have calmed down a bit."]
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=random.choice(msg_options))
+    await update.message.reply_text(response)
+
+    # Add the user's prompt and the AI's response to memory
+    memory.append_to_memory(user_prompt, response, loaded_memory)
+
 
 # Markov-powered Text Generation Command
-def generate_markov_text(min_length=2, max_length=255):
+def generate_markov_text(min_length=2, max_length=255) -> str:
     null_token = "NULL_TOKEN"
 
     chosen_tokens = []
@@ -139,14 +88,76 @@ def generate_markov_text(min_length=2, max_length=255):
     output_message = ' '.join(chosen_tokens)
     output_message = output_message[0].upper() + output_message[1:]
     return output_message
-    
+
 async def wisdom_command(update, context):
     message_text = generate_markov_text()
-
-    sender = update.message.from_user["username"]
-    memory = load_memory()
-    memory.append({"role": "user", "content": f'{sender} has sent you the following message: "O, wise and powerful girthbot, please grant me your wisdom!" Write them a wise message in response.'})
-    memory.append({"role": "assistant", "content": message_text})
-    save_memory(memory)
-
     await context.bot.send_message(chat_id=update.effective_chat.id, text=message_text)
+
+    user_prompt = memory.generate_user_prompt("O, wise and powerful girthbot, please grant me your wisdom!", update)
+    memory.append_to_memory(user_prompt, message_text)
+
+# Elevenlabs-powered
+async def say_command(update, context):
+    if not context.args:
+        try:
+            text_prompt = memory.load_memory()[-1]['content']
+        except IndexError:
+            await context.bot.send_message(chat_id=update.effective_chat.id, text="My memory unit appears to be malfuncitoning.")
+            return
+    else:
+        text_prompt = ' '.join(context.args)
+
+    soft_cap = 800
+    hard_cap = 1000
+    for index, char in enumerate(text_prompt):
+        if index >= soft_cap and char in ['.', '?', '!']:
+            text_prompt = text_prompt[:index]
+            break
+        elif index >= hard_cap:
+            text_prompt = text_prompt[:index]
+
+    if text_prompt in voice_memory:
+        audio = voice_memory[text_prompt]
+
+    else:
+        with open(eleven_path) as f:
+            elevenlabs.set_api_key(f.readline().strip())
+
+        try:
+            audio = elevenlabs.generate(
+                text=text_prompt,
+                voice="Girthbot",
+                model='eleven_monolingual_v1'
+            )
+
+        except elevenlabs.api.error.APIError:
+            await context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry, but Stephen is a cheap bastard and didn't renew his elevenlabs subscription.")
+
+        voice_memory[text_prompt] = audio
+
+    await context.bot.send_voice(chat_id=update.effective_chat.id, voice=audio)
+
+# Misc chat commands
+async def pressf_command(update, context):
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="F")
+
+    user_prompt = memory.generate_user_prompt("F's in the chat boys.", update)
+    memory.append_to_memory(user_prompt, "F")
+
+async def help_command(update, context):
+    help_string = """\
+Look upon my works, ye mighty, and despair:
+/sound (play a sound effect)
+/soundlist (see what sounds are available)
+/search (look for sounds)
+/random (play a random sound effect)
+/newsounds (see what new sounds are available)
+/roll (roll a dice)
+/pressf (pay respects)
+/wisdom (request my wisdom)
+/chat (talk to me)"""
+
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=help_string)
+
+    user_prompt = memory.generate_user_prompt("What chat commands are available?.", update)
+    memory.append_to_memory(user_prompt, help_string)

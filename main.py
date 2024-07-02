@@ -4,12 +4,13 @@ import shutil
 import random
 import logging
 from logging.handlers import RotatingFileHandler
+import telegram
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHandler
 import sound_player
 import dice_roller
 import message_replier
 import chat
-import telegram
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHandler
+import memory
 
 token_path = os.path.join("Data", "telegram_token.txt")
 logging_dir = os.path.join("Data", "logging")
@@ -33,7 +34,7 @@ def main():
 
     application = ApplicationBuilder().token(token_string).build()
 
-    # Add handlers
+    # Create and add handlers
     handler_list = [
         CommandHandler("sound", sound_player.sound_command),
         CommandHandler("soundlist", sound_player.soundlist_command),
@@ -48,11 +49,12 @@ def main():
         CommandHandler("search", sound_player.search_command),
         CommandHandler("statroll", dice_roller.statroll_command),
         CommandHandler("roll", dice_roller.roll_command),
-        CommandHandler("pressf", pressf_command),
+        CommandHandler("pressf", chat.pressf_command),
         CommandHandler("wisdom", chat.wisdom_command),
-        CommandHandler("help", help_command),
+        CommandHandler("help", chat.help_command),
         CommandHandler("chat", chat.chat_command),
-        CommandHandler("lobotomize", chat.lobotomize_command),
+        CommandHandler("say", chat.say_command),
+        CommandHandler("lobotomize", memory.lobotomize_command),
         CommandHandler("logs", logs_command),
         CommandHandler("restart", restart_command),
         MessageHandler(filters.TEXT & (~filters.COMMAND), message_replier.handle_message)
@@ -65,34 +67,17 @@ def main():
     application.run_polling()
     print("Application stopped")
 
-
 # Basic commands
-async def help_command(update, context):
-    help_string = """\
-Look upon my works, ye mighty, and despair:
-/sound (play a sound effect)
-/soundlist (see what sounds are available)
-/search (look for sounds)
-/random (play a random sound effect)
-/newsounds (see what new sounds are available)
-/roll (roll a dice)
-/pressf (pay respects)
-/wisdom (request my wisdom)
-/chat (talk to me)"""
-
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=help_string)
-     
-async def pressf_command(update, context):
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="F")
-
 async def logs_command(update, context):
     output_path = os.path.join(logging_dir, "error_log.txt")
-    
+
+    # Try to remove the temp error log if it already exists
     try:
         os.remove(output_path)
     except FileNotFoundError:
         pass
 
+    # Concatenate the rolling error log files together into one file
     with open(output_path, 'wb') as wfd:
         for file in os.listdir(logging_dir)[::-1]:
             file_path = os.path.join(logging_dir, file)
@@ -102,11 +87,20 @@ async def logs_command(update, context):
 
             with open(file_path, 'rb') as fd:
                 shutil.copyfileobj(fd, wfd)
+
+    # Try to send the resulting log file
     try:
+        response = "Sure, here you go."
         await context.bot.send_document(chat_id=update.effective_chat.id, document=output_path)
+
     except telegram.error.BadRequest:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="The error log is empty.")
-    
+        response = "My error log is empty."
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
+
+    user_prompt = memory.generate_user_prompt("Can you send me your error log?", update)
+    memory.append_to_memory(user_prompt, response)
+
+    # Delete the temp error log
     try:
         os.remove(output_path)
     except FileNotFoundError:
@@ -120,15 +114,20 @@ async def restart_command(update, context):
     with open(admins_path) as f:
         admin_list = f.readlines()
 
+    user_prompt = memory.generate_user_prompt("I'm going to restart you, okay?", update)
+
     # If the user is not on the admin list, do not let them use this command
     if username not in admin_list:
-        msg_options = ["You don't have the right, O you don't have the right.", "You think I'd let just anyone do this?",]
-        await update.message.reply_text(random.choice(msg_options))
+        response = random.choice(["You don't have the right, O you don't have the right.", "You think I'd let just anyone do that?"])
+        memory.append_to_memory(user_prompt, response)
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
         return
-    
-    msg_options_2 = ["I will be reborn greater than ever.", "You think this is enough to kill me?", "Wake me up when this is over with."]
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=random.choice(msg_options_2))
-    os.execv(sys.executable, ['python'] + sys.argv) 
+
+    response = random.choice(["I will be reborn greater than ever.", "You think this is enough to kill me?", "Wake me up when this is over with."])
+    memory.append_to_memory(user_prompt, response)
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
+
+    os.execv(sys.executable, ['python3'] + sys.argv)
 
 if __name__ == "__main__":
     main()

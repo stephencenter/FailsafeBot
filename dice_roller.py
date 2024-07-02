@@ -77,9 +77,9 @@ def parse_diceroll(dice_roll) -> list or None:
             dice_roll[0] = f"1{dice_roll[0]}"
 
     except IndexError:
-        return None
+        return []
 
-    roll_data = re.split("d|(\+)|(-)", "".join(dice_roll), flags=re.IGNORECASE)
+    roll_data = re.split(r"d|(\+)|(-)", "".join(dice_roll), flags=re.IGNORECASE)
     roll_data = [x for x in roll_data if x is not None]
 
     try:
@@ -87,10 +87,10 @@ def parse_diceroll(dice_roll) -> list or None:
         num_faces = int(roll_data[1])
 
     except (IndexError, ValueError):
-        return None
+        return []
 
     if num_faces < 1 or num_dice < 1:
-        return None
+        return []
 
     modifier = 0
 
@@ -103,38 +103,38 @@ def parse_diceroll(dice_roll) -> list or None:
 
     except (IndexError, ValueError) as e:
         if len(roll_data) != 2 or e is ValueError:
-            return None
+            return []
 
     return [num_dice, num_faces, modifier]
 
 async def roll_command(update, context):
     dice_roll = parse_diceroll(context.args)
-    
-    if dice_roll is None:
-        await update.message.reply_text(f'Please use dice notation like a civilized humanoid, e.g. "3d6 + 2"')
+
+    if not dice_roll:
+        await update.message.reply_text('Please use dice notation like a civilized humanoid, e.g. "3d6 + 2"')
         return
-        
+
     num_dice, num_faces, modifier = dice_roll
-    
+
     if num_dice > 50:
-        await update.message.reply_text(f"Keep it to 50 dice or fewer please, I'm not a god.")
+        await update.message.reply_text("Keep it to 50 dice or fewer please, I'm not a god.")
         return
-        
+
     if num_faces > 10000:
-        await update.message.reply_text(f"Keep it to 10,000 sides or fewer please, I'm not a god.")
+        await update.message.reply_text("Keep it to 10,000 sides or fewer please, I'm not a god.")
         return
-    
+
     rolls = []
     for _ in range(num_dice):
         this_roll = random.randint(1, num_faces)
         rolls.append(this_roll)
-        
+
     if modifier != 0 or num_dice > 1:
         dice_text = ', '.join(str(x) for x in rolls)
         dice_text = f"({dice_text})"
-    
+
     else:
         dice_text = ""
-    
+
     username = update.message.from_user.username
     await update.message.reply_text(f"{username} rolled *{sum(rolls) + modifier}* {dice_text}", ParseMode.MARKDOWN)
