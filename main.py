@@ -3,7 +3,6 @@ import shutil
 import logging
 import asyncio
 from logging.handlers import RotatingFileHandler
-import telegram
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHandler
 import discord
 from discord.ext import commands
@@ -12,6 +11,7 @@ import dice_roller
 import message_replier
 import chat
 import memory
+import helpers
 
 telegram_token_path = os.path.join("Data", "telegram_token.txt")
 discord_token_path = os.path.join("Data", "discord_token.txt")
@@ -77,7 +77,10 @@ async def add_commands(telegram_bot, discord_bot):
         ("chat", chat.chat_command),
         ("say", chat.say_command),
         ("lobotomize", memory.lobotomize_command),
-        ("logs", logs_command)
+        ("logs", logs_command),
+        ("vcsound", sound_player.vcsound_command),
+        ("vcjoin", sound_player.vcjoin_command),
+        ("vcleave", sound_player.vcleave_command)
     ]
 
     for command in command_list:
@@ -96,14 +99,24 @@ def discord_handler(bot, command_name, command):
     async def wrapper_function(context):
         response = await command(context)
         try:
-            await context.send(response)
+            if isinstance(response, helpers.FileResponse) or isinstance(response, helpers.SoundResponse):
+                await context.send(file=discord.File(response.path))
+            else:
+                await context.send(response)
         except discord.errors.HTTPException:
             pass
 
 def telegram_handler(command):
     async def wrapper_function(update, context):
         response = await command(context, update=update)
+        if isinstance(response, helpers.FileResponse):
+            await context.bot.send_document(chat_id=update.effective_chat.id, document=response.path)
+
+        elif isinstance(response, helpers.SoundResponse):
+            await context.bot.send_voice(chat_id=update.effective_chat.id, voice=open(response.path, 'rb'))
+
         await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
+
     return wrapper_function
 
 async def logs_command(context, update=None):
@@ -126,23 +139,10 @@ async def logs_command(context, update=None):
             with open(file_path, 'rb') as fd:
                 shutil.copyfileobj(fd, wfd)
 
-    # Try to send the resulting log file
-    try:
-        response = "Sure, here you go."
-        await context.bot.send_document(chat_id=update.effective_chat.id, document=output_path)
+    return helpers.FileResponse(output_path)
 
-    except telegram.error.BadRequest:
-        response = "My error log is empty."
-        return response
-
-    user_prompt = await memory.generate_user_prompt("Can you send me your error log?", context, update)
-    memory.append_to_memory(user_prompt, response)
-
-    # Delete the temp error log
-    try:
-        os.remove(output_path)
-    except FileNotFoundError:
-        pass
+    # user_prompt = await memory.generate_user_prompt("Can you send me your error log?", context, update)
+    # memory.append_to_memory(user_prompt, response)
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -5,3 +5,4 @@ Data/
 *.bat
 verify.py
 .idea/
+ffmpeg.exe

@@ -1,5 +1,7 @@
 import os
 import json
+import discord
+from discord.ext import commands
 import random
 import memory
 import helpers
@@ -137,7 +139,7 @@ async def sound_command(context, update=None):
 
     # Sounds can have aliases, which are alternative names you can call
     # them with. If an alias is provided, we determine what sound the
-    # alias corresponds to and play thatS
+    # alias corresponds to and play that sound
     sound_aliases = get_alias_dict()
     if sound_name in sound_aliases:
         sound_name = sound_aliases[sound_name]
@@ -157,13 +159,12 @@ async def sound_command(context, update=None):
 
     # If the sound was requested in a non-private chat, then we'll update the
     # playcount for this sound
-    if not helpers.is_private(context, update):
+    if not await helpers.is_private(context, update):
         update_playcount(sound_name)
 
-    # Load the sound and send it to the user
-    with open(sound_dict[sound_name], 'rb') as sound_file:
-        await context.bot.send_voice(chat_id=update.effective_chat.id, voice=sound_file)
-        memory.append_to_memory(user_prompt, "Sure, here you go.")
+    memory.append_to_memory(user_prompt, "Sure, here you go.")
+
+    return helpers.SoundResponse(sound_dict[sound_name])
 
 async def randomsound_command(context, update=None):
     user_prompt = await memory.generate_user_prompt("Can you play a random sound for me?", context, update)
@@ -185,9 +186,49 @@ async def randomsound_command(context, update=None):
 
     memory.append_to_memory(user_prompt, f"Sure, here you go. The sound I chose is called '{sound_name}'.")
 
-    # Load the sound and send it to the user
-    with open(sound_dict[sound_name], 'rb') as f:
-        await context.bot.send_voice(chat_id=update.effective_chat.id, voice=f)
+    return helpers.SoundResponse(sound_dict[sound_name])
+
+async def vcsound_command(context, update=None):
+    if update is not None:
+        return "That's Discord only, sorry"
+
+    if context.voice_client is None:
+        return "I'm not in a voice channel!"
+
+    chosen_sound = await sound_command(context, update)
+
+    if isinstance(chosen_sound, helpers.SoundResponse):
+        source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(chosen_sound.path))
+        context.voice_client.play(source, after=lambda e: print(f'Player error: {e}') if e else None)
+        return
+
+    return chosen_sound
+
+async def vcjoin_command(context, update=None):
+    if update is not None:
+        return "That's Discord only, sorry"
+
+    vc_converter = commands.VoiceChannelConverter()
+    channel_name = ' '.join(await helpers.get_args_list(context))
+
+    try:
+        voice_channel = await vc_converter.convert(context, channel_name)
+    except commands.errors.ChannelNotFound:
+        return "Couldn't find that channel (note that channel names are case-sensitive)"
+
+    if context.voice_client is not None:
+        return await context.voice_client.move_to(voice_channel)
+
+    await voice_channel.connect()
+
+async def vcleave_command(context, update=None):
+    if update is not None:
+        return
+
+    try:
+        await context.voice_client.disconnect()
+    except (AttributeError, commands.errors.CommandInvokeError):
+        pass
 
 async def soundlist_command(context, update=None):
     sorted_list = sorted(get_sound_dict().keys())
@@ -313,7 +354,7 @@ async def getaliases_command(context, update=None):
 
 async def search_command(context, update=None):
     try:
-        search_string = await helpers.get_args_list(context, update).lower()
+        search_string = ' '.join(await helpers.get_args_list(context, update)).lower()
     except IndexError:
         return "What sound do you want me to search for?"
 

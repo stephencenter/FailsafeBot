@@ -1,6 +1,5 @@
 import random
 import re
-from telegram.constants import ParseMode
 import helpers
 
 # Stat Roll command
@@ -51,12 +50,12 @@ def get_mythras_roll() -> str:
 async def statroll_command(context, update=None):
     valid_games = ["dnd", "coc", "mythras"]
     try:
-        game = await helpers.get_args_list(context, update).lower()
+        game = (await helpers.get_args_list(context, update))[0].lower()
         if game not in valid_games:
             raise IndexError
 
     except IndexError:
-        return f"Please supply a game name. Options are {', '.join(valid_games)}"
+        return f"Please supply a valid game name. Options are {', '.join(valid_games)}"
 
     roll_string = "this should not appear"
     if game == "dnd":
@@ -133,5 +132,5 @@ async def roll_command(context, update=None):
     else:
         dice_text = ""
 
-    sender = helpers.get_sender(context, update)
-    return f"{sender} rolled *{sum(rolls) + modifier}* {dice_text}", ParseMode.MARKDOWN
+    sender = await helpers.get_sender(context, update)
+    return f"{sender} rolled a {sum(rolls) + modifier} {dice_text}"
