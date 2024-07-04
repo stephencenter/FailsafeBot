@@ -4,3 +4,4 @@ Sounds/
 Data/
 *.bat
 verify.py
+.idea/

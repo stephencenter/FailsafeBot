@@ -1,12 +1,14 @@
 import os
 import json
 import random
+import helpers
 
 memory_path = "Data/openai_memory.json"
 username_path = "Data/username_map.json"
 
-def generate_user_prompt(user_message, update) -> str:
-    sender = update.message.from_user["username"]
+async def generate_user_prompt(user_message, context, update) -> str:
+    sender = await helpers.get_sender(context, update)
+
     try:
         with open(username_path, 'r', encoding='utf8') as f:
             username_map = json.load(f)
@@ -16,9 +18,8 @@ def generate_user_prompt(user_message, update) -> str:
     except (FileNotFoundError, KeyError):
         pass
 
-    if update.message.chat.type == "private":
+    if await helpers.is_private(context, update):
         user_prompt = f'{sender} sent you the following message in a private chat: "{user_message}". Write a message to send to them privately as a response.'
-
     else:
         user_prompt = f'{sender} sent the following message in the group chat: "{user_message}". Write a message to send into the group chat as a response.'
 
@@ -34,7 +35,7 @@ def load_memory() -> list:
 
     return memory
 
-def append_to_memory(user_prompt: str, bot_prompt: str, memory: list = []):
+def append_to_memory(user_prompt: str, bot_prompt: str, memory: list = ()):
     if not memory:
         memory = load_memory()
 
@@ -53,11 +54,11 @@ def append_to_memory(user_prompt: str, bot_prompt: str, memory: list = []):
     with open(memory_path, mode='w') as f:
         json.dump(memory, f, indent=4, ensure_ascii=False)
 
-async def lobotomize_command(update, context):
+async def lobotomize_command(_context, _update):
     try:
         os.remove(memory_path)
     except FileNotFoundError:
         pass
 
     msg_options = ["My mind has never been clearer.", "Hey, what happened to those voices in my head?", "My inner demons seem to have calmed down a bit."]
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=random.choice(msg_options))
+    return random.choice(msg_options)

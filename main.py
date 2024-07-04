@@ -1,23 +1,25 @@
 import os
-import sys
 import shutil
-import random
 import logging
+import asyncio
 from logging.handlers import RotatingFileHandler
 import telegram
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHandler
+import discord
+from discord.ext import commands
 import sound_player
 import dice_roller
 import message_replier
 import chat
 import memory
 
-token_path = os.path.join("Data", "telegram_token.txt")
+telegram_token_path = os.path.join("Data", "telegram_token.txt")
+discord_token_path = os.path.join("Data", "discord_token.txt")
 logging_dir = os.path.join("Data", "logging")
 logging_path = os.path.join(logging_dir, "log.txt")
 admins_path = "Data/admins.txt"
 
-def main():
+async def init_logging():
     # Configure logger
     log_formatter = logging.Formatter("---------------------\n%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     log_handler = RotatingFileHandler(logging_path, mode='a', maxBytes=1024*1024, backupCount=2, encoding=None, delay=False)
@@ -28,47 +30,83 @@ def main():
     app_log.setLevel(logging.WARNING)
     app_log.addHandler(log_handler)
 
+async def init_bots():
     # Retrieve Telegram token from file
-    with open(token_path) as f:
-        token_string = f.readline().strip()
+    with open(telegram_token_path) as f:
+        telegram_token = f.readline().strip()
 
-    application = ApplicationBuilder().token(token_string).build()
+    telegram_bot = ApplicationBuilder().token(telegram_token).build()
 
+    intents = discord.Intents.default()
+    intents.members = True
+    intents.message_content = True
+    with open(discord_token_path) as f:
+        discord_token = f.readline().strip()
+
+    await telegram_bot.initialize()
+    await telegram_bot.start()
+    discord_bot = commands.Bot(command_prefix='/', intents=intents)
+    await add_commands(telegram_bot, discord_bot)
+
+    await telegram_bot.updater.start_polling()
+    async with discord_bot:
+        await discord_bot.start(discord_token)
+
+    await telegram_bot.stop()
+    await telegram_bot.shutdown()
+
+async def add_commands(telegram_bot, discord_bot):
     # Create and add handlers
-    handler_list = [
-        CommandHandler("sound", sound_player.sound_command),
-        CommandHandler("soundlist", sound_player.soundlist_command),
-        CommandHandler("random", sound_player.randomsound_command),
-        CommandHandler("playcount", sound_player.playcount_command),
-        CommandHandler("topsounds", sound_player.topsounds_command),
-        CommandHandler("botsounds", sound_player.botsounds_command),
-        CommandHandler("newsounds", sound_player.newsounds_command),
-        CommandHandler("alias", sound_player.alias_command),
-        CommandHandler("delalias", sound_player.delalias_command),
-        CommandHandler("getaliases", sound_player.getaliases_command),
-        CommandHandler("search", sound_player.search_command),
-        CommandHandler("statroll", dice_roller.statroll_command),
-        CommandHandler("roll", dice_roller.roll_command),
-        CommandHandler("pressf", chat.pressf_command),
-        CommandHandler("wisdom", chat.wisdom_command),
-        CommandHandler("help", chat.help_command),
-        CommandHandler("chat", chat.chat_command),
-        CommandHandler("say", chat.say_command),
-        CommandHandler("lobotomize", memory.lobotomize_command),
-        CommandHandler("logs", logs_command),
-        CommandHandler("restart", restart_command),
-        MessageHandler(filters.TEXT & (~filters.COMMAND), message_replier.handle_message)
+    command_list = [
+        ("sound", sound_player.sound_command),
+        ("soundlist", sound_player.soundlist_command),
+        ("random", sound_player.randomsound_command),
+        ("playcount", sound_player.playcount_command),
+        ("topsounds", sound_player.topsounds_command),
+        ("botsounds", sound_player.botsounds_command),
+        ("newsounds", sound_player.newsounds_command),
+        ("alias", sound_player.alias_command),
+        ("delalias", sound_player.delalias_command),
+        ("getaliases", sound_player.getaliases_command),
+        ("search", sound_player.search_command),
+        ("statroll", dice_roller.statroll_command),
+        ("roll", dice_roller.roll_command),
+        ("pressf", chat.pressf_command),
+        ("wisdom", chat.wisdom_command),
+        # ("help", chat.help_command),
+        ("chat", chat.chat_command),
+        ("say", chat.say_command),
+        ("lobotomize", memory.lobotomize_command),
+        ("logs", logs_command)
     ]
 
-    for handler in handler_list:
-        application.add_handler(handler)
+    for command in command_list:
+        telegram_bot.add_handler(CommandHandler(command[0], telegram_handler(command[1])))
+        discord_handler(discord_bot, command[0], command[1])
 
-    print("Application started")
-    application.run_polling()
-    print("Application stopped")
+    telegram_bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), message_replier.handle_message))
+
+async def main():
+    await init_logging()
+    await init_bots()
 
 # Basic commands
-async def logs_command(update, context):
+def discord_handler(bot, command_name, command):
+    @bot.command(name=command_name)
+    async def wrapper_function(context):
+        response = await command(context)
+        try:
+            await context.send(response)
+        except discord.errors.HTTPException:
+            pass
+
+def telegram_handler(command):
+    async def wrapper_function(update, context):
+        response = await command(context, update=update)
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
+    return wrapper_function
+
+async def logs_command(context, update=None):
     output_path = os.path.join(logging_dir, "error_log.txt")
 
     # Try to remove the temp error log if it already exists
@@ -95,9 +133,9 @@ async def logs_command(update, context):
 
     except telegram.error.BadRequest:
         response = "My error log is empty."
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
+        return response
 
-    user_prompt = memory.generate_user_prompt("Can you send me your error log?", update)
+    user_prompt = await memory.generate_user_prompt("Can you send me your error log?", context, update)
     memory.append_to_memory(user_prompt, response)
 
     # Delete the temp error log
@@ -106,28 +144,5 @@ async def logs_command(update, context):
     except FileNotFoundError:
         pass
 
-async def restart_command(update, context):
-    # Get the username of the user that called this command
-    username = update.message.from_user.username
-
-    # Verify that the user is on the admin list
-    with open(admins_path) as f:
-        admin_list = f.readlines()
-
-    user_prompt = memory.generate_user_prompt("I'm going to restart you, okay?", update)
-
-    # If the user is not on the admin list, do not let them use this command
-    if username not in admin_list:
-        response = random.choice(["You don't have the right, O you don't have the right.", "You think I'd let just anyone do that?"])
-        memory.append_to_memory(user_prompt, response)
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
-        return
-
-    response = random.choice(["I will be reborn greater than ever.", "You think this is enough to kill me?", "Wake me up when this is over with."])
-    memory.append_to_memory(user_prompt, response)
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
-
-    os.execv(sys.executable, ['python3'] + sys.argv)
-
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

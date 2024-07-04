@@ -1,6 +1,7 @@
 import random
 import re
 from telegram.constants import ParseMode
+import helpers
 
 # Stat Roll command
 def get_coc_roll() -> str:
@@ -47,16 +48,15 @@ def get_mythras_roll() -> str:
 
     return roll_string
 
-async def statroll_command(update, context):
+async def statroll_command(context, update=None):
     valid_games = ["dnd", "coc", "mythras"]
     try:
-        game = context.args[0].lower()
+        game = await helpers.get_args_list(context, update).lower()
         if game not in valid_games:
             raise IndexError
 
     except IndexError:
-        await update.message.reply_text(f"Please supply a game name. Options are {', '.join(valid_games)}")
-        return
+        return f"Please supply a game name. Options are {', '.join(valid_games)}"
 
     roll_string = "this should not appear"
     if game == "dnd":
@@ -68,10 +68,10 @@ async def statroll_command(update, context):
     if game == "mythras":
         roll_string = get_mythras_roll()
 
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=roll_string)
+    return roll_string
 
 # Dice Roll commmand
-def parse_diceroll(dice_roll) -> list or None:
+def parse_diceroll(dice_roll) -> list:
     try:
         if dice_roll[0].startswith("d"):
             dice_roll[0] = f"1{dice_roll[0]}"
@@ -107,22 +107,19 @@ def parse_diceroll(dice_roll) -> list or None:
 
     return [num_dice, num_faces, modifier]
 
-async def roll_command(update, context):
-    dice_roll = parse_diceroll(context.args)
+async def roll_command(context, update=None):
+    dice_roll = parse_diceroll(await helpers.get_args_list(context, update))
 
     if not dice_roll:
-        await update.message.reply_text('Please use dice notation like a civilized humanoid, e.g. "3d6 + 2"')
-        return
+        return 'Please use dice notation like a civilized humanoid, e.g. "3d6 + 2"'
 
     num_dice, num_faces, modifier = dice_roll
 
     if num_dice > 50:
-        await update.message.reply_text("Keep it to 50 dice or fewer please, I'm not a god.")
-        return
+        return "Keep it to 50 dice or fewer please, I'm not a god."
 
     if num_faces > 10000:
-        await update.message.reply_text("Keep it to 10,000 sides or fewer please, I'm not a god.")
-        return
+        return "Keep it to 10,000 sides or fewer please, I'm not a god."
 
     rolls = []
     for _ in range(num_dice):
@@ -136,5 +133,5 @@ async def roll_command(update, context):
     else:
         dice_text = ""
 
-    username = update.message.from_user.username
-    await update.message.reply_text(f"{username} rolled *{sum(rolls) + modifier}* {dice_text}", ParseMode.MARKDOWN)
+    sender = helpers.get_sender(context, update)
+    return f"{sender} rolled *{sum(rolls) + modifier}* {dice_text}", ParseMode.MARKDOWN

@@ -3,6 +3,7 @@ import numpy
 import openai
 import elevenlabs
 import memory
+import helpers
 
 openai_path = "Data/openai_key.txt"
 eleven_path = "Data/eleven_key.txt"
@@ -12,8 +13,8 @@ markov_path = "Data/markov_chain.json"
 
 voice_memory = dict()
 
-with open(markov_path, 'r', encoding='utf8') as f:
-    markov_chain = json.load(f)
+with open(markov_path, 'r', encoding='utf8') as markov:
+    markov_chain = json.load(markov)
 
 def get_ai_response(messages: list) -> str:
     global previous_usage
@@ -28,10 +29,7 @@ def get_ai_response(messages: list) -> str:
 
     return response
 
-async def chat_command(update, context):
-    if not context.args:
-        return
-
+async def chat_command(context, update=None):
     # Load and set the OpenAI API key
     with open(openai_path) as f:
         openai.api_key = f.readline().strip()
@@ -42,8 +40,10 @@ async def chat_command(update, context):
 
     loaded_memory = memory.load_memory()
 
+    user_message = await helpers.get_args_list(context, update)
+
     # Create a prompt for GPT that includes the user's name and message, as well as whether it was a private message or not
-    user_prompt = memory.generate_user_prompt(' '.join(context.args), update)
+    user_prompt = await memory.generate_user_prompt(' '.join(user_message), context, update)
 
     # Place the system prompt before the loaded memory to instruct the AI how to act
     messages = [{"role": "system", "content": system_prompt}] + loaded_memory
@@ -53,14 +53,12 @@ async def chat_command(update, context):
     try:
         response = get_ai_response(messages)
     except openai.error.ServiceUnavailableError:
-        await update.message.reply_text("*beep-boop* CONNECTION TIMED OUT *beep-boop*")
-        return
-
-    await update.message.reply_text(response)
+        return "*beep-boop* CONNECTION TIMED OUT *beep-boop*"
 
     # Add the user's prompt and the AI's response to memory
     memory.append_to_memory(user_prompt, response, loaded_memory)
 
+    return response
 
 # Markov-powered Text Generation Command
 def generate_markov_text(min_length=2, max_length=255) -> str:
@@ -89,23 +87,25 @@ def generate_markov_text(min_length=2, max_length=255) -> str:
     output_message = output_message[0].upper() + output_message[1:]
     return output_message
 
-async def wisdom_command(update, context):
+async def wisdom_command(context, update=None):
     message_text = generate_markov_text()
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=message_text)
 
-    user_prompt = memory.generate_user_prompt("O, wise and powerful girthbot, please grant me your wisdom!", update)
+    user_prompt = await memory.generate_user_prompt("O, wise and powerful girthbot, please grant me your wisdom!", context, update)
     memory.append_to_memory(user_prompt, message_text)
 
+    return message_text
+
 # Elevenlabs-powered
-async def say_command(update, context):
-    if not context.args:
+async def say_command(context, update=None):
+    user_message = await helpers.get_args_list(context, update)
+    if not user_message:
         try:
             text_prompt = memory.load_memory()[-1]['content']
         except IndexError:
-            await context.bot.send_message(chat_id=update.effective_chat.id, text="My memory unit appears to be malfuncitoning.")
-            return
+            return "My memory unit appears to be malfuncitoning."
+
     else:
-        text_prompt = ' '.join(context.args)
+        text_prompt = ' '.join(user_message)
 
     soft_cap = 800
     hard_cap = 1000
@@ -131,20 +131,20 @@ async def say_command(update, context):
             )
 
         except elevenlabs.api.error.APIError:
-            await context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry, but Stephen is a cheap bastard and didn't renew his elevenlabs subscription.")
+            return "Sorry, but Stephen is a cheap bastard and didn't renew his elevenlabs subscription."
 
         voice_memory[text_prompt] = audio
 
     await context.bot.send_voice(chat_id=update.effective_chat.id, voice=audio)
 
 # Misc chat commands
-async def pressf_command(update, context):
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="F")
-
-    user_prompt = memory.generate_user_prompt("F's in the chat boys.", update)
+async def pressf_command(context, update=None):
+    user_prompt = await memory.generate_user_prompt("F's in the chat boys.", context, update)
     memory.append_to_memory(user_prompt, "F")
 
-async def help_command(update, context):
+    return "F"
+
+async def help_command(context, update=None):
     help_string = """\
 Look upon my works, ye mighty, and despair:
 /sound (play a sound effect)
@@ -157,7 +157,7 @@ Look upon my works, ye mighty, and despair:
 /wisdom (request my wisdom)
 /chat (talk to me)"""
 
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=help_string)
-
-    user_prompt = memory.generate_user_prompt("What chat commands are available?.", update)
+    user_prompt = await memory.generate_user_prompt("What chat commands are available?.", context, update)
     memory.append_to_memory(user_prompt, help_string)
+
+    return help_string

@@ -2,6 +2,7 @@ import os
 import json
 import random
 import memory
+import helpers
 
 sounds_path = "Sounds"
 alias_path = "Data/sound_aliases.json"
@@ -122,17 +123,17 @@ def update_playcount(sound_name):
     with open(playcounts_path, 'w') as f:
         json.dump(play_counts, f, indent=4)
 
-async def sound_command(update, context):
+async def sound_command(context, update=None):
     # Get the dictionary of all sounds and the paths they're located at
     sound_dict = get_sound_dict()
 
     # Alert the user if they forgot to provide a sound name
-    if not context.args or context.args[0].isspace():
-        await update.message.reply_text(random.choice(txt_sound_not_provided))
-        return
+    user_message = await helpers.get_args_list(context, update)
+    if not user_message or user_message[0].isspace():
+        return txt_sound_not_provided
 
     # Parse the arguments the user provided for the sound name
-    sound_name = context.args[0].lower()
+    sound_name = user_message[0].lower()
 
     # Sounds can have aliases, which are alternative names you can call
     # them with. If an alias is provided, we determine what sound the
@@ -143,22 +144,20 @@ async def sound_command(update, context):
 
     # Alert the user if the sound they requested does not exist
     if sound_name not in sound_dict:
-        await update.message.reply_text(random.choice(txt_sound_not_found))
-        return
+        return random.choice(txt_sound_not_found)
 
-    user_prompt = memory.generate_user_prompt(f"Can you play the {sound_name} sound for me?", update)
+    user_prompt = await memory.generate_user_prompt(f"Can you play the {sound_name} sound for me?", context, update)
 
     # The bot has a 1 in 1000 chance of refusing to play a sound.
     # Have to keep the users on their toes
     if random.randint(1, 1000) == 555:
         response = "You know, I'm just not feeling it right now."
-        await update.message.reply_text(response)
         memory.append_to_memory(user_prompt, response)
-        return
+        return response
 
     # If the sound was requested in a non-private chat, then we'll update the
     # playcount for this sound
-    if update.message.chat.type != "private":
+    if not helpers.is_private(context, update):
         update_playcount(sound_name)
 
     # Load the sound and send it to the user
@@ -166,23 +165,22 @@ async def sound_command(update, context):
         await context.bot.send_voice(chat_id=update.effective_chat.id, voice=sound_file)
         memory.append_to_memory(user_prompt, "Sure, here you go.")
 
-async def randomsound_command(update, context):
-    user_prompt = memory.generate_user_prompt("Can you play a random sound for me?", update)
+async def randomsound_command(context, update=None):
+    user_prompt = await memory.generate_user_prompt("Can you play a random sound for me?", context, update)
 
     # The bot has a 1 in 1000 chance of refusing to play a sound.
     # Have to keep the users on their toes
     if random.randint(1, 1000) == 555:
         response = "You know, I'm just not feeling it right now."
-        await update.message.reply_text(response)
         memory.append_to_memory(user_prompt, response)
-        return
+        return response
 
     # Get the dictionary of all sounds and the paths they're located at
     sound_dict = get_sound_dict()
     sound_name = random.choice(list(sound_dict.keys()))
 
     # If the sound was requested in a group chat, then we update the playcount for this sound
-    if update.message.chat.type != "private":
+    if not await helpers.is_private(context, update):
         update_playcount(sound_name)
 
     memory.append_to_memory(user_prompt, f"Sure, here you go. The sound I chose is called '{sound_name}'.")
@@ -191,20 +189,20 @@ async def randomsound_command(update, context):
     with open(sound_dict[sound_name], 'rb') as f:
         await context.bot.send_voice(chat_id=update.effective_chat.id, voice=f)
 
-async def soundlist_command(update, context):
+async def soundlist_command(context, update=None):
     sorted_list = sorted(get_sound_dict().keys())
-    list_string = ', '.join(sorted_list)
     count = len(sorted_list)
 
-    user_prompt = memory.generate_user_prompt("How many sounds are available to use? Can you list them for me?", update)
-    response = f"There are {count} sounds available to use. If I try to tell you want they are it makes me crash and Stephen is too lazy to fix it so you're gonna have to just guess."
+    user_prompt = await memory.generate_user_prompt("How many sounds are available to use? Can you list them for me?", context, update)
+    response = f"There are {count} sounds available to use. If I try to tell you want they are it makes me crash and Stephen's too lazy to fix it so you're gonna have to guess."
     memory.append_to_memory(user_prompt, response)
 
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
+    return response
 
-async def alias_command(update, context):
+async def alias_command(context, update=None):
     # Get the username of the user that called this command
-    username = update.message.from_user.username
+    username = await helpers.get_sender()
+    user_message = await helpers.get_args_list(context, update)
 
     # Verify that the user is on the admin list
     with open(admins_path) as f:
@@ -212,73 +210,66 @@ async def alias_command(update, context):
 
     # If the user is not on the admin list, do not let them use this command
     if username not in admin_list:
-        await update.message.reply_text(random.choice(txt_no_permissions))
-        return
+        return random.choice(txt_no_permissions)
 
     # Attempt to parse the new alias and target sound from the arguments provided
     try:
-        new_alias = context.args[0]
-        sound_name = context.args[1]
+        new_alias = user_message[0]
+        sound_name = user_message[1]
 
     except KeyError:
-        await update.message.reply_text("Format is /alias [new alias] [sound name]")
-        return
+        return "Format is /alias [new alias] [sound name]"
 
     # Get the list of all sounds
     sound_dict = get_sound_dict()
 
     if new_alias in sound_dict:
-        await update.message.reply_text(f"There is already a sound called '{new_alias}'")
-        return
+        return f"There is already a sound called '{new_alias}'"
 
     alias_dict = get_alias_dict()
 
     # Avoid redirecting existing aliases to new sounds
     if new_alias in alias_dict:
-        await update.message.reply_text(f"'{new_alias}' is already an alias for '{alias_dict[new_alias]}'")
-        return
+        return f"'{new_alias}' is already an alias for '{alias_dict[new_alias]}'"
 
     if sound_name not in sound_dict:
         try:
             sound_name = alias_dict[sound_name]
 
         except KeyError:
-            await update.message.reply_text(random.choice(txt_sound_not_found))
-            return
+            return random.choice(txt_sound_not_found)
 
     alias_dict[new_alias] = sound_name
 
     with open(alias_path, "w") as f:
         json.dump(alias_dict, f, indent=4)
 
-    await update.message.reply_text(f"'{new_alias}' has been added as an alias for '{sound_name}'")
+    return f"'{new_alias}' has been added as an alias for '{sound_name}'"
 
-async def delalias_command(update, context):
-    username = update.message.from_user.username
+async def delalias_command(context, update=None):
+    username = await helpers.get_sender()
 
     with open(admins_path) as f:
         admin_list = f.readlines()
 
     if username not in admin_list:
-        await update.message.reply_text(random.choice(txt_no_permissions))
-        return
+        return random.choice(txt_no_permissions)
 
-    alias_to_delete = context.args[0]
+    alias_to_delete = await helpers.get_args_list(context, update)[0]
     alias_dict = get_alias_dict()
 
     try:
         del alias_dict[alias_to_delete]
 
     except KeyError:
-        await update.message.reply_text(f"{alias_to_delete} isn't an alias for anything.")
-        return
+        return f"{alias_to_delete} isn't an alias for anything."
 
     with open(alias_path, 'w') as f:
         json.dump(alias_dict, f, indent=4)
 
-    await update.message.reply_text(f"{alias_to_delete} is no longer assigned to a sound.")
+    return f"{alias_to_delete} is no longer assigned to a sound."
 
-async def newsounds_command(update, context):
+async def newsounds_command(context, update=None):
     sound_list = sorted(get_sound_dict().keys())
     playcount_dict = get_playcount_dict()
     new_sounds = [sound for sound in sound_list if playcount_dict[sound] == 0]
@@ -286,27 +277,25 @@ async def newsounds_command(update, context):
     list_string = ', '.join(new_sounds)
 
     if new_count == 0:
-        await update.message.reply_text("There are no new sounds available.")
+        return "There are no new sounds available."
 
     elif new_count == 1:
-        await update.message.reply_text(f"There is one new sound available: {list_string}")
+        return f"There is one new sound available: {list_string}"
 
     else:
-        await update.message.reply_text(f"There are {new_count} new sounds available:\n\n{list_string}")
+        return f"There are {new_count} new sounds available:\n\n{list_string}"
 
-async def getaliases_command(update, context):
+async def getaliases_command(context, update=None):
     try:
-        sound_name = context.args[0].lower()
+        sound_name = await helpers.get_args_list(context, update).lower()
     except IndexError:
-        await update.message.reply_text(random.choice(txt_sound_not_provided))
-        return
+        return random.choice(txt_sound_not_provided)
 
     sound_dict = get_sound_dict()
     alias_dict = get_alias_dict()
 
     if sound_name not in sound_dict and sound_name not in alias_dict:
-        await update.message.reply_text(random.choice(txt_sound_not_found))
-        return
+        return random.choice(txt_sound_not_found)
 
     aliases = sorted(get_aliases(sound_name, sound_dict, alias_dict))
     num_alias = len(aliases)
@@ -314,20 +303,19 @@ async def getaliases_command(update, context):
     alias_string = f"'{join_string.join(aliases)}'"
 
     if num_alias == 1:
-        await update.message.reply_text(f"The sound '{sound_name}' has one alias: {alias_string}")
+        return f"The sound '{sound_name}' has one alias: {alias_string}"
 
     elif num_alias > 1:
-        await update.message.reply_text(f"The sound '{sound_name}' has {num_alias} aliases: {alias_string}")
+        return f"The sound '{sound_name}' has {num_alias} aliases: {alias_string}"
 
     else:
-        await update.message.reply_text(f"The sound '{sound_name}' has no assigned aliases")
+        return f"The sound '{sound_name}' has no assigned aliases"
 
-async def search_command(update, context):
+async def search_command(context, update=None):
     try:
-        search_string = context.args[0].lower()
+        search_string = await helpers.get_args_list(context, update).lower()
     except IndexError:
-        await update.message.reply_text("What sound do you want me to search for?")
-        return
+        return "What sound do you want me to search for?"
 
     sound_dict = get_sound_dict()
     alias_dict = get_alias_dict()
@@ -345,48 +333,43 @@ async def search_command(update, context):
     num_matches = len(filtered_list)
     list_string = f"\n\n{', '.join(sorted(filtered_list))}"
     if num_matches == 1:
-        await update.message.reply_text(f"There is one sound matching '{search_string}': {list_string}")
+        return f"There is one sound matching '{search_string}': {list_string}"
 
     elif num_matches > 1:
-        await update.message.reply_text(
-            f"There are {len(filtered_list)} sounds matching '{search_string}': {list_string}")
+        return f"There are {len(filtered_list)} sounds matching '{search_string}': {list_string}"
 
     else:
-        await update.message.reply_text(f"There are no sounds matching '{search_string}'")
+        return f"There are no sounds matching '{search_string}'"
 
-async def playcount_command(update, context):
-    if not context.args or context.args[0].isspace():
-        await update.message.reply_text(random.choice(txt_sound_not_provided))
-        return
+async def playcount_command(context, update=None):
+    user_message = await helpers.get_args_list(context, update)
+    if not user_message or user_message[0].isspace():
+        return random.choice(txt_sound_not_provided)
 
-    sound_name = context.args[0].lower()
+    sound_name = user_message[0].lower()
 
     sound_aliases = get_alias_dict()
     if sound_name in sound_aliases:
         sound_name = sound_aliases[sound_name]
 
     if sound_name not in get_sound_dict():
-        await update.message.reply_text(random.choice(txt_sound_not_found))
-        return
+        return random.choice(txt_sound_not_found)
 
     playcount = get_playcount_dict()[sound_name]
-    await context.bot.send_message(chat_id=update.effective_chat.id,
-                                   text=f"/sound {sound_name} has been used {playcount} times")
+    return f"/sound {sound_name} has been used {playcount} times"
 
-async def topsounds_command(update, context):
+async def topsounds_command(context, update=None):
     play_counts = get_playcount_dict()
     list_size = 20
     top_sounds = sorted(play_counts, key=lambda x: play_counts[x], reverse=True)[:list_size]
 
     message = "\n".join(f"    {sound} @ {play_counts[sound]} plays" for sound in top_sounds)
-    await context.bot.send_message(chat_id=update.effective_chat.id,
-                                   text=f"The {list_size} most used sounds are:\n{message}")
+    return f"The {list_size} most used sounds are:\n{message}"
 
-async def botsounds_command(update, context):
+async def botsounds_command(context, update=None):
     play_counts = get_playcount_dict()
     list_size = 20
     bot_sounds = sorted(play_counts, key=lambda x: play_counts[x])[:list_size]
 
     message = "\n".join(f"    {sound} @ {play_counts[sound]} plays" for sound in bot_sounds)
-    await context.bot.send_message(chat_id=update.effective_chat.id,
-                                   text=f"The {list_size} least used sounds are:\n{message}")
+    return f"The {list_size} least used sounds are:\n{message}"
