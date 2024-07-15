@@ -12,6 +12,7 @@ import message_replier
 import chat
 import memory
 import helpers
+import voice_chat
 
 telegram_token_path = os.path.join("Data", "telegram_token.txt")
 discord_token_path = os.path.join("Data", "discord_token.txt")
@@ -40,16 +41,19 @@ async def init_bots():
     intents = discord.Intents.default()
     intents.members = True
     intents.message_content = True
-    with open(discord_token_path) as f:
-        discord_token = f.readline().strip()
 
     await telegram_bot.initialize()
     await telegram_bot.start()
+
     discord_bot = commands.Bot(command_prefix='/', intents=intents)
     await add_commands(telegram_bot, discord_bot)
 
     await telegram_bot.updater.start_polling()
+    print("Telegram bot started")
     async with discord_bot:
+        with open(discord_token_path) as f:
+            discord_token = f.readline().strip()
+        print("Discord bot started")
         await discord_bot.start(discord_token)
 
     await telegram_bot.stop()
@@ -65,9 +69,9 @@ async def add_commands(telegram_bot, discord_bot):
         ("topsounds", sound_player.topsounds_command),
         ("botsounds", sound_player.botsounds_command),
         ("newsounds", sound_player.newsounds_command),
-        ("alias", sound_player.alias_command),
+        ("addalias", sound_player.addalias_command),
         ("delalias", sound_player.delalias_command),
-        ("getaliases", sound_player.getaliases_command),
+        ("getalias", sound_player.getalias_command),
         ("search", sound_player.search_command),
         ("statroll", dice_roller.statroll_command),
         ("roll", dice_roller.roll_command),
@@ -78,9 +82,13 @@ async def add_commands(telegram_bot, discord_bot):
         ("say", chat.say_command),
         ("lobotomize", memory.lobotomize_command),
         ("logs", logs_command),
-        ("vcsound", sound_player.vcsound_command),
-        ("vcjoin", sound_player.vcjoin_command),
-        ("vcleave", sound_player.vcleave_command)
+        ("vcsound", voice_chat.vcsound_command),
+        ("vcrandom", voice_chat.vcrandom_command),
+        ("vcstop", voice_chat.vcstop_command),
+        ("vcjoin", voice_chat.vcjoin_command),
+        ("vcleave", voice_chat.vcleave_command),
+        ("vcstream", voice_chat.vcstream_command)
+
     ]
 
     for command in command_list:
@@ -99,7 +107,11 @@ def discord_handler(bot, command_name, command):
     async def wrapper_function(context):
         response = await command(context)
         try:
-            if isinstance(response, helpers.FileResponse) or isinstance(response, helpers.SoundResponse):
+            if isinstance(response, helpers.FileResponse):
+                await context.send(content=response.message, file=discord.File(response.path))
+                if response.temp:
+                    os.remove(response.path)
+            elif isinstance(response, helpers.SoundResponse):
                 await context.send(file=discord.File(response.path))
             else:
                 await context.send(response)
