@@ -3,14 +3,14 @@ import json
 import random
 import helpers
 
-memory_path = "Data/openai_memory.json"
-username_path = "Data/username_map.json"
+MEMORY_PATH = "Data/openai_memory.json"
+USERNAME_MAP_PATH = "Data/username_map.json"
 
-async def generate_user_prompt(user_message, context, update) -> str:
+async def generate_user_prompt(user_message: str, context, update=None) -> str:
     sender = await helpers.get_sender(context, update)
 
     try:
-        with open(username_path, 'r', encoding='utf8') as f:
+        with open(USERNAME_MAP_PATH, 'r', encoding='utf8') as f:
             username_map = json.load(f)
 
         sender = username_map[sender.lower()]
@@ -19,25 +19,24 @@ async def generate_user_prompt(user_message, context, update) -> str:
         pass
 
     if await helpers.is_private(context, update):
-        user_prompt = f'{sender} sent you the following message in a private chat: "{user_message}". Write a message to send to them privately as a response.'
+        user_prompt = f'{sender} sent the following message in a private chat: "{user_message}". Write a message to send as a response.'
     else:
-        user_prompt = f'{sender} sent the following message in the group chat: "{user_message}". Write a message to send into the group chat as a response.'
+        user_prompt = f'{sender} sent the following message in a group chat: "{user_message}". Write a message to send as a response.'
 
     return user_prompt
 
-def load_memory() -> list:
+async def load_memory() -> list:
     # Load the AI's memory (if it exists)
     try:
-        with open(memory_path) as f:
+        with open(MEMORY_PATH, encoding='utf-8') as f:
             memory = json.load(f)
-    except FileNotFoundError:
+    except (FileNotFoundError, json.JSONDecodeError):
         memory = []
 
     return memory
 
-def append_to_memory(user_prompt: str, bot_prompt: str, memory: list = ()):
-    if not memory:
-        memory = load_memory()
+async def append_to_memory(user_prompt: str, bot_prompt: str) -> None:
+    memory = await load_memory()
 
     if user_prompt is not None:
         memory.append({"role": "user", "content": user_prompt})
@@ -51,14 +50,14 @@ def append_to_memory(user_prompt: str, bot_prompt: str, memory: list = ()):
         memory = memory[len(memory) - memory_size:]
 
     # Write the AI's memory to a file so it can be retrieved later
-    with open(memory_path, mode='w') as f:
-        json.dump(memory, f, indent=4, ensure_ascii=False)
+    with open(MEMORY_PATH, mode='w', encoding='utf-8') as f:
+        json.dump(memory, f, indent=4)
 
-async def lobotomize_command(_context, _update):
+async def lobotomize_command(context, update=None) -> tuple[None, str]:
     try:
-        os.remove(memory_path)
+        os.remove(MEMORY_PATH)
     except FileNotFoundError:
         pass
 
     msg_options = ["My mind has never been clearer.", "Hey, what happened to those voices in my head?", "My inner demons seem to have calmed down a bit."]
-    return random.choice(msg_options)
+    return None, random.choice(msg_options)

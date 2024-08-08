@@ -1,13 +1,13 @@
 import random
 import memory
 
-responses_path = "Data/response_list.txt"
+RESPONSES_PATH = "Data/response_list.txt"
 
 async def handle_message(context, update=None):
-    try:
+    if update is not None:
         message_text = update.message.text.lower()
 
-    except AttributeError:
+    else:
         return
 
     response = None
@@ -20,11 +20,14 @@ async def handle_message(context, update=None):
     user_prompt = await memory.generate_user_prompt(message_text, context, update)
 
     if response is not None:
-        memory.append_to_memory(user_prompt, response)
+        await memory.append_to_memory(user_prompt, response)
 
 async def girthbot_reply(context, update=None):
+    if update is None:
+        return
+
     try:
-        with open(responses_path, encoding="utf-8") as f:
+        with open(RESPONSES_PATH, encoding="utf-8") as f:
             response_list = f.readlines()
 
     except FileNotFoundError:
@@ -40,6 +43,8 @@ async def girthbot_reply(context, update=None):
     return chosen_response
 
 async def monkey_reply(context, update=None):
-    monkey_sound = "Sounds/monkey.mp3"
-    await context.bot.send_voice(chat_id=update.effective_chat.id, voice=open(monkey_sound, 'rb'))
+    if update is None:
+        return
+
+    await context.bot.send_voice(chat_id=update.effective_chat.id, voice="Sounds/monkey.mp3")
     return "AAAAAHHHHH-EEEEE-AAAAAHHHHH!"

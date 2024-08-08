@@ -4,6 +4,7 @@ import logging
 import asyncio
 from logging.handlers import RotatingFileHandler
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHandler
+from telegram.error import BadRequest
 import discord
 from discord.ext import commands
 import sound_player
@@ -12,17 +13,18 @@ import message_replier
 import chat
 import memory
 import helpers
+import voice_chat
 
-telegram_token_path = os.path.join("Data", "telegram_token.txt")
-discord_token_path = os.path.join("Data", "discord_token.txt")
-logging_dir = os.path.join("Data", "logging")
-logging_path = os.path.join(logging_dir, "log.txt")
-admins_path = "Data/admins.txt"
+TELEGRAM_TOKEN_PATH = os.path.join("Data", "telegram_token.txt")
+DISCORD_TOKEN_PATH = os.path.join("Data", "discord_token.txt")
+LOGGING_DIR_PATH = os.path.join("Data", "logging")
+LOGGING_FILE_PATH = os.path.join(LOGGING_DIR_PATH, "log.txt")
+ADMIN_LIST_PATH = "Data/admins.txt"
 
 async def init_logging():
     # Configure logger
     log_formatter = logging.Formatter("---------------------\n%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    log_handler = RotatingFileHandler(logging_path, mode='a', maxBytes=1024*1024, backupCount=2, encoding=None, delay=False)
+    log_handler = RotatingFileHandler(LOGGING_FILE_PATH, mode='a', maxBytes=1024*1024, backupCount=2, encoding=None, delay=False)
     log_handler.setFormatter(log_formatter)
     log_handler.setLevel(logging.WARNING)
 
@@ -32,7 +34,7 @@ async def init_logging():
 
 async def init_bots():
     # Retrieve Telegram token from file
-    with open(telegram_token_path) as f:
+    with open(TELEGRAM_TOKEN_PATH, encoding='utf-8') as f:
         telegram_token = f.readline().strip()
 
     telegram_bot = ApplicationBuilder().token(telegram_token).build()
@@ -40,16 +42,21 @@ async def init_bots():
     intents = discord.Intents.default()
     intents.members = True
     intents.message_content = True
-    with open(discord_token_path) as f:
-        discord_token = f.readline().strip()
 
     await telegram_bot.initialize()
     await telegram_bot.start()
+
     discord_bot = commands.Bot(command_prefix='/', intents=intents)
     await add_commands(telegram_bot, discord_bot)
 
-    await telegram_bot.updater.start_polling()
+    if telegram_bot.updater is not None:
+        await telegram_bot.updater.start_polling()
+        print("Telegram bot started")
+
     async with discord_bot:
+        with open(DISCORD_TOKEN_PATH, encoding='utf-8') as f:
+            discord_token = f.readline().strip()
+        print("Discord bot started")
         await discord_bot.start(discord_token)
 
     await telegram_bot.stop()
@@ -65,9 +72,9 @@ async def add_commands(telegram_bot, discord_bot):
         ("topsounds", sound_player.topsounds_command),
         ("botsounds", sound_player.botsounds_command),
         ("newsounds", sound_player.newsounds_command),
-        ("alias", sound_player.alias_command),
+        ("addalias", sound_player.addalias_command),
         ("delalias", sound_player.delalias_command),
-        ("getaliases", sound_player.getaliases_command),
+        ("getalias", sound_player.getalias_command),
         ("search", sound_player.search_command),
         ("statroll", dice_roller.statroll_command),
         ("roll", dice_roller.roll_command),
@@ -78,9 +85,12 @@ async def add_commands(telegram_bot, discord_bot):
         ("say", chat.say_command),
         ("lobotomize", memory.lobotomize_command),
         ("logs", logs_command),
-        ("vcsound", sound_player.vcsound_command),
-        ("vcjoin", sound_player.vcjoin_command),
-        ("vcleave", sound_player.vcleave_command)
+        ("vcsound", voice_chat.vcsound_command),
+        ("vcrandom", voice_chat.vcrandom_command),
+        ("vcstop", voice_chat.vcstop_command),
+        ("vcjoin", voice_chat.vcjoin_command),
+        ("vcleave", voice_chat.vcleave_command),
+        ("vcstream", voice_chat.vcstream_command)
     ]
 
     for command in command_list:
@@ -97,30 +107,57 @@ async def main():
 def discord_handler(bot, command_name, command):
     @bot.command(name=command_name)
     async def wrapper_function(context):
-        response = await command(context)
+        command_response: helpers.CommandResponse = await command(context)
+
         try:
-            if isinstance(response, helpers.FileResponse) or isinstance(response, helpers.SoundResponse):
-                await context.send(file=discord.File(response.path))
-            else:
-                await context.send(response)
+            if isinstance(command_response, helpers.SoundResponse):
+                await context.send(file=discord.File(command_response.file_path))
+
+            elif isinstance(command_response, helpers.FileResponse):
+                await context.send(content=command_response.bot_message, file=discord.File(command_response.file_path))
+                if command_response.temp:
+                    os.remove(command_response.file_path)
+
+            elif command_response.send_to_chat:
+                await context.send(command_response.bot_message)
+
         except discord.errors.HTTPException:
             pass
 
-def telegram_handler(command):
-    async def wrapper_function(update, context):
-        response = await command(context, update=update)
-        if isinstance(response, helpers.FileResponse):
-            await context.bot.send_document(chat_id=update.effective_chat.id, document=response.path)
-
-        elif isinstance(response, helpers.SoundResponse):
-            await context.bot.send_voice(chat_id=update.effective_chat.id, voice=open(response.path, 'rb'))
-
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
+        if command_response.record_to_memory:
+            user_prompt = await memory.generate_user_prompt(command_response.user_message, context)
+            await memory.append_to_memory(user_prompt=user_prompt, bot_prompt=command_response.bot_message)
 
     return wrapper_function
 
-async def logs_command(context, update=None):
-    output_path = os.path.join(logging_dir, "error_log.txt")
+def telegram_handler(command):
+    async def wrapper_function(update, context):
+        command_response: helpers.CommandResponse = await command(context, update=update)
+
+        if isinstance(command_response, helpers.SoundResponse):
+            await context.bot.send_voice(chat_id=update.effective_chat.id, voice=command_response.file_path)
+
+        elif isinstance(command_response, helpers.FileResponse):
+            await context.bot.send_document(chat_id=update.effective_chat.id, document=command_response.file_path)
+            if command_response.temp:
+                os.remove(command_response.file_path)
+
+        elif command_response.send_to_chat:
+            try:
+                await context.bot.send_message(chat_id=update.effective_chat.id, text=command_response.bot_message)
+
+            except BadRequest:
+                error_response = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
+                await context.bot.send_document(chat_id=update.effective_chat.id, text=error_response)
+
+        if command_response.record_to_memory:
+            user_prompt = await memory.generate_user_prompt(command_response.user_message, context, update)
+            await memory.append_to_memory(user_prompt=user_prompt, bot_prompt=command_response.bot_message)
+
+    return wrapper_function
+
+async def logs_command(context, update=None) -> helpers.CommandResponse:
+    output_path = os.path.join(LOGGING_DIR_PATH, "error_log.txt")
 
     # Try to remove the temp error log if it already exists
     try:
@@ -130,8 +167,8 @@ async def logs_command(context, update=None):
 
     # Concatenate the rolling error log files together into one file
     with open(output_path, 'wb') as wfd:
-        for file in os.listdir(logging_dir)[::-1]:
-            file_path = os.path.join(logging_dir, file)
+        for file in os.listdir(LOGGING_DIR_PATH)[::-1]:
+            file_path = os.path.join(LOGGING_DIR_PATH, file)
 
             if os.path.samefile(file_path, output_path):
                 continue
@@ -139,10 +176,7 @@ async def logs_command(context, update=None):
             with open(file_path, 'rb') as fd:
                 shutil.copyfileobj(fd, wfd)
 
-    return helpers.FileResponse(output_path)
-
-    # user_prompt = await memory.generate_user_prompt("Can you send me your error log?", context, update)
-    # memory.append_to_memory(user_prompt, response)
+    return helpers.FileResponse("Can you send me your error log?", "Sure, here you go.", output_path)
 
 if __name__ == "__main__":
     asyncio.run(main())

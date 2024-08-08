@@ -2,10 +2,10 @@ import os
 import json
 from tqdm import tqdm
 
-input_path = 'Data/chat_data/'
-output_path = 'Data/markov_chain.json'
+INPUT_PATH = 'Data/chat_data/'
+OUTPUT_PATH = 'Data/markov_chain.json'
 
-def fix_apple(text):
+def fix_apple(text: str) -> str:
     # Apple devices have an awful feature called 'smart punctuation' that we need to account for
     text = text.replace('‘', "'")
     text = text.replace('’', "'")
@@ -17,7 +17,7 @@ def fix_apple(text):
 
     return text
 
-def clean_token(token):
+def clean_token(token: str) -> str:
     pair_list = [
         ('(', ')'),
         ('[', ']'),
@@ -37,12 +37,12 @@ def clean_token(token):
 
     return token
 
-def load_chat_logs():
+def load_chat_logs() -> list[str]:
     message_list = []
-    for file in os.listdir(input_path):
+    for file in os.listdir(INPUT_PATH):
         print(f"Processing {file}...")
 
-        with open(os.path.join(input_path, file), 'r', encoding='utf-8') as f:
+        with open(os.path.join(INPUT_PATH, file), 'r', encoding='utf-8') as f:
             chat_data = json.load(f)
 
         for message in tqdm(chat_data["messages"]):
@@ -78,7 +78,7 @@ def load_chat_logs():
     return message_list
 
 def build_markov_chain(message_list):
-    markov_chain = dict()
+    markov_chain = {}
     null_token = "NULL_TOKEN"
 
     print("Creating markov chain...")
@@ -93,7 +93,7 @@ def build_markov_chain(message_list):
                     else:
                         markov_chain[null_token][token] = 1
                 else:
-                    markov_chain[null_token] = dict()
+                    markov_chain[null_token] = {}
                     markov_chain[null_token][token] = 1
 
             if index + 1 == len(token_list):
@@ -103,7 +103,7 @@ def build_markov_chain(message_list):
                     else:
                         markov_chain[token][null_token] = 1
                 else:
-                    markov_chain[token] = dict()
+                    markov_chain[token] = {}
                     markov_chain[token][null_token] = 1
 
             else:
@@ -114,7 +114,7 @@ def build_markov_chain(message_list):
                     else:
                         markov_chain[token][next_token] = 1
                 else:
-                    markov_chain[token] = dict()
+                    markov_chain[token] = {}
                     markov_chain[token][next_token] = 1
 
     markov_chain = dict(sorted(markov_chain.items(), key=lambda item: sum(item[1].values()), reverse=True))
@@ -131,10 +131,10 @@ def main():
     chat_data = load_chat_logs()
     markov_chain = build_markov_chain(chat_data)
 
-    with open(output_path, 'w', encoding='utf8') as f:
+    with open(OUTPUT_PATH, 'w', encoding='utf8') as f:
         json.dump(markov_chain, f, indent=4, ensure_ascii=False)
 
-    print(f"Markov chain written to file at '{output_path}'")
+    print(f"Markov chain written to file at '{OUTPUT_PATH}'")
     input()
 
 main()
