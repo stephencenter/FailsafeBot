@@ -49,7 +49,6 @@ async def wisdom_command(context, update=None) -> helpers.CommandResponse:
     return helpers.CommandResponse("O, wise and powerful girthbot, please grant me your wisdom!", response)
 
 # Elevenlabs-powered
-
 async def say_command(context, update=None) -> helpers.CommandResponse:
     """
     user_message = await helpers.get_args_list(context, update)

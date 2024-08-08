@@ -137,21 +137,20 @@ async def vcstream_command(context, update=None) -> helpers.CommandResponse:
 
 async def vcjoin_command(context, update=None) -> helpers.CommandResponse:
     if update is not None:
-        return helpers.CommandResponse("Join this voice channel please.", "That's Discord only, sorry!")
+        return helpers.CommandResponse("Join my voice channel please.", "That's Discord only, sorry!")
 
-    vc_converter = commands.VoiceChannelConverter()
-    channel_name = ' '.join(await helpers.get_args_list(context))
+    target_voice = context.author.voice
 
-    try:
-        voice_channel = await vc_converter.convert(context, channel_name)
-    except commands.errors.ChannelNotFound:
-        return helpers.CommandResponse(f"Join the '{channel_name}' voice channel please.", "Couldn't find that channel (note that channel names are case-sensitive)")
+    if target_voice is None:
+        return helpers.CommandResponse("Join my voice channel please.", "You're not in a voice channel!")
 
     if context.voice_client is not None:
-        return await context.voice_client.move_to(voice_channel)
+        await context.voice_client.move_to(target_voice.channel)
 
-    await voice_channel.connect()
-    return helpers.CommandResponse(f"Join the '{channel_name}' voice channel please.", "If you insist.", send_to_chat=False)
+    else:
+        await target_voice.channel.connect()
+
+    return helpers.CommandResponse("Join my voice channel please.", "If you insist.", send_to_chat=False)
 
 async def vcleave_command(context, update=None) -> helpers.CommandResponse:
     if update is not None:

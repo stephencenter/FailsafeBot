@@ -103,7 +103,6 @@ async def main():
     await init_logging()
     await init_bots()
 
-# Basic commands
 def discord_handler(bot, command_name, command):
     @bot.command(name=command_name)
     async def wrapper_function(context):
