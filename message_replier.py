@@ -3,7 +3,7 @@ import memory
 
 RESPONSES_PATH = "Data/response_list.txt"
 
-async def handle_message(context, update=None):
+async def handle_message(update, context):
     if update is not None:
         message_text = update.message.text.lower()
 

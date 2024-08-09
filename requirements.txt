@@ -1,4 +1,6 @@
+discord.py==2.4.0
 numpy==1.25.1
 openai==0.27.8
-python-telegram-bot==20.4
+python-telegram-bot==21.4
 tqdm==4.65.0
+yt_dlp==2024.8.6

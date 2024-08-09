@@ -42,11 +42,13 @@ async def roll_command(context, update=None) -> helpers.CommandResponse:
 
     user_prompt = f"Can you roll a {roll_text} for me?"
 
-    if num_dice > 50:
-        return helpers.CommandResponse(user_prompt, "Keep it to 50 dice or fewer please, I'm not a god.")
+    max_dice = 100
+    if num_dice > max_dice:
+        return helpers.CommandResponse(user_prompt, f"Keep it to {max_dice} dice or fewer please, I'm not a god.")
 
-    if num_faces > 10000:
-        return helpers.CommandResponse(user_prompt, "Keep it to 10,000 sides or fewer please, I'm not a god.")
+    max_faces = 100000
+    if num_faces > max_faces:
+        return helpers.CommandResponse(user_prompt, f"Keep it to {max_faces:,} sides or fewer please, I'm not a god.")
 
     rolls = []
     for _ in range(num_dice):
@@ -62,7 +64,7 @@ async def roll_command(context, update=None) -> helpers.CommandResponse:
 
     sender = await helpers.get_sender(context, update)
 
-    return helpers.CommandResponse(user_prompt, f"{sender} rolled a {sum(rolls) + modifier} {dice_text}")
+    return helpers.CommandResponse(user_prompt, f"{sender} rolled a {sum(rolls) + modifier:,} {dice_text}")
 
 def parse_diceroll(dice_roll) -> tuple[int, int, int] | None:
     try:
