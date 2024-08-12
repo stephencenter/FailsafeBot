@@ -1,12 +1,11 @@
 import random
-import asyncio
 import yt_dlp
 import discord
 from discord.ext import commands
 import helpers
 import sound_manager
 
-ytdl_format_options = {
+ytdl = yt_dlp.YoutubeDL({
     'format': 'bestaudio/best',
     'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
     'restrictfilenames': True,
@@ -17,37 +16,23 @@ ytdl_format_options = {
     'quiet': True,
     'no_warnings': True,
     'default_search': 'auto',
-    'source_address': '0.0.0.0',  # bind to ipv4 since ipv6 addresses cause issues sometimes
-}
+    'source_address': '0.0.0.0',
+})
 
-ffmpeg_options = {
-    'options': '-vn',
-}
-
-ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
-
-class YTDLSource(discord.PCMVolumeTransformer):
-    def __init__(self, source, *, data, volume=0.5):
-        super().__init__(source, volume)
-
-        self.data = data
-        self.title = data.get('title')
-        self.url = data.get('url')
-
-    @classmethod
-    async def from_url(cls, url, *, loop=None, stream=False):
-        loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
+class YTDLStream(discord.PCMVolumeTransformer):
+    def __init__(self, stream_url: str):
+        data = ytdl.extract_info(stream_url, download=False)
 
         if data is None:
             return
 
+        # If a playlist was provided, take the first entry
         if 'entries' in data:
-            # take first item from a playlist
             data = data['entries'][0]
 
-        filename = data['url'] if stream else ytdl.prepare_filename(data)
-        return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
+        self.title = data['title']
+
+        super().__init__(discord.FFmpegPCMAudio(data['url'], before_options="-vn"), 0.5)
 
 async def vcsound_command(context, update=None) -> helpers.CommandResponse:
     if update is not None:
@@ -117,23 +102,25 @@ async def vcstream_command(context, update=None) -> helpers.CommandResponse:
         return helpers.CommandResponse("Stream this for me please.", "I'm not in a voice channel!")
 
     try:
-        stream_url = (await helpers.get_args_list(context, update))[0]
+        stream_url = ' '.join(await helpers.get_args_list(context, update))
     except IndexError:
         return helpers.CommandResponse("Stream this for me please.", "Provide a streamable URL please!")
 
+    # Stop the voice client if it's already playing a sound or stream
     if context.voice_client.is_playing():
         context.voice_client.stop()
 
-    player = await YTDLSource.from_url(stream_url, loop=context.bot.loop, stream=True)
-    if player is None:
+    # Create a stream player from the provided URL
+    stream_player = YTDLStream(stream_url)
+
+    if stream_player is None:
         return helpers.CommandResponse("Stream this for me please.", "There was an error streaming from that URL.")
 
+    # Play the stream through the voice client
     async with context.typing():
-        context.voice_client.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
+        context.voice_client.play(stream_player, after=lambda e: print(f'Player error: {e}') if e else None)
 
-    await context.send(f'Now playing: {player.title}')
-
-    return helpers.CommandResponse("Stream this for me please.", "Sure, here you go.")
+    return helpers.CommandResponse("Stream this for me please.", f"Now playing: {stream_player.title}")
 
 async def vcjoin_command(context, update=None) -> helpers.CommandResponse:
     if update is not None:

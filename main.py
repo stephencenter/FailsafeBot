@@ -1,5 +1,4 @@
 import os
-import shutil
 import logging
 import asyncio
 from logging.handlers import RotatingFileHandler
@@ -184,20 +183,8 @@ def telegram_handler(command):
     return wrapper_function
 
 async def logs_command(context, update=None) -> helpers.CommandResponse:
-    output_path = os.path.join(LOGGING_DIR_PATH, "error_log.txt")
-
-    # Concatenate the rolling error log files together into one file
-    with open(output_path, 'wb') as wfd:
-        for file in os.listdir(LOGGING_DIR_PATH)[::-1]:
-            file_path = os.path.join(LOGGING_DIR_PATH, file)
-
-            if os.path.samefile(file_path, output_path):
-                continue
-
-            with open(file_path, 'rb') as fd:
-                shutil.copyfileobj(fd, wfd)
-
-    return helpers.FileResponse("Can you send me your error log?", "Sure, here you go.", output_path, temp=True)
+    output_path = os.path.join(LOGGING_DIR_PATH, "log.txt")
+    return helpers.FileResponse("Can you send me your error log?", "Sure, here you go.", output_path)
 
 if __name__ == "__main__":
     try:
