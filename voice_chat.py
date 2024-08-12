@@ -150,3 +150,19 @@ async def vcleave_command(context, update=None) -> helpers.CommandResponse:
         pass
 
     return helpers.CommandResponse("Leave the current voice channel please.", "If you insist", send_to_chat=False)
+
+def apply_events(discord_bot: commands.Bot):
+    @discord_bot.event
+    async def on_voice_state_update(member, before, after):
+        # This function automatically disconnects the bot if it's the only
+        # member remaining in a voice channel
+        bot_channel = discord_bot.voice_clients[0].channel
+
+        if bot_channel is None or not isinstance(bot_channel, discord.VoiceChannel):
+            return
+
+        if before.channel != bot_channel or after.channel == bot_channel:
+            return
+
+        if len(bot_channel.members) == 1:
+            await discord_bot.voice_clients[0].disconnect(force=False)

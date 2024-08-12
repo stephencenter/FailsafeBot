@@ -47,7 +47,7 @@ async def create_bots() -> tuple[telegram.ext.Application, commands.Bot]:
     intents.message_content = True
 
     # Create discord bot object
-    discord_bot = commands.Bot(command_prefix='/', intents=intents)
+    discord_bot = commands.Bot(command_prefix='/', intents=intents, help_command=None)
 
     return telegram_bot, discord_bot
 
@@ -68,7 +68,7 @@ async def add_commands(telegram_bot, discord_bot) -> tuple[telegram.ext.Applicat
         ("roll", dice_roller.roll_command),
         ("pressf", chat.pressf_command),
         ("wisdom", chat.wisdom_command),
-        # ("help", chat.help_command),
+        ("help", chat.help_command),
         ("chat", chat.chat_command),
         ("say", chat.say_command),
         ("test", chat.test_command),
@@ -89,6 +89,7 @@ async def add_commands(telegram_bot, discord_bot) -> tuple[telegram.ext.Applicat
         discord_handler(discord_bot, command[0], command[1])
 
     telegram_bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), message_replier.handle_message))
+    voice_chat.apply_events(discord_bot)
     return telegram_bot, discord_bot
 
 async def run_telegram_bot(telegram_bot):
@@ -120,9 +121,7 @@ async def main():
             print("Discord bot started")
             await run_discord_bot(discord_bot)
 
-    print('Exiting...')
-
-def discord_handler(bot, command_name, command):
+def discord_handler(bot, command_name: str, command):
     # This function creates command handlers for the discord bot.
     # Provide this function with a bot, a command name, and a command function,
     # and it will create a wrapper for that command function and tie it to the
@@ -151,6 +150,8 @@ def discord_handler(bot, command_name, command):
         if command_response.record_to_memory:
             user_prompt = await memory.generate_user_prompt(command_response.user_message, context)
             await memory.append_to_memory(user_prompt=user_prompt, bot_prompt=command_response.bot_message)
+
+    return wrapper_function
 
 def telegram_handler(command):
     # This function creates command handlers for the telegram bot.
@@ -190,5 +191,5 @@ async def logs_command(context, update=None) -> helpers.CommandResponse:
 if __name__ == "__main__":
     try:
         asyncio.run(main())
-    except KeyboardInterrupt:
-        pass
+    except (KeyboardInterrupt, asyncio.exceptions.CancelledError, RuntimeError):
+        print('Exiting...')

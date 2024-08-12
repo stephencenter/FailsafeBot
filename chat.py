@@ -24,6 +24,7 @@ async def chat_command(context, update=None) -> helpers.CommandResponse:
     with open(GPT_PROMPT_PATH, encoding='utf-8') as f:
         system_prompt = ''.join(f.readlines())
 
+    # Load the current conversation so far
     loaded_memory = await memory.load_memory()
 
     user_message = ' '.join(await helpers.get_args_list(context, update))
@@ -92,6 +93,7 @@ async def say_command(context, update=None) -> helpers.CommandResponse:
 async def pressf_command(context, update=None) -> helpers.CommandResponse:
     return helpers.CommandResponse("F's in the chat boys.", "F")
 
+# This command is for verifying that the bot is online and receiving commands
 async def test_command(context, update=None) -> helpers.CommandResponse:
     if not await helpers.is_admin(context, update):
         return helpers.NoResponse()

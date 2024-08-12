@@ -4,19 +4,10 @@ import random
 import helpers
 
 MEMORY_PATH = "Data/openai_memory.json"
-USERNAME_MAP_PATH = "Data/username_map.json"
+MEMORY_SIZE = 8
 
 async def generate_user_prompt(user_message: str, context, update=None) -> str:
     sender = await helpers.get_sender(context, update)
-
-    try:
-        with open(USERNAME_MAP_PATH, 'r', encoding='utf8') as f:
-            username_map = json.load(f)
-
-        sender = username_map[sender.lower()]
-
-    except (FileNotFoundError, KeyError):
-        pass
 
     if await helpers.is_private(context, update):
         user_prompt = f'{sender} sent the following message in a private chat: "{user_message}". Write a message to send as a response.'
@@ -45,14 +36,14 @@ async def append_to_memory(user_prompt: str, bot_prompt: str) -> None:
         memory.append({"role": "assistant", "content": bot_prompt})
 
     # The AI's memory has a size limit to keep API usage low, and too keep it from veering off track too much
-    memory_size = 8
-    if len(memory) > memory_size:
-        memory = memory[len(memory) - memory_size:]
+    if len(memory) > MEMORY_SIZE:
+        memory = memory[len(memory) - MEMORY_SIZE:]
 
     # Write the AI's memory to a file so it can be retrieved later
     with open(MEMORY_PATH, mode='w', encoding='utf-8') as f:
         json.dump(memory, f, indent=4)
 
+# This command clears the bot's memory
 async def lobotomize_command(context, update=None) -> tuple[None, str]:
     try:
         os.remove(MEMORY_PATH)
