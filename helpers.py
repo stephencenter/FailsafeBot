@@ -26,11 +26,13 @@ async def get_args_list(context, update=None) -> list:
     except IndexError:
         return []
 
-async def is_admin(username) -> bool:
-    # Returns whether the provided username is on the bot's admin list
+async def is_admin(context, update=None) -> bool:
+    # Returns whether the message sender is on the bot's admin list
+    username = await get_sender(context, update)
+
     admins_path = "Data/admins.txt"
     with open(admins_path, encoding='utf-8') as f:
-        admin_list = f.readlines()
+        admin_list = [x.strip() for x in f.readlines()]
 
     return username in admin_list
 
@@ -50,3 +52,7 @@ class FileResponse(CommandResponse):
 class SoundResponse(FileResponse):
     def __init__(self, user_message: str, bot_message: str, file_path: str, record_to_memory: bool = True):
         super().__init__(user_message, bot_message, file_path, record_to_memory, False)
+
+class NoResponse(CommandResponse):
+    def __init__(self):
+        super().__init__('', '', record_to_memory=False, send_to_chat=False)

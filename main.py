@@ -28,7 +28,7 @@ async def init_logging():
     # Create a rotating log handler - this ensures that the log is
     log_handler = RotatingFileHandler(LOGGING_FILE_PATH, mode='a', maxBytes=1024*1024, backupCount=1, encoding=None, delay=False)
     log_handler.setFormatter(log_formatter)
-    log_handler.setLevel(logging.WARNING)
+    log_handler.setLevel(logging.ERROR)
 
     app_log = logging.getLogger("root")
     app_log.setLevel(logging.WARNING)
@@ -71,6 +71,7 @@ async def add_commands(telegram_bot, discord_bot) -> tuple[telegram.ext.Applicat
         # ("help", chat.help_command),
         ("chat", chat.chat_command),
         ("say", chat.say_command),
+        ("test", chat.test_command),
         ("lobotomize", memory.lobotomize_command),
         ("logs", logs_command),
         ("vcsound", voice_chat.vcsound_command),

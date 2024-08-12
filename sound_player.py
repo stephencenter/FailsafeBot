@@ -54,11 +54,10 @@ async def soundlist_command(context, update=None) -> helpers.CommandResponse:
 
 async def addalias_command(context, update=None) -> helpers.CommandResponse:
     # Get the username of the user that called this command
-    username = await helpers.get_sender(context, update)
     user_message = await helpers.get_args_list(context, update)
 
     # Verify that the user is on the admin list
-    if not await helpers.is_admin(username):
+    if not await helpers.is_admin(context, update):
         return helpers.CommandResponse("Can you add a new sound alias?", random.choice(helpers.TXT_NO_PERMISSIONS))
 
     # Attempt to parse the new alias and target sound from the arguments provided
@@ -73,9 +72,7 @@ async def addalias_command(context, update=None) -> helpers.CommandResponse:
     return helpers.CommandResponse(f"Can you make '{new_alias}' an alias for the sound '{sound_name}'?", response)
 
 async def delalias_command(context, update=None) -> helpers.CommandResponse:
-    username = await helpers.get_sender(context, update)
-
-    if not await helpers.is_admin(username):
+    if not await helpers.is_admin(context, update):
         return helpers.CommandResponse("Can you delete a sound alias for me?", random.choice(helpers.TXT_NO_PERMISSIONS))
 
     try:

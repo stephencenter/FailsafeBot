@@ -88,8 +88,9 @@ async def vcstop_command(context, update=None) -> helpers.CommandResponse:
         return helpers.CommandResponse("Stop making all that noise please.", "That's Discord only, sorry!")
 
     try:
-        await context.voice_client.stop()
-    except (AttributeError, commands.errors.CommandInvokeError):
+        context.voice_client.stop()
+    except (AttributeError, TypeError, commands.errors.CommandInvokeError):
+        # For some reason this can throw a lot of exceptions, we just ignore them
         pass
 
     return helpers.CommandResponse("Stop making all that noise please.", "If you insist.", send_to_chat=False)

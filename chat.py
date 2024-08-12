@@ -1,8 +1,6 @@
 import json
 import numpy
-import openai
-from openai.error import ServiceUnavailableError
-# import elevenlabs
+from openai import OpenAI
 import memory
 import helpers
 
@@ -18,7 +16,9 @@ with open(MARKOV_PATH, 'r', encoding='utf8') as markov:
 async def chat_command(context, update=None) -> helpers.CommandResponse:
     # Load and set the OpenAI API key
     with open(OPENAI_KEY_PATH, encoding='utf-8') as f:
-        openai.api_key = f.readline().strip()
+        openai_api_key = f.readline().strip()
+
+    openai_client = OpenAI(api_key=openai_api_key)
 
     # Load the system prompt
     with open(GPT_PROMPT_PATH, encoding='utf-8') as f:
@@ -36,11 +36,7 @@ async def chat_command(context, update=None) -> helpers.CommandResponse:
     messages.append({"role": "user", "content": user_prompt})
 
     # Have GPT generate a response to the user prompt
-    try:
-        response = get_gpt_response(messages)
-
-    except ServiceUnavailableError:
-        return helpers.CommandResponse(user_message, "*beep-boop* CONNECTION TIMED OUT *beep-boop*")
+    response = get_gpt_response(openai_client, messages)
 
     return helpers.CommandResponse(user_message, response)
 
@@ -96,18 +92,24 @@ async def say_command(context, update=None) -> helpers.CommandResponse:
 async def pressf_command(context, update=None) -> helpers.CommandResponse:
     return helpers.CommandResponse("F's in the chat boys.", "F")
 
+async def test_command(context, update=None) -> helpers.CommandResponse:
+    if not await helpers.is_admin(context, update):
+        return helpers.NoResponse()
+
+    return helpers.CommandResponse("Hey, are you working?", "I'm still alive, unfortunately.")
+
 async def help_command(context, update=None) -> helpers.CommandResponse:
     help_string = """\
 Look upon my works, ye mighty, and despair:
-/sound (play a sound effect)
+/vcjoin and /vcleave (join or leave current voice channel)
+/sound or /vcsound (play a sound effect)
+/random or /vcrandom (play a random sound effect)
 /soundlist (see what sounds are available)
 /search (look for sounds)
-/random (play a random sound effect)
-/newsounds (see what new sounds are available)
+/chat (talk to me)
 /roll (roll a dice)
 /pressf (pay respects)
-/wisdom (request my wisdom)
-/chat (talk to me)"""
+/wisdom (request my wisdom)"""
 
     return helpers.CommandResponse("What chat commands are available?", help_string)
 
@@ -138,9 +140,12 @@ def generate_markov_text(min_length=2, max_length=255) -> str:
     output_message = output_message[0].upper() + output_message[1:]
     return output_message
 
-def get_gpt_response(messages: list) -> str:
-    chat = openai.ChatCompletion.create(model="gpt-4o-mini", messages=messages)  # gpt-3.5-turbo or gpt-4o-mini"
+def get_gpt_response(openai_client: OpenAI, messages: list) -> str:
+    chat = openai_client.chat.completions.create(messages=messages, model="gpt-4o-mini")
     response = chat.choices[0].message.content
+
+    if response is None:
+        return ''
 
     # Remove quotation marks from the message if GPT decided to use them
     if response.startswith('"') and response.endswith('"'):
