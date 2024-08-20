@@ -44,11 +44,11 @@ async def append_to_memory(user_prompt: str, bot_prompt: str) -> None:
         json.dump(memory, f, indent=4)
 
 # This command clears the bot's memory
-async def lobotomize_command(context, update=None) -> tuple[None, str]:
+async def lobotomize_command(context, update=None) -> helpers.CommandResponse:
     try:
         os.remove(MEMORY_PATH)
     except FileNotFoundError:
         pass
 
     msg_options = ["My mind has never been clearer.", "Hey, what happened to those voices in my head?", "My inner demons seem to have calmed down a bit."]
-    return None, random.choice(msg_options)
+    return helpers.CommandResponse('', random.choice(msg_options), record_to_memory=False)

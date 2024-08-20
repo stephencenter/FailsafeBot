@@ -156,9 +156,12 @@ def apply_events(discord_bot: commands.Bot):
     async def on_voice_state_update(member, before, after):
         # This function automatically disconnects the bot if it's the only
         # member remaining in a voice channel
-        bot_channel = discord_bot.voice_clients[0].channel
+        try:
+            bot_channel = discord_bot.voice_clients[0].channel
+        except IndexError:
+            return
 
-        if bot_channel is None or not isinstance(bot_channel, discord.VoiceChannel):
+        if not isinstance(bot_channel, discord.VoiceChannel):
             return
 
         if before.channel != bot_channel or after.channel == bot_channel:
