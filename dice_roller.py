@@ -1,6 +1,7 @@
 import random
 import re
 import helpers
+import settings
 
 # Stat Roll command
 async def statroll_command(context, update=None) -> helpers.CommandResponse:
@@ -42,13 +43,12 @@ async def roll_command(context, update=None) -> helpers.CommandResponse:
 
     user_prompt = f"Can you roll a {roll_text} for me?"
 
-    max_dice = 100
-    if num_dice > max_dice:
-        return helpers.CommandResponse(user_prompt, f"Keep it to {max_dice} dice or fewer please, I'm not a god.")
+    config = settings.get_config()
+    if num_dice > config.main.maxdice:
+        return helpers.CommandResponse(user_prompt, f"Keep it to {config.main.maxdice:,} dice or fewer please, I'm not a god.")
 
-    max_faces = 100000
-    if num_faces > max_faces:
-        return helpers.CommandResponse(user_prompt, f"Keep it to {max_faces:,} sides or fewer please, I'm not a god.")
+    if num_faces > config.main.maxfaces:
+        return helpers.CommandResponse(user_prompt, f"Keep it to {config.main.maxfaces:,} sides or fewer please, I'm not a god.")
 
     rolls = []
     for _ in range(num_dice):

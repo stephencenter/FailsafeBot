@@ -2,9 +2,9 @@ import os
 import json
 import random
 import helpers
+import settings
 
 MEMORY_PATH = "Data/openai_memory.json"
-MEMORY_SIZE = 8
 
 async def generate_user_prompt(user_message: str, context, update=None) -> str:
     sender = await helpers.get_sender(context, update)
@@ -35,9 +35,10 @@ async def append_to_memory(user_prompt: str, bot_prompt: str) -> None:
     if bot_prompt is not None:
         memory.append({"role": "assistant", "content": bot_prompt})
 
+    config = settings.get_config()
     # The AI's memory has a size limit to keep API usage low, and too keep it from veering off track too much
-    if len(memory) > MEMORY_SIZE:
-        memory = memory[len(memory) - MEMORY_SIZE:]
+    if len(memory) > config.main.memorysize:
+        memory = memory[len(memory) - config.main.memorysize:]
 
     # Write the AI's memory to a file so it can be retrieved later
     with open(MEMORY_PATH, mode='w', encoding='utf-8') as f:

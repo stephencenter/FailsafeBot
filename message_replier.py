@@ -1,28 +1,31 @@
 import random
 import memory
+import settings
 
 RESPONSES_PATH = "Data/response_list.txt"
 
 async def handle_message(update, context):
-    if update is not None:
-        message_text = update.message.text.lower()
-
-    else:
+    if update is None:
         return
 
-    response = None
-    if "girthbot" in message_text or "girth bot" in message_text:
-        response = await girthbot_reply(context, update)
+    message_text = update.message.text.lower()
 
-    elif "monkey" in message_text:
+    config = settings.get_config()
+    bot_name = config.main.botname.lower()
+
+    response = None
+    if config.main.replytomonkey and "monkey" in message_text:
         response = await monkey_reply(context, update)
+
+    elif config.main.replytoname and (bot_name in message_text or ''.join(bot_name.split()) in message_text):
+        response = await botname_reply(context, update)
 
     user_prompt = await memory.generate_user_prompt(message_text, context, update)
 
     if response is not None:
         await memory.append_to_memory(user_prompt, response)
 
-async def girthbot_reply(context, update=None):
+async def botname_reply(context, update=None):
     if update is None:
         return
 
@@ -43,6 +46,7 @@ async def girthbot_reply(context, update=None):
     return chosen_response
 
 async def monkey_reply(context, update=None):
+    # Discworld adventure game reference
     if update is None:
         return
 

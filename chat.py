@@ -3,6 +3,7 @@ import numpy
 from openai import OpenAI
 import memory
 import helpers
+import settings
 
 OPENAI_KEY_PATH = "Data/openai_key.txt"
 ELEVENLABS_KEY_PATH = "Data/eleven_key.txt"
@@ -43,7 +44,8 @@ async def chat_command(context, update=None) -> helpers.CommandResponse:
 
 async def wisdom_command(context, update=None) -> helpers.CommandResponse:
     response = generate_markov_text()
-    return helpers.CommandResponse("O, wise and powerful girthbot, please grant me your wisdom!", response)
+    bot_name = settings.get_config().main.botname
+    return helpers.CommandResponse(f"O, wise and powerful {bot_name}, please grant me your wisdom!", response)
 
 # Elevenlabs-powered
 async def say_command(context, update=None) -> helpers.CommandResponse:
@@ -82,7 +84,7 @@ async def say_command(context, update=None) -> helpers.CommandResponse:
             )
 
         except elevenlabs.api.error.APIError:
-            return "Sorry, but Stephen is a cheap bastard and didn't renew his elevenlabs subscription."
+            return "Sorry, but someone was a cheap bastard and didn't renew their elevenlabs subscription."
 
         voice_memory[text_prompt] = audio
 

@@ -4,6 +4,7 @@ import discord
 from discord.ext import commands
 import helpers
 import sound_manager
+import settings
 
 ytdl = yt_dlp.YoutubeDL({
     'format': 'bestaudio/best',
@@ -21,7 +22,7 @@ ytdl = yt_dlp.YoutubeDL({
 
 class YTDLStream(discord.PCMVolumeTransformer):
     def __init__(self, stream_url: str):
-        data = ytdl.extract_info(stream_url, download=False)
+        data = ytdl.extract_info(stream_url, download=settings.get_config().main.ytdldownload)
 
         if data is None:
             return
@@ -156,6 +157,9 @@ def apply_events(discord_bot: commands.Bot):
     async def on_voice_state_update(member, before, after):
         # This function automatically disconnects the bot if it's the only
         # member remaining in a voice channel
+        if not settings.get_config().main.vcautodc:
+            return
+
         try:
             bot_channel = discord_bot.voice_clients[0].channel
         except IndexError:

@@ -14,6 +14,7 @@ import chat
 import memory
 import helpers
 import voice_chat
+import settings
 
 TELEGRAM_TOKEN_PATH = os.path.join("Data", "telegram_token.txt")
 DISCORD_TOKEN_PATH = os.path.join("Data", "discord_token.txt")
@@ -79,7 +80,10 @@ async def add_commands(telegram_bot, discord_bot) -> tuple[telegram.ext.Applicat
         ("vcstop", voice_chat.vcstop_command),
         ("vcjoin", voice_chat.vcjoin_command),
         ("vcleave", voice_chat.vcleave_command),
-        ("vcstream", voice_chat.vcstream_command)
+        ("vcstream", voice_chat.vcstream_command),
+        ("getconfig", settings.getconfig_command),
+        ("setconfig", settings.setconfig_command),
+        ("configlist", settings.configlist_command)
     ]
 
     # Iterate through the command list and set the 1st element as the command name and the 2nd
@@ -175,7 +179,7 @@ def telegram_handler(command):
 
             except BadRequest:
                 error_response = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
-                await context.bot.send_document(chat_id=update.effective_chat.id, text=error_response)
+                await context.bot.send_message(chat_id=update.effective_chat.id, text=error_response)
 
         # Add the command and its response to memory if necessary
         if command_response.record_to_memory:
