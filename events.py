@@ -1,5 +1,6 @@
 import random
-import memory
+import discord
+import chat
 import settings
 
 RESPONSES_PATH = "Data/response_list.txt"
@@ -20,10 +21,10 @@ async def handle_message(update, context):
     elif config.main.replytoname and (bot_name in message_text or ''.join(bot_name.split()) in message_text):
         response = await botname_reply(context, update)
 
-    user_prompt = await memory.generate_user_prompt(message_text, context, update)
+    user_prompt = chat.generate_user_prompt(message_text, context, update)
 
     if response is not None:
-        await memory.append_to_memory(user_prompt, response)
+        chat.append_to_memory(user_prompt, response)
 
 async def botname_reply(context, update=None):
     if update is None:
@@ -52,3 +53,25 @@ async def monkey_reply(context, update=None):
 
     await context.bot.send_voice(chat_id=update.effective_chat.id, voice="Sounds/monkey.mp3")
     return "AAAAAHHHHH-EEEEE-AAAAAHHHHH!"
+
+def apply_events(discord_bot):
+    @discord_bot.event
+    async def on_voice_state_update(member, before, after):
+        # This function automatically disconnects the bot if it's the only
+        # member remaining in a voice channel
+        if not settings.get_config().main.vcautodc:
+            return
+
+        try:
+            bot_channel = discord_bot.voice_clients[0].channel
+        except IndexError:
+            return
+
+        if not isinstance(bot_channel, discord.VoiceChannel):
+            return
+
+        if before.channel != bot_channel or after.channel == bot_channel:
+            return
+
+        if len(bot_channel.members) == 1:
+            await discord_bot.voice_clients[0].disconnect(force=False)

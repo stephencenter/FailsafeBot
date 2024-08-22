@@ -1,33 +1,28 @@
 import os
 import logging
 import asyncio
+from datetime import datetime
 from logging.handlers import RotatingFileHandler
 import telegram.ext
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHandler
 from telegram.error import BadRequest
 import discord
-from discord.ext import commands
-import sound_player
-import dice_roller
-import message_replier
+from discord.ext import commands as discord_commands
+import commands
+import events
 import chat
-import memory
-import helpers
-import voice_chat
-import settings
 
 TELEGRAM_TOKEN_PATH = os.path.join("Data", "telegram_token.txt")
 DISCORD_TOKEN_PATH = os.path.join("Data", "discord_token.txt")
-LOGGING_DIR_PATH = os.path.join("Data", "logging")
-LOGGING_FILE_PATH = os.path.join(LOGGING_DIR_PATH, "log.txt")
 ADMIN_LIST_PATH = "Data/admins.txt"
+VERSION_NUMBER = 'v1.0.0'
 
 async def init_logging():
     # Configure log formatting
     log_formatter = logging.Formatter("---------------------\n%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     # Create a rotating log handler - this ensures that the log is
-    log_handler = RotatingFileHandler(LOGGING_FILE_PATH, mode='a', maxBytes=1024*1024, backupCount=1, encoding=None, delay=False)
+    log_handler = RotatingFileHandler(commands.LOGGING_FILE_PATH, mode='a', maxBytes=1024*1024, backupCount=1, encoding=None, delay=True)
     log_handler.setFormatter(log_formatter)
     log_handler.setLevel(logging.ERROR)
 
@@ -35,7 +30,7 @@ async def init_logging():
     app_log.setLevel(logging.WARNING)
     app_log.addHandler(log_handler)
 
-async def create_bots() -> tuple[telegram.ext.Application, commands.Bot]:
+async def create_bots() -> tuple[telegram.ext.Application, discord_commands.Bot]:
     # Retrieve telegram bot token from file
     with open(TELEGRAM_TOKEN_PATH, encoding='utf-8') as f:
         telegram_token = f.readline().strip()
@@ -48,42 +43,42 @@ async def create_bots() -> tuple[telegram.ext.Application, commands.Bot]:
     intents.message_content = True
 
     # Create discord bot object
-    discord_bot = commands.Bot(command_prefix='/', intents=intents, help_command=None)
+    discord_bot = discord_commands.Bot(command_prefix='/', intents=intents, help_command=None)
 
     return telegram_bot, discord_bot
 
-async def add_commands(telegram_bot, discord_bot) -> tuple[telegram.ext.Application, commands.Bot]:
+async def add_commands(telegram_bot, discord_bot) -> tuple[telegram.ext.Application, discord_commands.Bot]:
     command_list = [
-        ("sound", sound_player.sound_command),
-        ("soundlist", sound_player.soundlist_command),
-        ("random", sound_player.randomsound_command),
-        ("playcount", sound_player.playcount_command),
-        ("topsounds", sound_player.topsounds_command),
-        ("botsounds", sound_player.botsounds_command),
-        ("newsounds", sound_player.newsounds_command),
-        ("addalias", sound_player.addalias_command),
-        ("delalias", sound_player.delalias_command),
-        ("getalias", sound_player.getalias_command),
-        ("search", sound_player.search_command),
-        ("statroll", dice_roller.statroll_command),
-        ("roll", dice_roller.roll_command),
-        ("pressf", chat.pressf_command),
-        ("wisdom", chat.wisdom_command),
-        ("help", chat.help_command),
-        ("chat", chat.chat_command),
-        ("say", chat.say_command),
-        ("test", chat.test_command),
-        ("lobotomize", memory.lobotomize_command),
-        ("logs", logs_command),
-        ("vcsound", voice_chat.vcsound_command),
-        ("vcrandom", voice_chat.vcrandom_command),
-        ("vcstop", voice_chat.vcstop_command),
-        ("vcjoin", voice_chat.vcjoin_command),
-        ("vcleave", voice_chat.vcleave_command),
-        ("vcstream", voice_chat.vcstream_command),
-        ("getconfig", settings.getconfig_command),
-        ("setconfig", settings.setconfig_command),
-        ("configlist", settings.configlist_command)
+        ("sound", commands.sound_command),
+        ("soundlist", commands.soundlist_command),
+        ("random", commands.randomsound_command),
+        ("playcount", commands.playcount_command),
+        ("topsounds", commands.topsounds_command),
+        ("botsounds", commands.botsounds_command),
+        ("newsounds", commands.newsounds_command),
+        ("addalias", commands.addalias_command),
+        ("delalias", commands.delalias_command),
+        ("getalias", commands.getalias_command),
+        ("search", commands.search_command),
+        ("statroll", commands.statroll_command),
+        ("roll", commands.roll_command),
+        ("pressf", commands.pressf_command),
+        ("wisdom", commands.wisdom_command),
+        ("help", commands.help_command),
+        ("chat", commands.chat_command),
+        ("test", commands.test_command),
+        ("lobotomize", commands.lobotomize_command),
+        ("logs", commands.logs_command),
+        ("vcsound", commands.vcsound_command),
+        ("vcrandom", commands.vcrandom_command),
+        ("vcstop", commands.vcstop_command),
+        ("vcjoin", commands.vcjoin_command),
+        ("vcleave", commands.vcleave_command),
+        ("vcstream", commands.vcstream_command),
+        ("getconfig", commands.getconfig_command),
+        ("setconfig", commands.setconfig_command),
+        ("configlist", commands.configlist_command),
+        ("restart", commands.restart_command)
     ]
 
     # Iterate through the command list and set the 1st element as the command name and the 2nd
@@ -92,8 +87,8 @@ async def add_commands(telegram_bot, discord_bot) -> tuple[telegram.ext.Applicat
         telegram_bot.add_handler(CommandHandler(command[0], telegram_handler(command[1])))
         discord_handler(discord_bot, command[0], command[1])
 
-    telegram_bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), message_replier.handle_message))
-    voice_chat.apply_events(discord_bot)
+    telegram_bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), events.handle_message))
+    events.apply_events(discord_bot)
     return telegram_bot, discord_bot
 
 async def run_telegram_bot(telegram_bot):
@@ -111,6 +106,8 @@ async def run_discord_bot(discord_bot):
     await discord_bot.start(discord_token)
 
 async def main():
+    print(f"Starting script {VERSION_NUMBER} at {datetime.now()}")
+
     # Initialize logging and set up the bots
     await init_logging()
     telegram_bot, discord_bot = await create_bots()
@@ -133,13 +130,13 @@ def discord_handler(bot, command_name: str, command):
     # and writes it to memory if necessary
     @bot.command(name=command_name)
     async def wrapper_function(context):
-        command_response: helpers.CommandResponse = await command(context)
+        command_response: commands.CommandResponse = await command(context)
 
         try:
-            if isinstance(command_response, helpers.SoundResponse):
+            if isinstance(command_response, commands.SoundResponse):
                 await context.send(file=discord.File(command_response.file_path))
 
-            elif isinstance(command_response, helpers.FileResponse):
+            elif isinstance(command_response, commands.FileResponse):
                 await context.send(content=command_response.bot_message, file=discord.File(command_response.file_path))
                 if command_response.temp:
                     os.remove(command_response.file_path)
@@ -152,8 +149,8 @@ def discord_handler(bot, command_name: str, command):
 
         # Add the command and its response to memory if necessary
         if command_response.record_to_memory:
-            user_prompt = await memory.generate_user_prompt(command_response.user_message, context)
-            await memory.append_to_memory(user_prompt=user_prompt, bot_prompt=command_response.bot_message)
+            user_prompt = chat.generate_user_prompt(command_response.user_message, context)
+            chat.append_to_memory(user_prompt=user_prompt, bot_prompt=command_response.bot_message)
 
     return wrapper_function
 
@@ -163,12 +160,12 @@ def telegram_handler(command):
     # for that command function and return it. This wrapper automatically handles
     # the bot's response to the command and writes it to memory if necessary
     async def wrapper_function(update, context):
-        command_response: helpers.CommandResponse = await command(context, update=update)
+        command_response: commands.CommandResponse = await command(context, update=update)
 
-        if isinstance(command_response, helpers.SoundResponse):
+        if isinstance(command_response, commands.SoundResponse):
             await context.bot.send_voice(chat_id=update.effective_chat.id, voice=command_response.file_path)
 
-        elif isinstance(command_response, helpers.FileResponse):
+        elif isinstance(command_response, commands.FileResponse):
             await context.bot.send_document(chat_id=update.effective_chat.id, document=command_response.file_path)
             if command_response.temp:
                 os.remove(command_response.file_path)
@@ -183,14 +180,10 @@ def telegram_handler(command):
 
         # Add the command and its response to memory if necessary
         if command_response.record_to_memory:
-            user_prompt = await memory.generate_user_prompt(command_response.user_message, context, update)
-            await memory.append_to_memory(user_prompt=user_prompt, bot_prompt=command_response.bot_message)
+            user_prompt = chat.generate_user_prompt(command_response.user_message, context, update)
+            chat.append_to_memory(user_prompt=user_prompt, bot_prompt=command_response.bot_message)
 
     return wrapper_function
-
-async def logs_command(context, update=None) -> helpers.CommandResponse:
-    output_path = os.path.join(LOGGING_DIR_PATH, "log.txt")
-    return helpers.FileResponse("Can you send me your error log?", "Sure, here you go.", output_path)
 
 if __name__ == "__main__":
     try:

@@ -1,121 +1,19 @@
 import json
 import numpy
 from openai import OpenAI
-import memory
-import helpers
+from openai.types.chat import ChatCompletionMessageParam
 import settings
+import helpers
 
 OPENAI_KEY_PATH = "Data/openai_key.txt"
 ELEVENLABS_KEY_PATH = "Data/eleven_key.txt"
 GPT_PROMPT_PATH = "Data/gpt_prompt.txt"
 ADMINS_PATH = "Data/admins.txt"
 MARKOV_PATH = "Data/markov_chain.json"
+MEMORY_PATH = "Data/openai_memory.json"
 
 with open(MARKOV_PATH, 'r', encoding='utf8') as markov:
     markov_chain = json.load(markov)
-
-async def chat_command(context, update=None) -> helpers.CommandResponse:
-    # Load and set the OpenAI API key
-    with open(OPENAI_KEY_PATH, encoding='utf-8') as f:
-        openai_api_key = f.readline().strip()
-
-    openai_client = OpenAI(api_key=openai_api_key)
-
-    # Load the system prompt
-    with open(GPT_PROMPT_PATH, encoding='utf-8') as f:
-        system_prompt = ''.join(f.readlines())
-
-    # Load the current conversation so far
-    loaded_memory = await memory.load_memory()
-
-    user_message = ' '.join(await helpers.get_args_list(context, update))
-
-    # Create a prompt for GPT that includes the user's name and message, as well as whether it was a private message or not
-    user_prompt = await memory.generate_user_prompt(user_message, context, update)
-
-    # Place the system prompt before the loaded memory to instruct the AI how to act
-    messages = [{"role": "system", "content": system_prompt}] + loaded_memory
-    messages.append({"role": "user", "content": user_prompt})
-
-    # Have GPT generate a response to the user prompt
-    response = get_gpt_response(openai_client, messages)
-
-    return helpers.CommandResponse(user_message, response)
-
-async def wisdom_command(context, update=None) -> helpers.CommandResponse:
-    response = generate_markov_text()
-    bot_name = settings.get_config().main.botname
-    return helpers.CommandResponse(f"O, wise and powerful {bot_name}, please grant me your wisdom!", response)
-
-# Elevenlabs-powered
-async def say_command(context, update=None) -> helpers.CommandResponse:
-    """
-    user_message = await helpers.get_args_list(context, update)
-    if not user_message:
-        try:
-            text_prompt = memory.load_memory()[-1]['content']
-        except IndexError:
-            return "My memory unit appears to be malfuncitoning."
-
-    else:
-        text_prompt = ' '.join(user_message)
-
-    soft_cap = 800
-    hard_cap = 1000
-    for index, char in enumerate(text_prompt):
-        if index >= soft_cap and char in ['.', '?', '!']:
-            text_prompt = text_prompt[:index]
-            break
-        elif index >= hard_cap:
-            text_prompt = text_prompt[:index]
-
-    if text_prompt in voice_memory:
-        audio = voice_memory[text_prompt]
-
-    else:
-        with open(eleven_path, encoding='utf-8') as f:
-            elevenlabs.set_api_key(f.readline().strip())
-
-        try:
-            audio = elevenlabs.generate(
-                text=text_prompt,
-                voice="Girthbot",
-                model='eleven_monolingual_v1'
-            )
-
-        except elevenlabs.api.error.APIError:
-            return "Sorry, but someone was a cheap bastard and didn't renew their elevenlabs subscription."
-
-        voice_memory[text_prompt] = audio
-
-    await context.bot.send_voice(chat_id=update.effective_chat.id, voice=audio)"""
-    return helpers.CommandResponse('Hey can you say this for me?', "Doesn't work right now, blame elevenlabs")
-
-# Misc chat commands
-async def pressf_command(context, update=None) -> helpers.CommandResponse:
-    return helpers.CommandResponse("F's in the chat boys.", "F")
-
-# This command is for verifying that the bot is online and receiving commands
-async def test_command(context, update=None) -> helpers.CommandResponse:
-    if not await helpers.is_admin(context, update):
-        return helpers.NoResponse()
-
-    return helpers.CommandResponse("Hey, are you working?", "I'm still alive, unfortunately.")
-
-async def help_command(context, update=None) -> helpers.CommandResponse:
-    help_string = """\
-Look upon my works, ye mighty, and despair:
-/vcjoin and /vcleave (join or leave current voice channel)
-/sound or /vcsound (play a sound effect)
-/random or /vcrandom (play a random sound effect)
-/soundlist (see what sounds are available)
-/search (look for sounds)
-/chat (talk to me)
-/roll (roll a dice)
-/pressf (pay respects)
-/wisdom (request my wisdom)"""
-
-    return helpers.CommandResponse("What chat commands are available?", help_string)
 
 # Markov-powered Text Generation Command
 def generate_markov_text(min_length=2, max_length=255) -> str:
@@ -144,9 +42,28 @@ def generate_markov_text(min_length=2, max_length=255) -> str:
     output_message = output_message[0].upper() + output_message[1:]
     return output_message
 
-def get_gpt_response(openai_client: OpenAI, messages: list) -> str:
-    chat = openai_client.chat.completions.create(messages=messages, model="gpt-4o-mini")
-    response = chat.choices[0].message.content
+def get_gpt_response(user_message) -> str:
+    # Load and set the OpenAI API key
+    with open(OPENAI_KEY_PATH, encoding='utf-8') as f:
+        openai_api_key = f.readline().strip()
+
+    openai_client = OpenAI(api_key=openai_api_key)
+
+    # Load the system prompt
+    with open(GPT_PROMPT_PATH, encoding='utf-8') as f:
+        system_prompt = ''.join(f.readlines())
+
+    # Load the current conversation so far
+    loaded_memory: list = load_memory()
+
+    # Place the system prompt before the loaded memory to instruct the AI how to act
+    messages: list[ChatCompletionMessageParam] = [{"role": "system", "content": system_prompt}]
+    messages += loaded_memory
+    messages.append({"role": "user", "content": user_message})
+
+    config = settings.get_config()
+    gpt_creation = openai_client.chat.completions.create(messages=messages, model=config.main.gptmodel)
+    response = gpt_creation.choices[0].message.content
 
     if response is None:
         return ''
@@ -156,3 +73,49 @@ def get_gpt_response(openai_client: OpenAI, messages: list) -> str:
         response = response[1:-1]
 
     return response
+
+def generate_user_prompt(user_message: str, context, update=None) -> str:
+    sender = helpers.get_sender(context, update)
+
+    if helpers.is_private(context, update):
+        user_prompt = f'{sender} sent the following message in a private chat: "{user_message}". Write a message to send as a response.'
+    else:
+        user_prompt = f'{sender} sent the following message in a group chat: "{user_message}". Write a message to send as a response.'
+
+    return user_prompt
+
+def load_memory() -> list[dict[str, str]]:
+    # Load the AI's memory (if it exists)
+    config = settings.get_config()
+
+    memory = []
+    if config.main.usememory:
+        try:
+            with open(MEMORY_PATH, encoding='utf-8') as f:
+                memory = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass
+
+    return memory
+
+def append_to_memory(user_prompt=None, bot_prompt=None) -> None:
+    config = settings.get_config()
+
+    if not config.main.usememory:
+        return
+
+    memory = load_memory()
+
+    if user_prompt is not None:
+        memory.append({"role": "user", "content": user_prompt})
+
+    if bot_prompt is not None:
+        memory.append({"role": "assistant", "content": bot_prompt})
+
+    # The AI's memory has a size limit to keep API usage low, and too keep it from veering off track too much
+    if len(memory) > config.main.memorysize:
+        memory = memory[len(memory) - config.main.memorysize:]
+
+    # Write the AI's memory to a file so it can be retrieved later
+    with open(MEMORY_PATH, mode='w', encoding='utf-8') as f:
+        json.dump(memory, f, indent=4)
