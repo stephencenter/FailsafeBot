@@ -8,14 +8,14 @@ from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHan
 from telegram.error import BadRequest
 import discord
 from discord.ext import commands as discord_commands
+import helpers
 import commands
 import events
 import chat
 
 TELEGRAM_TOKEN_PATH = os.path.join("Data", "telegram_token.txt")
 DISCORD_TOKEN_PATH = os.path.join("Data", "discord_token.txt")
-ADMIN_LIST_PATH = "Data/admins.txt"
-VERSION_NUMBER = 'v1.0.0'
+VERSION_NUMBER = 'v1.0.1'
 
 async def init_logging():
     # Configure log formatting
@@ -45,9 +45,7 @@ async def create_bots() -> tuple[telegram.ext.Application, discord_commands.Bot]
     # Create discord bot object
     discord_bot = discord_commands.Bot(command_prefix='/', intents=intents, help_command=None)
 
-    return telegram_bot, discord_bot
-
-async def add_commands(telegram_bot, discord_bot) -> tuple[telegram.ext.Application, discord_commands.Bot]:
+    # Add a command to this list to register it
     command_list = [
         ("sound", commands.sound_command),
         ("soundlist", commands.soundlist_command),
@@ -68,6 +66,7 @@ async def add_commands(telegram_bot, discord_bot) -> tuple[telegram.ext.Applicat
         ("chat", commands.chat_command),
         ("test", commands.test_command),
         ("lobotomize", commands.lobotomize_command),
+        ("memory", commands.memory_command),
         ("logs", commands.logs_command),
         ("vcsound", commands.vcsound_command),
         ("vcrandom", commands.vcrandom_command),
@@ -89,6 +88,7 @@ async def add_commands(telegram_bot, discord_bot) -> tuple[telegram.ext.Applicat
 
     telegram_bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), events.handle_message))
     events.apply_events(discord_bot)
+
     return telegram_bot, discord_bot
 
 async def run_telegram_bot(telegram_bot):
@@ -111,7 +111,6 @@ async def main():
     # Initialize logging and set up the bots
     await init_logging()
     telegram_bot, discord_bot = await create_bots()
-    telegram_bot, discord_bot = await add_commands(telegram_bot, discord_bot)
 
     # Run the bots simultaneously
     async with telegram_bot:
@@ -160,6 +159,13 @@ def telegram_handler(command):
     # for that command function and return it. This wrapper automatically handles
     # the bot's response to the command and writes it to memory if necessary
     async def wrapper_function(update, context):
+        # Telegram doesn't allow you to make "private" bots, meaning anyone can add your bot to their chat
+        # and use up your CPU time. This check prevents the bot from responding to commands unless it comes
+        # from a whitelisted chat
+        if not helpers.is_whitelisted(context, update):
+            print("rejected", update.message.chat.id, datetime.now())
+            return
+
         command_response: commands.CommandResponse = await command(context, update=update)
 
         if isinstance(command_response, commands.SoundResponse):

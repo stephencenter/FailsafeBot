@@ -1,5 +1,8 @@
 import settings
 
+TELEGRAM_WHITELIST_PATH = "Data/tg_whitelist.txt"
+ADMINS_PATH = "Data/admins.txt"
+
 TXT_NO_PERMISSIONS = (
     "You don't have the right, O you don't have the right.",
     "You think I'd let just anyone do this?"
@@ -27,6 +30,14 @@ def get_args_list(context, update=None) -> list[str]:
     except IndexError:
         return []
 
+def get_args_string(context, update=None):
+    # Returns the arguments provided with the command as a string
+    # e.g. /test a b c -> 'a b c'
+    if update is not None:
+        return ' '.join(context.args)
+
+    return context.message.content
+
 def is_admin(context, update=None) -> bool:
     # Returns whether the message sender is on the bot's admin list
     if not settings.get_config().main.requireadmin:
@@ -34,8 +45,19 @@ def is_admin(context, update=None) -> bool:
 
     username = get_sender(context, update)
 
-    admins_path = "Data/admins.txt"
-    with open(admins_path, encoding='utf-8') as f:
+    with open(ADMINS_PATH, encoding='utf-8') as f:
         admin_list = [x.strip() for x in f.readlines()]
 
     return username in admin_list
+
+def is_whitelisted(context, update) -> bool:
+    # Returns whether the chat is on the bot's whitelist (telegram only)
+    if not settings.get_config().main.usewhitelist:
+        return True
+
+    chat_id = str(update.message.chat.id)
+
+    with open(TELEGRAM_WHITELIST_PATH, encoding='utf-8') as f:
+        whitelist = [x.strip() for x in f.readlines()]
+
+    return chat_id in whitelist

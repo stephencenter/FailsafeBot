@@ -8,18 +8,19 @@ import helpers
 OPENAI_KEY_PATH = "Data/openai_key.txt"
 ELEVENLABS_KEY_PATH = "Data/eleven_key.txt"
 GPT_PROMPT_PATH = "Data/gpt_prompt.txt"
-ADMINS_PATH = "Data/admins.txt"
 MARKOV_PATH = "Data/markov_chain.json"
 MEMORY_PATH = "Data/openai_memory.json"
 
 with open(MARKOV_PATH, 'r', encoding='utf8') as markov:
     markov_chain = json.load(markov)
 
-# Markov-powered Text Generation Command
-def generate_markov_text(min_length=2, max_length=255) -> str:
+def generate_markov_text() -> str:
+    # Markov-powered Text Generation Command
     null_token = "NULL_TOKEN"
-
+    config = settings.Config()
+    min_length = 2
     chosen_tokens = []
+
     while True:
         if not chosen_tokens:
             prev_token = null_token
@@ -35,7 +36,7 @@ def generate_markov_text(min_length=2, max_length=255) -> str:
             break
 
         chosen_tokens.append(new_token)
-        if len(chosen_tokens) >= max_length:
+        if len(chosen_tokens) >= config.main.maxmarkov:
             break
 
     output_message = ' '.join(chosen_tokens)

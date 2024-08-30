@@ -232,7 +232,7 @@ async def botsounds_command(context, update=None) -> CommandResponse:
 # ==========================
 #region
 async def chat_command(context, update=None) -> CommandResponse:
-    user_message = ' '.join(helpers.get_args_list(context, update))
+    user_message = helpers.get_args_string(context, update)
 
     # Create a prompt for GPT that includes the user's name and message, as well as whether it was a private message or not
     user_prompt = chat.generate_user_prompt(user_message, context, update)
@@ -302,7 +302,7 @@ async def vcrandom_command(context, update=None) -> CommandResponse:
 
     await sound_manager.increment_playcount(sound_name)
 
-    return CommandResponse(user_message, "Sure, I chose the sound '{sound_name}", send_to_chat=False)
+    return CommandResponse(user_message, f"Sure, I chose the sound '{sound_name}", send_to_chat=False)
 
 async def vcstop_command(context, update=None) -> CommandResponse:
     if update is not None:
@@ -324,7 +324,7 @@ async def vcstream_command(context, update=None) -> CommandResponse:
         return CommandResponse("Stream this for me please.", "I'm not in a voice channel!")
 
     try:
-        stream_url = ' '.join(helpers.get_args_list(context, update))
+        stream_url = helpers.get_args_string(context, update)
     except IndexError:
         return CommandResponse("Stream this for me please.", "Provide a streamable URL please!")
 
@@ -457,6 +457,12 @@ async def lobotomize_command(context, update=None) -> CommandResponse:
 
     msg_options = ["My mind has never been clearer.", "Hey, what happened to those voices in my head?", "My inner demons seem to have calmed down a bit."]
     return CommandResponse('', random.choice(msg_options), record_to_memory=False)
+
+async def memory_command(context, update=None) -> CommandResponse:
+    if not helpers.is_admin(context, update):
+        return NoResponse()
+
+    return FileResponse("Can you send me your memory file?", "Sure, here you go.", chat.MEMORY_PATH)
 #endregion
 
 # ==========================
@@ -528,6 +534,9 @@ async def configlist_command(context, update=None) -> CommandResponse:
 # ==========================
 #region
 async def logs_command(context, update=None) -> CommandResponse:
+    if not helpers.is_admin(context, update):
+        return NoResponse()
+
     output_path = os.path.join(LOGGING_DIR_PATH, "log.txt")
     return FileResponse("Can you send me your error log?", "Sure, here you go.", output_path)
 
@@ -536,6 +545,7 @@ async def test_command(context, update=None) -> CommandResponse:
     if not helpers.is_admin(context, update):
         return NoResponse()
 
+    print(helpers.get_args_string(context, update))
     return CommandResponse("Hey, are you working?", "I'm still alive, unfortunately.")
 
 async def help_command(context, update=None) -> CommandResponse:
