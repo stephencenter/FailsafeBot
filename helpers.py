@@ -30,17 +30,19 @@ def get_args_list(context, update=None) -> list[str]:
     except IndexError:
         return []
 
-def get_args_string(context, update=None):
+def get_args_string(context, update=None) -> str:
     # Returns the arguments provided with the command as a string
     # e.g. /test a b c -> 'a b c'
     if update is not None:
         return ' '.join(context.args)
-
-    return context.message.content
+    try:
+        return ' '.join(context.message.content.split()[1:])
+    except IndexError:
+        return ''
 
 def is_admin(context, update=None) -> bool:
     # Returns whether the message sender is on the bot's admin list
-    if not settings.get_config().main.requireadmin:
+    if not settings.Config().main.requireadmin:
         return True
 
     username = get_sender(context, update)
@@ -52,7 +54,7 @@ def is_admin(context, update=None) -> bool:
 
 def is_whitelisted(context, update) -> bool:
     # Returns whether the chat is on the bot's whitelist (telegram only)
-    if not settings.get_config().main.usewhitelist:
+    if not settings.Config().main.usewhitelist:
         return True
 
     chat_id = str(update.message.chat.id)

@@ -62,7 +62,7 @@ def get_gpt_response(user_message) -> str:
     messages += loaded_memory
     messages.append({"role": "user", "content": user_message})
 
-    config = settings.get_config()
+    config = settings.Config()
     gpt_creation = openai_client.chat.completions.create(messages=messages, model=config.main.gptmodel)
     response = gpt_creation.choices[0].message.content
 
@@ -87,7 +87,7 @@ def generate_user_prompt(user_message: str, context, update=None) -> str:
 
 def load_memory() -> list[dict[str, str]]:
     # Load the AI's memory (if it exists)
-    config = settings.get_config()
+    config = settings.Config()
 
     memory = []
     if config.main.usememory:
@@ -100,7 +100,7 @@ def load_memory() -> list[dict[str, str]]:
     return memory
 
 def append_to_memory(user_prompt=None, bot_prompt=None) -> None:
-    config = settings.get_config()
+    config = settings.Config()
 
     if not config.main.usememory:
         return

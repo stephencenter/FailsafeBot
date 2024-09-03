@@ -1,8 +1,10 @@
 import os
 import sys
 import random
+import subprocess
 import discord
 from discord.ext import commands as discord_commands
+import psutil
 import sound_manager
 import chat
 import settings
@@ -244,7 +246,7 @@ async def chat_command(context, update=None) -> CommandResponse:
 
 async def wisdom_command(context, update=None) -> CommandResponse:
     response = chat.generate_markov_text()
-    bot_name = settings.get_config().main.botname
+    bot_name = settings.Config().main.botname
     return CommandResponse(f"O, wise and powerful {bot_name}, please grant me your wisdom!", response)
 
 async def pressf_command(context, update=None) -> CommandResponse:
@@ -394,7 +396,7 @@ async def roll_command(context, update=None) -> CommandResponse:
 
     user_prompt = f"Can you roll a {roll_text} for me?"
 
-    config = settings.get_config()
+    config = settings.Config()
     if num_dice > config.main.maxdice:
         return CommandResponse(user_prompt, f"Keep it to {config.main.maxdice:,} dice or fewer please, I'm not a god.")
 
@@ -481,7 +483,7 @@ async def getconfig_command(context, update=None) -> CommandResponse:
     except IndexError:
         return CommandResponse(user_message, "You need to provide a setting name to check.")
 
-    config = settings.get_config()
+    config = settings.Config()
     group_name, setting_name, value = config.find_setting(search_string)
 
     user_message = f"Can you tell me the value of the setting {search_string}?"
@@ -503,7 +505,7 @@ async def setconfig_command(context, update=None) -> CommandResponse:
     except IndexError:
         return CommandResponse(user_message, "Format is /setconfig [setting] [new value]")
 
-    config = settings.get_config()
+    config = settings.Config()
     group_name, setting_name, _ = config.find_setting(search_string)
 
     user_message = f"Can you change the value of the setting {search_string}?"
@@ -518,7 +520,7 @@ async def setconfig_command(context, update=None) -> CommandResponse:
     return CommandResponse(user_message, f"Setting '{group_name}.{setting_name}' has been set to '{new_value}'.")
 
 async def configlist_command(context, update=None) -> CommandResponse:
-    config = settings.get_config()
+    config = settings.Config()
 
     setting_list = []
     for group in config.__dict__:
@@ -533,21 +535,6 @@ async def configlist_command(context, update=None) -> CommandResponse:
 # OTHER COMMANDS
 # ==========================
 #region
-async def logs_command(context, update=None) -> CommandResponse:
-    if not helpers.is_admin(context, update):
-        return NoResponse()
-
-    output_path = os.path.join(LOGGING_DIR_PATH, "log.txt")
-    return FileResponse("Can you send me your error log?", "Sure, here you go.", output_path)
-
-async def test_command(context, update=None) -> CommandResponse:
-    # This command is for verifying that the bot is online and receiving commands
-    if not helpers.is_admin(context, update):
-        return NoResponse()
-
-    print(helpers.get_args_string(context, update))
-    return CommandResponse("Hey, are you working?", "I'm still alive, unfortunately.")
-
 async def help_command(context, update=None) -> CommandResponse:
     help_string = """\
 Look upon my works, ye mighty, and despair:
@@ -563,6 +550,20 @@ Look upon my works, ye mighty, and despair:
 
     return CommandResponse("What chat commands are available?", help_string)
 
+async def logs_command(context, update=None) -> CommandResponse:
+    if not helpers.is_admin(context, update):
+        return NoResponse()
+
+    output_path = os.path.join(LOGGING_DIR_PATH, "log.txt")
+    return FileResponse("Can you send me your error log?", "Sure, here you go.", output_path)
+
+async def test_command(context, update=None) -> CommandResponse:
+    # This command is for verifying that the bot is online and receiving commands
+    if not helpers.is_admin(context, update):
+        return NoResponse()
+
+    return CommandResponse("Hey, are you working?", "I'm still alive, unfortunately.")
+
 async def restart_command(context, update=None) -> CommandResponse:
     if not helpers.is_admin(context, update):
         return NoResponse()
@@ -574,4 +575,57 @@ async def restart_command(context, update=None) -> CommandResponse:
 
     await update.message.reply_text("Restarting...")
     os.execv(sys.executable, ['python'] + sys.argv)
+
+async def system_command(context, update=None) -> CommandResponse:
+    if not helpers.is_admin(context, update):
+        return NoResponse()
+
+    config = settings.Config()
+    mem_usage = psutil.virtual_memory()
+    disk_usage = psutil.disk_usage('/')
+
+    if config.main.usemegabytes:
+        divisor = 1024**2
+        label = "MB"
+    else:
+        divisor = 1024**3
+        label = "GB"
+
+    system_string = f"""SYSTEM RESOURCES
+CPU: {psutil.cpu_percent()}%
+Memory: {mem_usage.percent}% - {round(mem_usage.used/divisor, 2):,} / {round(mem_usage.total/divisor, 2):,} {label}
+Disk: {disk_usage.percent}% - {round(disk_usage.used/divisor, 2):,} / {round(disk_usage.total/divisor, 2):,} {label}
+"""
+    return CommandResponse("What's your resource usage at?", system_string)
+
+async def terminal_command(context, update=None) -> CommandResponse:
+    if not helpers.is_admin(context, update):
+        return NoResponse()
+
+    command_string = helpers.get_args_string(context, update)
+
+    if not command_string:
+        return CommandResponse("Can you run a command in your terminal?", "What command do you want me to run?")
+
+    process = subprocess.Popen(
+        command_string,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        shell=True
+    )
+
+    # If asked a y/n question, automatically respond with y
+    config = settings.Config()
+    if config.main.cmdautoyes and process.stdin is not None:
+        process.stdin.write(b'y')
+
+    stdout = process.communicate()[0]
+
+    user_message = f"Can you run this command: {command_string}"
+    if stdout:
+        return CommandResponse(user_message, stdout.decode())
+
+    return CommandResponse(user_message, "Done.")
+
 #endregion

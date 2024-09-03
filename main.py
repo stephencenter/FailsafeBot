@@ -5,7 +5,7 @@ from datetime import datetime
 from logging.handlers import RotatingFileHandler
 import telegram.ext
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHandler
-from telegram.error import BadRequest
+from telegram.error import BadRequest, TimedOut, NetworkError
 import discord
 from discord.ext import commands as discord_commands
 import helpers
@@ -15,7 +15,7 @@ import chat
 
 TELEGRAM_TOKEN_PATH = os.path.join("Data", "telegram_token.txt")
 DISCORD_TOKEN_PATH = os.path.join("Data", "discord_token.txt")
-VERSION_NUMBER = 'v1.0.1'
+VERSION_NUMBER = 'v1.0.2'
 
 async def init_logging():
     # Configure log formatting
@@ -77,7 +77,9 @@ async def create_bots() -> tuple[telegram.ext.Application, discord_commands.Bot]
         ("getconfig", commands.getconfig_command),
         ("setconfig", commands.setconfig_command),
         ("configlist", commands.configlist_command),
-        ("restart", commands.restart_command)
+        ("restart", commands.restart_command),
+        ("system", commands.system_command),
+        ("terminal", commands.terminal_command)
     ]
 
     # Iterate through the command list and set the 1st element as the command name and the 2nd
@@ -95,7 +97,7 @@ async def run_telegram_bot(telegram_bot):
     # Start the telegram bot and begin listening for commands
     await telegram_bot.start()
     if telegram_bot.updater is not None:
-        await telegram_bot.updater.start_polling()
+        await telegram_bot.updater.start_polling(drop_pending_updates=True)
 
 async def run_discord_bot(discord_bot):
     # Retrieve discord bot token from file
@@ -180,7 +182,7 @@ def telegram_handler(command):
             try:
                 await context.bot.send_message(chat_id=update.effective_chat.id, text=command_response.bot_message)
 
-            except BadRequest:
+            except (BadRequest, TimedOut, NetworkError):
                 error_response = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
                 await context.bot.send_message(chat_id=update.effective_chat.id, text=error_response)
 

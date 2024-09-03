@@ -39,7 +39,7 @@ class YTDLStream(discord.PCMVolumeTransformer):
     })
 
     def __init__(self, stream_url: str):
-        data = self.ytdl.extract_info(stream_url, download=settings.get_config().main.ytdldownload)
+        data = self.ytdl.extract_info(stream_url, download=settings.Config().main.ytdldownload)
 
         if data is None:
             return

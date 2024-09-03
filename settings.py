@@ -19,10 +19,24 @@ class ConfigMain:
     gptmodel: str = "gpt-4o-mini"  # What GPT model to use for AI chatting
     usewhitelist: bool = False  # Whether a chat needs to be on the whitelist for commands to function
     maxmarkov: int = 255  # Maximum number of tokens for the markov chain command /wisdom
+    usemegabytes: bool = True  # Whether the /system command should use megabytes (will use gigabytes if false)
+    cmdautoyes: bool = False  # Whether the /terminal command should automatically say 'y' to y/n questions (prevents hanging)
 
 @dataclass
 class Config:
     main: ConfigMain = field(default_factory=ConfigMain)
+
+    def __post_init__(self):
+        try:
+            with open(CONFIG_PATH, mode='r', encoding='utf-8') as f:
+                loaded = toml.load(f)
+
+        except FileNotFoundError:
+            return
+
+        for key in loaded:
+            for subkey in loaded[key]:
+                self.__dict__[key].__dict__[subkey] = loaded[key][subkey]
 
     def find_setting(self, search_string: str) -> tuple[str | None, str | None, Any]:
         # Provide a search string (either the setting name or [group name].[setting name]) and
@@ -49,25 +63,6 @@ class Config:
                     value = getattr(group, setting_name)
 
         return group_name, setting_name, value
-
-    def apply_settings(self, dictionary: dict):
-        for key in dictionary:
-            for subkey in dictionary[key]:
-                self.__dict__[key].__dict__[subkey] = dictionary[key][subkey]
-
-def get_config() -> Config:
-    config = Config()
-
-    try:
-        with open(CONFIG_PATH, mode='r', encoding='utf-8') as f:
-            loaded = toml.load(f)
-
-    except FileNotFoundError:
-        return config
-
-    config.apply_settings(loaded)
-
-    return config
 
 def save_config(config: Config):
     with open(CONFIG_PATH, mode='w', encoding='utf-8') as f:

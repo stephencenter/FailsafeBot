@@ -11,7 +11,7 @@ async def handle_message(update, context):
 
     message_text = update.message.text.lower()
 
-    config = settings.get_config()
+    config = settings.Config()
     bot_name = config.main.botname.lower()
 
     response = None
@@ -59,7 +59,9 @@ def apply_events(discord_bot):
     async def on_voice_state_update(member, before, after):
         # This function automatically disconnects the bot if it's the only
         # member remaining in a voice channel
-        if not settings.get_config().main.vcautodc:
+        config = settings.Config()
+
+        if not config.main.vcautodc:
             return
 
         try:
