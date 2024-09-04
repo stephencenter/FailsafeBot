@@ -16,11 +16,12 @@ with open(MARKOV_PATH, 'r', encoding='utf8') as markov:
 
 def generate_markov_text() -> str:
     # Markov-powered Text Generation Command
-    null_token = "NULL_TOKEN"
     config = settings.Config()
-    min_length = 2
-    chosen_tokens = []
+    if config.main.minmarkov > config.main.maxmarkov:
+        raise ValueError("Markov minimum length cannot be greater than maximum length (config issue)")
 
+    null_token = "NULL_TOKEN"
+    chosen_tokens = []
     while True:
         if not chosen_tokens:
             prev_token = null_token
@@ -30,7 +31,7 @@ def generate_markov_text() -> str:
         new_token = numpy.random.choice(list(markov_chain[prev_token].keys()), 1, p=list(markov_chain[prev_token].values()))[0]
 
         if new_token == null_token:
-            if len(chosen_tokens) < min_length:
+            if len(chosen_tokens) < config.main.minmarkov:
                 chosen_tokens = []
                 continue
             break

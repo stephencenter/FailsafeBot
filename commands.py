@@ -13,6 +13,7 @@ import helpers
 
 LOGGING_DIR_PATH = os.path.join("Data", "logging")
 LOGGING_FILE_PATH = os.path.join(LOGGING_DIR_PATH, "log.txt")
+VERSION_NUMBER = 'v1.0.3'
 
 # ==========================
 # RESPONSE CLASSES
@@ -505,6 +506,9 @@ async def setconfig_command(context, update=None) -> CommandResponse:
     except IndexError:
         return CommandResponse(user_message, "Format is /setconfig [setting] [new value]")
 
+    if not new_value:
+        return CommandResponse(user_message, "Format is /setconfig [setting] [new value]")
+
     config = settings.Config()
     group_name, setting_name, _ = config.find_setting(search_string)
 
@@ -628,4 +632,14 @@ async def terminal_command(context, update=None) -> CommandResponse:
 
     return CommandResponse(user_message, "Done.")
 
+async def version_command(context, update=None) -> CommandResponse:
+    if not helpers.is_admin(context, update):
+        return NoResponse()
+    return CommandResponse("What script version are you running?", VERSION_NUMBER)
+
+async def crash_command(context, update=None) -> CommandResponse:
+    if not helpers.is_admin(context, update):
+        return NoResponse()
+
+    raise NotImplementedError("/crash command used")
 #endregion

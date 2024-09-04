@@ -3,23 +3,24 @@ import logging
 import asyncio
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
-import telegram.ext
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHandler
-from telegram.error import BadRequest, TimedOut, NetworkError
+from telegram.ext import Application as TelegramBot
+from telegram.error import BadRequest, TimedOut, NetworkError, InvalidToken
 import discord
-from discord.ext import commands as discord_commands
+from discord.ext.commands import Bot as DiscordBot
+from discord.errors import LoginFailure
 import helpers
 import commands
 import events
 import chat
+import settings
 
 TELEGRAM_TOKEN_PATH = os.path.join("Data", "telegram_token.txt")
 DISCORD_TOKEN_PATH = os.path.join("Data", "discord_token.txt")
-VERSION_NUMBER = 'v1.0.2'
 
 async def init_logging():
     # Configure log formatting
-    log_formatter = logging.Formatter("---------------------\n%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    log_formatter = logging.Formatter(f"---------------------\n%(asctime)s - {commands.VERSION_NUMBER} - %(name)s - %(levelname)s - %(message)s")
 
     # Create a rotating log handler - this ensures that the log is
     log_handler = RotatingFileHandler(commands.LOGGING_FILE_PATH, mode='a', maxBytes=1024*1024, backupCount=1, encoding=None, delay=True)
@@ -30,22 +31,10 @@ async def init_logging():
     app_log.setLevel(logging.WARNING)
     app_log.addHandler(log_handler)
 
-async def create_bots() -> tuple[telegram.ext.Application, discord_commands.Bot]:
-    # Retrieve telegram bot token from file
-    with open(TELEGRAM_TOKEN_PATH, encoding='utf-8') as f:
-        telegram_token = f.readline().strip()
-
-    # Create telegram bot object
-    telegram_bot = ApplicationBuilder().token(telegram_token).build()
-
-    intents = discord.Intents.default()
-    intents.members = True
-    intents.message_content = True
-
-    # Create discord bot object
-    discord_bot = discord_commands.Bot(command_prefix='/', intents=intents, help_command=None)
-
-    # Add a command to this list to register it
+async def register_commands(bot: TelegramBot | DiscordBot):
+    # List of all commands, add commands here to register them.
+    # The first item in each tuple is the name of the command, and the second is
+    # the function that will be tied to that command
     command_list = [
         ("sound", commands.sound_command),
         ("soundlist", commands.soundlist_command),
@@ -79,49 +68,99 @@ async def create_bots() -> tuple[telegram.ext.Application, discord_commands.Bot]
         ("configlist", commands.configlist_command),
         ("restart", commands.restart_command),
         ("system", commands.system_command),
-        ("terminal", commands.terminal_command)
+        ("terminal", commands.terminal_command),
+        ("version", commands.version_command),
+        ("crash", commands.crash_command)
     ]
 
-    # Iterate through the command list and set the 1st element as the command name and the 2nd
-    # as the command function for each command
-    for command in command_list:
-        telegram_bot.add_handler(CommandHandler(command[0], telegram_handler(command[1])))
-        discord_handler(discord_bot, command[0], command[1])
+    if isinstance(bot, TelegramBot):
+        for command in command_list:
+            bot.add_handler(CommandHandler(command[0], telegram_handler(command[1])))
+        bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), events.handle_message))
 
-    telegram_bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), events.handle_message))
-    events.apply_events(discord_bot)
+    elif isinstance(bot, DiscordBot):
+        for command in command_list:
+            discord_handler(bot, command[0], command[1])
 
-    return telegram_bot, discord_bot
+        events.apply_events(bot)
 
-async def run_telegram_bot(telegram_bot):
-    # Start the telegram bot and begin listening for commands
+    else:
+        raise NotImplementedError
+
+async def create_run_telegram_bot(telegram_token: str):
+    # Create telegram bot object
+    telegram_bot = ApplicationBuilder().token(telegram_token).build()
+    await telegram_bot.initialize()
     await telegram_bot.start()
+
+    # Register all commands to the telegram bot
+    await register_commands(telegram_bot)
+
     if telegram_bot.updater is not None:
         await telegram_bot.updater.start_polling(drop_pending_updates=True)
 
-async def run_discord_bot(discord_bot):
-    # Retrieve discord bot token from file
-    with open(DISCORD_TOKEN_PATH, encoding='utf-8') as f:
-        discord_token = f.readline().strip()
+async def create_run_discord_bot(discord_token: str):
+    # Set intents for discord bot
+    intents = discord.Intents.default()
+    intents.members = True
+    intents.message_content = True
 
-    # Start the discord bot and begin listening for commands
+    # Create discord bot object
+    discord_bot = DiscordBot(command_prefix='/', intents=intents, help_command=None)
+
+    # Register all commands to the discord bot
+    await register_commands(discord_bot)
     await discord_bot.start(discord_token)
 
 async def main():
-    print(f"Starting script {VERSION_NUMBER} at {datetime.now()}")
+    print(f"Starting script {commands.VERSION_NUMBER} at {datetime.now()}")
+    config = settings.Config()
 
-    # Initialize logging and set up the bots
-    await init_logging()
-    telegram_bot, discord_bot = await create_bots()
+    # Initialize logging
+    if config.main.uselogging:
+        await init_logging()
 
-    # Run the bots simultaneously
-    async with telegram_bot:
-        print("Telegram bot started")
-        await run_telegram_bot(telegram_bot)
+    # Retrieve telegram bot token from file
+    try:
+        with open(TELEGRAM_TOKEN_PATH, encoding='utf-8') as f:
+            telegram_token = f.readline().strip()
+    except FileNotFoundError:
+        telegram_token = None
 
-        async with discord_bot:
-            print("Discord bot started")
-            await run_discord_bot(discord_bot)
+    # Retrieve discord bot token from file
+    try:
+        with open(DISCORD_TOKEN_PATH, encoding='utf-8') as f:
+            discord_token = f.readline().strip()
+    except FileNotFoundError:
+        discord_token = None
+
+    # Attempt to run Telgram bot
+    if config.main.runtelegram:
+        if telegram_token is not None:
+            print("Starting telegram bot")
+            try:
+                await create_run_telegram_bot(telegram_token)
+            except InvalidToken:
+                print(f"Telegram token at {TELEGRAM_TOKEN_PATH} is invalid, couldn't start bot")
+        else:
+            print(f"Telegram token not found at {TELEGRAM_TOKEN_PATH}, couldn't start bot")
+    else:
+        print("Telegram bot disabled in settings.toml, skipping")
+
+    # Attempt to run Discord bot
+    if config.main.rundiscord:
+        if discord_token is not None:
+            print("Starting discord bot")
+            try:
+                await create_run_discord_bot(discord_token)
+            except LoginFailure:
+                print(f"Discord token at {DISCORD_TOKEN_PATH} is invalid, couldn't start bot")
+        else:
+            print(f"Discord token not found at {DISCORD_TOKEN_PATH}, couldn't start bot")
+    else:
+        print(f"Discord bot disabled in {settings.CONFIG_PATH}, skipping")
+
+    await asyncio.Event().wait()
 
 def discord_handler(bot, command_name: str, command):
     # This function creates command handlers for the discord bot.
