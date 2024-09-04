@@ -1,12 +1,18 @@
 import random
+from datetime import datetime
 import discord
 import chat
+import helpers
 import settings
 
 RESPONSES_PATH = "Data/response_list.txt"
 
 async def handle_message(update, context):
     if update is None:
+        return
+
+    if not helpers.is_whitelisted(context, update):
+        print("rejected", update.message.chat.id, datetime.now())
         return
 
     message_text = update.message.text.lower()

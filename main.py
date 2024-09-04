@@ -120,22 +120,15 @@ async def main():
     if config.main.uselogging:
         await init_logging()
 
-    # Retrieve telegram bot token from file
-    try:
-        with open(TELEGRAM_TOKEN_PATH, encoding='utf-8') as f:
-            telegram_token = f.readline().strip()
-    except FileNotFoundError:
-        telegram_token = None
-
-    # Retrieve discord bot token from file
-    try:
-        with open(DISCORD_TOKEN_PATH, encoding='utf-8') as f:
-            discord_token = f.readline().strip()
-    except FileNotFoundError:
-        discord_token = None
-
-    # Attempt to run Telgram bot
     if config.main.runtelegram:
+        # Retrieve telegram bot token from file
+        try:
+            with open(TELEGRAM_TOKEN_PATH, encoding='utf-8') as f:
+                telegram_token = f.readline().strip()
+        except FileNotFoundError:
+            telegram_token = None
+
+        # Attempt to run Telgram bot
         if telegram_token is not None:
             print("Starting telegram bot")
             try:
@@ -147,8 +140,15 @@ async def main():
     else:
         print("Telegram bot disabled in settings.toml, skipping")
 
-    # Attempt to run Discord bot
     if config.main.rundiscord:
+        # Retrieve discord bot token from file
+        try:
+            with open(DISCORD_TOKEN_PATH, encoding='utf-8') as f:
+                discord_token = f.readline().strip()
+        except FileNotFoundError:
+            discord_token = None
+
+        # Attempt to run Discord bot
         if discord_token is not None:
             print("Starting discord bot")
             try:
