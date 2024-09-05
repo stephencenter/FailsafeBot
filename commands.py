@@ -1,9 +1,15 @@
 import os
 import sys
 import random
-import subprocess
+from datetime import datetime
+from subprocess import Popen, PIPE, STDOUT
+from typing import Callable
+from telegram.ext import MessageHandler, filters, CommandHandler, Application as TelegramBot
+from telegram.error import BadRequest, TimedOut, NetworkError
 import discord
 from discord.ext import commands as discord_commands
+from discord.ext.commands import CommandInvokeError, Bot as DiscordBot
+from discord.errors import HTTPException
 import psutil
 import sound_manager
 import chat
@@ -13,7 +19,8 @@ import helpers
 
 LOGGING_DIR_PATH = os.path.join("Data", "logging")
 LOGGING_FILE_PATH = os.path.join(LOGGING_DIR_PATH, "log.txt")
-VERSION_NUMBER = 'v1.0.3'
+VERSION_NUMBER = 'v1.0.4'
+RESPONSES_PATH = "Data/response_list.txt"
 
 # ==========================
 # RESPONSE CLASSES
@@ -39,7 +46,140 @@ class SoundResponse(FileResponse):
 class NoResponse(CommandResponse):
     def __init__(self):
         super().__init__('', '', record_to_memory=False, send_to_chat=False)
+#endregion
 
+# ==========================
+# RESPONSE HANDLERS
+# ==========================
+#region
+def telegram_handler(command: Callable) -> Callable:
+    # This function creates command handlers for the telegram bot.
+    # Provide this function with a command function and it will create a wrapper
+    # for that command function and return it. This wrapper automatically handles
+    # the bot's response to the command and writes it to memory if necessary
+    async def wrapper_function(update, context):
+        # Telegram doesn't allow you to make "private" bots, meaning anyone can add your bot to their chat
+        # and use up your CPU time. This check prevents the bot from responding to commands unless it comes
+        # from a whitelisted chat
+        if not helpers.is_whitelisted(context, update):
+            print("rejected", update.message.chat.id, datetime.now())
+            return
+
+        command_response: CommandResponse = await command(context, update=update)
+
+        if isinstance(command_response, SoundResponse):
+            await context.bot.send_voice(chat_id=update.effective_chat.id, voice=command_response.file_path)
+
+        elif isinstance(command_response, FileResponse):
+            await context.bot.send_document(chat_id=update.effective_chat.id, document=command_response.file_path)
+            if command_response.temp:
+                os.remove(command_response.file_path)
+
+        elif command_response.send_to_chat:
+            try:
+                await context.bot.send_message(chat_id=update.effective_chat.id, text=command_response.bot_message)
+
+            except (BadRequest, TimedOut, NetworkError):
+                error_response = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
+                await context.bot.send_message(chat_id=update.effective_chat.id, text=error_response)
+
+        # Add the command and its response to memory if necessary
+        if command_response.record_to_memory:
+            user_prompt = chat.generate_user_prompt(command_response.user_message, context, update)
+            chat.append_to_memory(user_prompt=user_prompt, bot_prompt=command_response.bot_message)
+
+    return wrapper_function
+
+def discord_handler(command: Callable) -> Callable:
+    # This function creates command handlers for the discord bot.
+    # Provide this function with a command function and it will create a wrapper
+    # for that command function and return it. This wrapper automatically handles
+    # the bot's response to the command and writes it to memory if necessary
+    async def wrapper_function(context):
+        command_response: CommandResponse = await command(context)
+
+        try:
+            if isinstance(command_response, SoundResponse):
+                await context.send(file=discord.File(command_response.file_path))
+
+            elif isinstance(command_response, FileResponse):
+                await context.send(content=command_response.bot_message, file=discord.File(command_response.file_path))
+                if command_response.temp:
+                    os.remove(command_response.file_path)
+
+            elif command_response.send_to_chat:
+                await context.send(command_response.bot_message)
+
+        except HTTPException:
+            error_response = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
+            await context.send(error_response)
+
+        # Add the command and its response to memory if necessary
+        if command_response.record_to_memory:
+            user_prompt = chat.generate_user_prompt(command_response.user_message, context)
+            chat.append_to_memory(user_prompt=user_prompt, bot_prompt=command_response.bot_message)
+
+    return wrapper_function
+
+
+def register_commands(bot: TelegramBot | DiscordBot):
+    # List of all commands, add commands here to register them.
+    # The first item in each tuple is the name of the command, and the second is
+    # the function that will be tied to that command
+    command_list = [
+        ("sound", sound_command),
+        ("soundlist", soundlist_command),
+        ("random", randomsound_command),
+        ("playcount", playcount_command),
+        ("topsounds", topsounds_command),
+        ("botsounds", botsounds_command),
+        ("newsounds", newsounds_command),
+        ("addalias", addalias_command),
+        ("delalias", delalias_command),
+        ("getalias", getalias_command),
+        ("search", search_command),
+        ("statroll", statroll_command),
+        ("roll", roll_command),
+        ("pressf", pressf_command),
+        ("wisdom", wisdom_command),
+        ("help", help_command),
+        ("chat", chat_command),
+        ("test", test_command),
+        ("lobotomize", lobotomize_command),
+        ("memory", memory_command),
+        ("logs", logs_command),
+        ("vcsound", vcsound_command),
+        ("vcrandom", vcrandom_command),
+        ("vcstop", vcstop_command),
+        ("vcjoin", vcjoin_command),
+        ("vcleave", vcleave_command),
+        ("vcstream", vcstream_command),
+        ("getconfig", getconfig_command),
+        ("setconfig", setconfig_command),
+        ("configlist", configlist_command),
+        ("restart", restart_command),
+        ("system", system_command),
+        ("terminal", terminal_command),
+        ("version", version_command),
+        ("crash", crash_command)
+    ]
+
+    if isinstance(bot, TelegramBot):
+        for command in command_list:
+            bot.add_handler(CommandHandler(command[0], telegram_handler(command[1])))
+
+        bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), telegram_handler(telegram_on_message)))
+
+    elif isinstance(bot, DiscordBot):#bot: DiscordBot, command_name: str,
+        for command in command_list:
+            new_command = discord_commands.Command(discord_handler(command[1]))
+            new_command.name = command[0]
+            bot.add_command(new_command)
+
+        discord_register_events(bot)
+
+    else:
+        raise NotImplementedError
 #endregion
 
 # ==========================
@@ -313,7 +453,7 @@ async def vcstop_command(context, update=None) -> CommandResponse:
 
     try:
         context.voice_client.stop()
-    except (AttributeError, TypeError, discord_commands.errors.CommandInvokeError):
+    except (AttributeError, TypeError, CommandInvokeError):
         # For some reason this can throw a lot of exceptions, we just ignore them
         pass
 
@@ -370,7 +510,7 @@ async def vcleave_command(context, update=None) -> CommandResponse:
 
     try:
         await context.voice_client.disconnect()
-    except (AttributeError, discord_commands.errors.CommandInvokeError):
+    except (AttributeError, CommandInvokeError):
         pass
 
     return CommandResponse("Leave the current voice channel please.", "If you insist", send_to_chat=False)
@@ -572,12 +712,13 @@ async def restart_command(context, update=None) -> CommandResponse:
     if not helpers.is_admin(context, update):
         return NoResponse()
 
-    if update is None:
-        return CommandResponse("Restart your script please.", "That's telegram only, sorry!")
-
     print("Restarting...")
 
-    await update.message.reply_text("Restarting...")
+    if update is None:
+        await context.send("Restarting...")
+    else:
+        await update.message.reply_text("Restarting...")
+
     os.execv(sys.executable, ['python'] + sys.argv)
 
 async def system_command(context, update=None) -> CommandResponse:
@@ -611,20 +752,13 @@ async def terminal_command(context, update=None) -> CommandResponse:
     if not command_string:
         return CommandResponse("Can you run a command in your terminal?", "What command do you want me to run?")
 
-    process = subprocess.Popen(
-        command_string,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        shell=True
-    )
+    with Popen(command_string, stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=True) as process:
+        # If asked a y/n question, automatically respond with y
+        config = settings.Config()
+        if config.main.cmdautoyes and process.stdin is not None:
+            process.stdin.write(b'y')
 
-    # If asked a y/n question, automatically respond with y
-    config = settings.Config()
-    if config.main.cmdautoyes and process.stdin is not None:
-        process.stdin.write(b'y')
-
-    stdout = process.communicate()[0]
+        stdout = process.communicate()[0]
 
     user_message = f"Can you run this command: {command_string}"
     if stdout:
@@ -640,6 +774,89 @@ async def version_command(context, update=None) -> CommandResponse:
 async def crash_command(context, update=None) -> CommandResponse:
     if not helpers.is_admin(context, update):
         return NoResponse()
-
     raise NotImplementedError("/crash command used")
+#endregion
+
+# ==========================
+# EVENTS
+# ==========================
+#region
+# This function assigns all of the event handlers to the discord bot
+# It is called when the discord bot is created in main.py
+def discord_register_events(discord_bot: DiscordBot):
+    @discord_bot.event
+    async def on_voice_state_update(member, before, after):
+        # This function automatically disconnects the bot if it's the only
+        # member remaining in a voice channel
+        config = settings.Config()
+
+        if not config.main.vcautodc:
+            return
+
+        try:
+            bot_channel = discord_bot.voice_clients[0].channel
+        except IndexError:
+            return
+
+        if not isinstance(bot_channel, discord.VoiceChannel):
+            return
+
+        if before.channel != bot_channel or after.channel == bot_channel:
+            return
+
+        if len(bot_channel.members) == 1:
+            await discord_bot.voice_clients[0].disconnect(force=False)
+
+    @discord_bot.event
+    async def on_message(message):
+        if message.content.startswith(discord_bot.command_prefix):
+            await discord_bot.process_commands(message)
+            return
+
+        message_handler = discord_handler(handle_message_event)
+        context = await discord_bot.get_context(message)
+        await message_handler(context)
+
+async def telegram_on_message(context, update) -> CommandResponse:
+    message_text = update.message.text.lower()
+    response = await handle_message_event(message_text)
+
+    return response
+
+async def handle_message_event(message) -> CommandResponse:
+    config = settings.Config()
+    bot_name = config.main.botname.lower()
+
+    if isinstance(message, discord_commands.Context):
+        message = message.message.content
+
+    response = NoResponse()
+
+    if config.main.replytomonkey and "monkey" in message:
+        response = await monkey_event(message)
+
+    elif config.main.replytoname and (bot_name in message or ''.join(bot_name.split()) in message):
+        response = await botname_event(message)
+
+    return response
+
+async def botname_event(message):
+    try:
+        with open(RESPONSES_PATH, encoding="utf-8") as f:
+            response_list = f.readlines()
+
+    except FileNotFoundError:
+        return NoResponse()
+
+    response_list = [line for line in response_list if not line.isspace() and not line.startswith("#")]
+
+    chosen_response = random.choice(response_list)
+    if chosen_response.startswith('f"') or chosen_response.startswith("f'"):
+        chosen_response = eval(chosen_response)
+
+    return CommandResponse(message, chosen_response)
+
+async def monkey_event(message):
+    # Discworld adventure game reference
+    return SoundResponse(message, bot_message="AAAAAHHHHH-EEEEE-AAAAAHHHHH!", file_path="Sounds/monkey.mp3")
 #endregion

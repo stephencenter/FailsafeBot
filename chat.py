@@ -44,7 +44,7 @@ def generate_markov_text() -> str:
     output_message = output_message[0].upper() + output_message[1:]
     return output_message
 
-def get_gpt_response(user_message) -> str:
+def get_gpt_response(user_message: str) -> str:
     # Load and set the OpenAI API key
     with open(OPENAI_KEY_PATH, encoding='utf-8') as f:
         openai_api_key = f.readline().strip()
@@ -56,7 +56,7 @@ def get_gpt_response(user_message) -> str:
         system_prompt = ''.join(f.readlines())
 
     # Load the current conversation so far
-    loaded_memory: list = load_memory()
+    loaded_memory: list[ChatCompletionMessageParam] =  load_memory()
 
     # Place the system prompt before the loaded memory to instruct the AI how to act
     messages: list[ChatCompletionMessageParam] = [{"role": "system", "content": system_prompt}]
@@ -86,7 +86,7 @@ def generate_user_prompt(user_message: str, context, update=None) -> str:
 
     return user_prompt
 
-def load_memory() -> list[dict[str, str]]:
+def load_memory() -> list[ChatCompletionMessageParam]:
     # Load the AI's memory (if it exists)
     config = settings.Config()
 
@@ -100,7 +100,7 @@ def load_memory() -> list[dict[str, str]]:
 
     return memory
 
-def append_to_memory(user_prompt=None, bot_prompt=None) -> None:
+def append_to_memory(user_prompt: str = '', bot_prompt: str = '') -> None:
     config = settings.Config()
 
     if not config.main.usememory:
@@ -108,10 +108,10 @@ def append_to_memory(user_prompt=None, bot_prompt=None) -> None:
 
     memory = load_memory()
 
-    if user_prompt is not None:
+    if user_prompt:
         memory.append({"role": "user", "content": user_prompt})
 
-    if bot_prompt is not None:
+    if bot_prompt:
         memory.append({"role": "assistant", "content": bot_prompt})
 
     # The AI's memory has a size limit to keep API usage low, and too keep it from veering off track too much

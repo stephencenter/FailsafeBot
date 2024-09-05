@@ -77,7 +77,7 @@ def load_chat_logs() -> list[str]:
 
     return message_list
 
-def build_markov_chain(message_list):
+def build_markov_chain(message_list: list[str]) -> dict[str, dict[str, float]]:
     markov_chain = {}
     null_token = "NULL_TOKEN"
 
