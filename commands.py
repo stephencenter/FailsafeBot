@@ -154,6 +154,7 @@ def register_commands(bot: TelegramBot | DiscordBot):
         ("vcjoin", vcjoin_command),
         ("vcleave", vcleave_command),
         ("vcstream", vcstream_command),
+        ("vcpause", vcpause_command),
         ("getconfig", getconfig_command),
         ("setconfig", setconfig_command),
         ("configlist", configlist_command),
@@ -487,6 +488,25 @@ async def vcstream_command(context, update=None) -> CommandResponse:
 
     return CommandResponse("Stream this for me please.", f"Now playing: {stream_player.title}")
 
+async def vcpause_command(context, update=None):
+    if update is not None:
+        return CommandResponse("Please toggle pause on the voice stream.", "That's Discord only, sorry!")
+
+    if context.voice_client is None:
+        return CommandResponse("Please toggle pause on the voice stream.", "I'm not in a voice channel!")
+
+    # Stop the voice client if it's already playing a sound or stream
+    if not context.voice_client.is_paused() and not context.voice_client.is_playing():
+        return CommandResponse("Please toggle pause on the voice stream.", "Nothing is playing!")
+
+    if context.voice_client.is_paused():
+        context.voice_client.resume()
+
+        return CommandResponse("Please unpause the voice stream.", "Done.", send_to_chat=False)
+
+    context.voice_client.pause()
+    return CommandResponse("Please pause the voice stream.", "Done.", send_to_chat=False)
+
 async def vcjoin_command(context, update=None) -> CommandResponse:
     if update is not None:
         return CommandResponse("Join my voice channel please.", "That's Discord only, sorry!")
@@ -736,9 +756,11 @@ async def system_command(context, update=None) -> CommandResponse:
         divisor = 1024**3
         label = "GB"
 
+    mem_percent = round(mem_usage.used/mem_usage.total*100, 2)
+
     system_string = f"""SYSTEM RESOURCES
-CPU: {psutil.cpu_percent()}%
-Memory: {mem_usage.percent}% - {round(mem_usage.used/divisor, 2):,} / {round(mem_usage.total/divisor, 2):,} {label}
+CPU: {psutil.cpu_percent(interval=0.5)}%
+Memory: {mem_percent}% - {round(mem_usage.used/divisor, 2)} / {round(mem_usage.total/divisor, 2):,} {label}
 Disk: {disk_usage.percent}% - {round(disk_usage.used/divisor, 2):,} / {round(disk_usage.total/divisor, 2):,} {label}
 """
     return CommandResponse("What's your resource usage at?", system_string)
@@ -781,9 +803,10 @@ async def crash_command(context, update=None) -> CommandResponse:
 # EVENTS
 # ==========================
 #region
-# This function assigns all of the event handlers to the discord bot
-# It is called when the discord bot is created in main.py
 def discord_register_events(discord_bot: DiscordBot):
+    # This function assigns all of the event handlers to the discord bot
+    # It is called when the discord bot is created in main.py
+
     @discord_bot.event
     async def on_voice_state_update(member, before, after):
         # This function automatically disconnects the bot if it's the only
@@ -799,9 +822,6 @@ def discord_register_events(discord_bot: DiscordBot):
             return
 
         if not isinstance(bot_channel, discord.VoiceChannel):
-            return
-
-        if before.channel != bot_channel or after.channel == bot_channel:
             return
 
         if len(bot_channel.members) == 1:
