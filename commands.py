@@ -16,6 +16,7 @@ import chat
 import settings
 import dice_roller
 import helpers
+import trivia
 
 LOGGING_DIR_PATH = os.path.join("Data", "logging")
 LOGGING_FILE_PATH = os.path.join(LOGGING_DIR_PATH, "log.txt")
@@ -128,8 +129,8 @@ def register_commands(bot: TelegramBot | DiscordBot):
     # the function that will be tied to that command
     command_list = [
         ("sound", sound_command),
-        ("soundlist", soundlist_command),
         ("random", randomsound_command),
+        ("soundlist", soundlist_command),
         ("playcount", playcount_command),
         ("topsounds", topsounds_command),
         ("botsounds", botsounds_command),
@@ -138,8 +139,6 @@ def register_commands(bot: TelegramBot | DiscordBot):
         ("delalias", delalias_command),
         ("getalias", getalias_command),
         ("search", search_command),
-        ("statroll", statroll_command),
-        ("roll", roll_command),
         ("pressf", pressf_command),
         ("wisdom", wisdom_command),
         ("help", help_command),
@@ -155,6 +154,11 @@ def register_commands(bot: TelegramBot | DiscordBot):
         ("vcleave", vcleave_command),
         ("vcstream", vcstream_command),
         ("vcpause", vcpause_command),
+        ("statroll", statroll_command),
+        ("roll", roll_command),
+        ("trivia", trivia_command),
+        ("guess", guess_command),
+        ("triviarank", triviarank_command),
         ("getconfig", getconfig_command),
         ("setconfig", setconfig_command),
         ("configlist", configlist_command),
@@ -237,6 +241,22 @@ async def soundlist_command(context, update=None) -> CommandResponse:
 
     return FileResponse("How many sounds are available to use? Can you list them for me?", response, txt_path, temp=True)
 
+async def newsounds_command(context, update=None) -> CommandResponse:
+    playcount_dict = sound_manager.get_playcount_dict()
+    new_sounds = [sound for sound in playcount_dict if playcount_dict[sound] == 0]
+    new_count = len(new_sounds)
+    list_string = ', '.join(new_sounds)
+
+    user_message = "How many new sounds are available?"
+
+    if new_count == 0:
+        return CommandResponse(user_message, "There are no new sounds available.")
+
+    if new_count == 1:
+        return CommandResponse(user_message, f"There is one new sound available: {list_string}")
+
+    return CommandResponse(user_message, f"There are {new_count} new sounds available:\n\n{list_string}")
+
 async def addalias_command(context, update=None) -> CommandResponse:
     # Get the username of the user that called this command
     user_message = helpers.get_args_list(context, update)
@@ -267,22 +287,6 @@ async def delalias_command(context, update=None) -> CommandResponse:
 
     response = await sound_manager.del_sound_alias(alias_to_delete)
     return CommandResponse(f"Can you delete the sound alias '{alias_to_delete}'?", response)
-
-async def newsounds_command(context, update=None) -> CommandResponse:
-    playcount_dict = sound_manager.get_playcount_dict()
-    new_sounds = [sound for sound in playcount_dict if playcount_dict[sound] == 0]
-    new_count = len(new_sounds)
-    list_string = ', '.join(new_sounds)
-
-    user_message = "How many new sounds are available?"
-
-    if new_count == 0:
-        return CommandResponse(user_message, "There are no new sounds available.")
-
-    if new_count == 1:
-        return CommandResponse(user_message, f"There is one new sound available: {list_string}")
-
-    return CommandResponse(user_message, f"There are {new_count} new sounds available:\n\n{list_string}")
 
 async def getalias_command(context, update=None) -> CommandResponse:
     try:
@@ -608,6 +612,47 @@ async def statroll_command(context, update=None) -> CommandResponse:
 #endregion
 
 # ==========================
+# TRIVIA COMMANDS
+# ==========================
+#region
+async def trivia_command(context, update=None) -> CommandResponse:
+    trivia_question = trivia.get_trivia_question()
+
+    return CommandResponse("Can you give me a trivia question?", trivia_question.get_question_string())
+
+async def guess_command(context, update=None) -> CommandResponse:
+    guess = helpers.get_args_string(context, update)
+    user_message = f"Is the trivia answer {guess}?"
+
+    if (current_question := trivia.get_current_question()) is None:
+        return CommandResponse(user_message, "Trivia is not active!")
+
+    if not guess:
+        return CommandResponse(user_message, f"You need to provide an answer, like /guess abc")
+
+    if current_question.is_guess_correct(guess):
+        points_gained = current_question.score_question(True, context, update)
+        player_name = helpers.get_sender(context, update)
+        return CommandResponse(user_message, f"That is correct, the answer was '{current_question.correct_answer}'. {player_name} earned {points_gained} points!")
+
+    if current_question.is_guess_on_list(guess):
+        current_question.score_question(False, context, update)
+        if current_question.guesses_left > 0:
+            return CommandResponse(user_message, f"That is incorrect, {current_question.guesses_left} guesses remaining.")
+
+        return CommandResponse(user_message, f"That is incorrect! Out of guesses, the answer was {current_question.correct_answer}!")
+
+    return CommandResponse(user_message, "That isn't an option for this question!")
+
+async def triviarank_command(context, update=None):
+    points_dict = trivia.get_points_dict()
+    ranking = sorted(points_dict, key=lambda x: points_dict[x], reverse=True)
+
+    message = '\n'.join(f'    {index + 1}. {player} @ {points_dict[player]} points' for index, player in enumerate(ranking))
+    return CommandResponse(f"What are the current trivia rankings?", f"The trivia rankings are:\n{message}")
+#endregion
+
+# ==========================
 # MEMORY COMMANDS
 # ==========================
 #region
@@ -705,12 +750,12 @@ Look upon my works, ye mighty, and despair:
 /vcjoin and /vcleave (join or leave current voice channel)
 /sound or /vcsound (play a sound effect)
 /random or /vcrandom (play a random sound effect)
-/soundlist (see what sounds are available)
-/search (look for sounds)
+/soundlist and /search (find sounds to play)
+/trivia (play trivia against your friends)
 /chat (talk to me)
 /roll (roll a dice)
-/pressf (pay respects)
-/wisdom (request my wisdom)"""
+/wisdom (request my wisdom)
+/pressf (pay respects)"""
 
     return CommandResponse("What chat commands are available?", help_string)
 

@@ -115,8 +115,8 @@ def append_to_memory(user_prompt: str = '', bot_prompt: str = '') -> None:
         memory.append({"role": "assistant", "content": bot_prompt})
 
     # The AI's memory has a size limit to keep API usage low, and too keep it from veering off track too much
-    if len(memory) > config.main.memorysize:
-        memory = memory[len(memory) - config.main.memorysize:]
+    if (size := len(memory)) > config.main.memorysize:
+        memory = memory[size - config.main.memorysize:]
 
     # Write the AI's memory to a file so it can be retrieved later
     with open(MEMORY_PATH, mode='w', encoding='utf-8') as f:
