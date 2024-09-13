@@ -1,7 +1,9 @@
+import json
 import settings
 
 TELEGRAM_WHITELIST_PATH = "Data/tg_whitelist.txt"
 ADMINS_PATH = "Data/admins.txt"
+USERNAME_MAP_PATH = "Data/username_map.json"
 
 TXT_NO_PERMISSIONS = (
     "You don't have the right, O you don't have the right.",
@@ -11,8 +13,11 @@ TXT_NO_PERMISSIONS = (
 def get_sender(context, update=None) -> str:
     # Returns the username of the user that send the command
     if update is not None:
-        return update.message.from_user["username"]
-    return context.author.name
+        username = update.message.from_user["username"]
+    else:
+        username = context.author.name
+
+    return map_username(username)
 
 def is_private(context, update=None) -> bool:
     # Returns whether the command was called in a private chat or a group chat
@@ -63,3 +68,17 @@ def is_whitelisted(context, update) -> bool:
         whitelist = [x.strip() for x in f.readlines()]
 
     return chat_id in whitelist
+
+def map_username(username) -> str:
+    try:
+        with open(USERNAME_MAP_PATH, 'r', encoding='utf-8') as f:
+            username_map = json.load(f)
+    except FileNotFoundError:
+        return username
+
+    try:
+        corrected_name = username_map[username.lower()]
+    except KeyError:
+        return username
+
+    return corrected_name

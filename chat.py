@@ -56,7 +56,7 @@ def get_gpt_response(user_message: str) -> str:
         system_prompt = ''.join(f.readlines())
 
     # Load the current conversation so far
-    loaded_memory: list[ChatCompletionMessageParam] =  load_memory()
+    loaded_memory: list[ChatCompletionMessageParam] = load_memory()
 
     # Place the system prompt before the loaded memory to instruct the AI how to act
     messages: list[ChatCompletionMessageParam] = [{"role": "system", "content": system_prompt}]

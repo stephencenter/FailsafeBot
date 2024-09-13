@@ -1,6 +1,7 @@
 import os
 import sys
 import random
+import logging
 from datetime import datetime
 from subprocess import Popen, PIPE, STDOUT
 from typing import Callable
@@ -20,7 +21,7 @@ import trivia
 
 LOGGING_DIR_PATH = os.path.join("Data", "logging")
 LOGGING_FILE_PATH = os.path.join(LOGGING_DIR_PATH, "log.txt")
-VERSION_NUMBER = 'v1.0.4'
+VERSION_NUMBER = 'v1.0.5'
 RESPONSES_PATH = "Data/response_list.txt"
 
 # ==========================
@@ -80,7 +81,8 @@ def telegram_handler(command: Callable) -> Callable:
             try:
                 await context.bot.send_message(chat_id=update.effective_chat.id, text=command_response.bot_message)
 
-            except (BadRequest, TimedOut, NetworkError):
+            except (BadRequest, TimedOut, NetworkError) as e:
+                logging.exception(e)
                 error_response = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
                 await context.bot.send_message(chat_id=update.effective_chat.id, text=error_response)
 
@@ -111,7 +113,8 @@ def discord_handler(command: Callable) -> Callable:
             elif command_response.send_to_chat:
                 await context.send(command_response.bot_message)
 
-        except HTTPException:
+        except HTTPException as e:
+            logging.exception(e)
             error_response = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
             await context.send(error_response)
 
@@ -154,8 +157,11 @@ def register_commands(bot: TelegramBot | DiscordBot):
         ("vcleave", vcleave_command),
         ("vcstream", vcstream_command),
         ("vcpause", vcpause_command),
-        ("statroll", statroll_command),
         ("roll", roll_command),
+        ("statroll", statroll_command),
+        ("d10000", d10000_command),
+        ("effects", effects_command),
+        ("reseteffects", reset_effects_command),
         ("trivia", trivia_command),
         ("guess", guess_command),
         ("triviarank", triviarank_command),
@@ -175,7 +181,7 @@ def register_commands(bot: TelegramBot | DiscordBot):
 
         bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), telegram_handler(telegram_on_message)))
 
-    elif isinstance(bot, DiscordBot):#bot: DiscordBot, command_name: str,
+    elif isinstance(bot, DiscordBot):
         for command in command_list:
             new_command = discord_commands.Command(discord_handler(command[1]))
             new_command.name = command[0]
@@ -609,6 +615,30 @@ async def statroll_command(context, update=None) -> CommandResponse:
         return CommandResponse(user_prompt, error_response)
 
     return CommandResponse(user_prompt, roll_string)
+
+async def d10000_command(context, update=None) -> CommandResponse:
+    username = helpers.get_sender(context, update)
+    effect = dice_roller.get_d10000_roll(username)
+    return CommandResponse("Can you roll an effect on the d10000 table?", effect)
+
+async def effects_command(context, update=None) -> CommandResponse:
+    username = helpers.get_sender(context, update)
+    active_effects = dice_roller.get_active_effects(username)
+
+    if active_effects:
+        effects_string = '\n    '.join(active_effects)
+        response = f"Here's all of your active effects:\n    {effects_string}"
+    else:
+        response = "You don't have any active effects, use the /d10000 command to get some!"
+
+    return CommandResponse("Can I get a list of my active d10000 effects?", response)
+
+async def reset_effects_command(context, update=None):
+    username = helpers.get_sender(context, update)
+    dice_roller.reset_active_effects(username)
+
+    return CommandResponse("Can you reset my active d10000 effects?", "Active effects reset.")
+
 #endregion
 
 # ==========================
@@ -628,7 +658,7 @@ async def guess_command(context, update=None) -> CommandResponse:
         return CommandResponse(user_message, "Trivia is not active!")
 
     if not guess:
-        return CommandResponse(user_message, f"You need to provide an answer, like /guess abc")
+        return CommandResponse(user_message, "You need to provide an answer, like /guess abc")
 
     if current_question.is_guess_correct(guess):
         points_gained = current_question.score_question(True, context, update)
@@ -649,7 +679,7 @@ async def triviarank_command(context, update=None):
     ranking = sorted(points_dict, key=lambda x: points_dict[x], reverse=True)
 
     message = '\n'.join(f'    {index + 1}. {player} @ {points_dict[player]} points' for index, player in enumerate(ranking))
-    return CommandResponse(f"What are the current trivia rankings?", f"The trivia rankings are:\n{message}")
+    return CommandResponse("What are the current trivia rankings?", f"The trivia rankings are:\n{message}")
 #endregion
 
 # ==========================
@@ -748,13 +778,14 @@ async def help_command(context, update=None) -> CommandResponse:
     help_string = """\
 Look upon my works, ye mighty, and despair:
 /vcjoin and /vcleave (join or leave current voice channel)
-/sound or /vcsound (play a sound effect)
-/random or /vcrandom (play a random sound effect)
+/sound and /vcsound (play a sound effect)
+/random and /vcrandom (play a random sound effect)
 /soundlist and /search (find sounds to play)
 /trivia (play trivia against your friends)
 /chat (talk to me)
-/roll (roll a dice)
 /wisdom (request my wisdom)
+/roll (roll a dice)
+/d10000 (roll the d10000 table)
 /pressf (pay respects)"""
 
     return CommandResponse("What chat commands are available?", help_string)
@@ -885,7 +916,6 @@ def discord_register_events(discord_bot: DiscordBot):
 async def telegram_on_message(context, update) -> CommandResponse:
     message_text = update.message.text.lower()
     response = await handle_message_event(message_text)
-
     return response
 
 async def handle_message_event(message) -> CommandResponse:
