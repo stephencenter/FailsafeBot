@@ -45,6 +45,8 @@ def generate_markov_text() -> str:
     return output_message
 
 def get_gpt_response(user_message: str) -> str:
+    config = settings.Config()
+
     # Load and set the OpenAI API key
     with open(OPENAI_KEY_PATH, encoding='utf-8') as f:
         openai_api_key = f.readline().strip()
@@ -56,14 +58,13 @@ def get_gpt_response(user_message: str) -> str:
         system_prompt = ''.join(f.readlines())
 
     # Load the current conversation so far
-    loaded_memory: list[ChatCompletionMessageParam] =  load_memory()
+    loaded_memory: list[ChatCompletionMessageParam] = load_memory()
 
     # Place the system prompt before the loaded memory to instruct the AI how to act
     messages: list[ChatCompletionMessageParam] = [{"role": "system", "content": system_prompt}]
     messages += loaded_memory
     messages.append({"role": "user", "content": user_message})
 
-    config = settings.Config()
     gpt_creation = openai_client.chat.completions.create(messages=messages, model=config.main.gptmodel)
     response = gpt_creation.choices[0].message.content
 

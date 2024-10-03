@@ -175,7 +175,7 @@ def register_commands(bot: TelegramBot | DiscordBot):
 
         bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), telegram_handler(telegram_on_message)))
 
-    elif isinstance(bot, DiscordBot):#bot: DiscordBot, command_name: str,
+    elif isinstance(bot, DiscordBot):
         for command in command_list:
             new_command = discord_commands.Command(discord_handler(command[1]))
             new_command.name = command[0]
@@ -648,7 +648,7 @@ async def triviarank_command(context, update=None):
     points_dict = trivia.get_points_dict()
     ranking = sorted(points_dict, key=lambda x: points_dict[x], reverse=True)
 
-    message = '\n'.join(f'    {index + 1}. {player} @ {points_dict[player]} points' for index, player in enumerate(ranking))
+    message = '\n'.join(f'    {index + 1}. {player} @ {points_dict[player]:,} points' for index, player in enumerate(ranking))
     return CommandResponse(f"What are the current trivia rankings?", f"The trivia rankings are:\n{message}")
 #endregion
 

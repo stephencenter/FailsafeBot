@@ -9,6 +9,7 @@ import discord
 from discord.ext.commands import Bot as DiscordBot
 from discord.errors import LoginFailure
 import commands
+import sound_manager
 import settings
 
 TELEGRAM_TOKEN_PATH = os.path.join("Data", "telegram_token.txt")
@@ -59,6 +60,9 @@ async def main():
     # Initialize logging
     if config.main.uselogging:
         await init_logging()
+
+    for problem in sound_manager.verify_aliases():
+        print(problem)
 
     if config.main.runtelegram:
         # Retrieve telegram bot token from file

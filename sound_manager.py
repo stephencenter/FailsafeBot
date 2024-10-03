@@ -251,3 +251,14 @@ def search_sounds(search_string: str) -> list[str]:
                     break
 
     return sorted(search_results)
+
+def verify_aliases():
+    alias_dict = get_alias_dict()
+    sound_list = get_sound_list()
+
+    for alias in alias_dict:
+        if alias in sound_list:
+            yield f"Notice: {alias} is both an alias and a sound name"
+
+        if alias_dict[alias] not in sound_list:
+            yield f"Notice: {alias} corresponds to a nonexistant sound"
