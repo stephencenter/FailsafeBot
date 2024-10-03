@@ -1,9 +1,10 @@
-.vscode/
 __pycache__/
+.vscode/
+.idea/
 Sounds/
 Data/
-*.bat
+Test/
 verify.py
-.idea/
-ffmpeg.exe
-/Test
+fix_d10000.py
+*.exe
+*.bat

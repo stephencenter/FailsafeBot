@@ -1,5 +1,9 @@
+import json
 import random
 import re
+
+D10000_LIST_PATH = "Data/d10000_list.txt"
+ACTIVE_EFFECTS_PATH = "Data/active_effects.json"
 
 def parse_diceroll(dice_roll) -> tuple[int, int, int] | None:
     try:
@@ -80,3 +84,54 @@ def get_mythras_roll() -> str:
         roll_string = "\n".join([roll_string, f"{stat}: {d1 + d2 + 6}"])
 
     return roll_string
+
+def get_d10000_roll(username) -> str:
+    try:
+        with open(D10000_LIST_PATH, 'r', encoding='utf-8') as f:
+            effects = f.readlines()
+    except FileNotFoundError:
+        return "The d10000 file couldn't be found!"
+
+    chosen_effect = random.choice(effects).strip()
+
+    try:
+        with open(ACTIVE_EFFECTS_PATH, 'r', encoding='utf-8') as f:
+            effects_dict = json.load(f)
+    except FileNotFoundError:
+        effects_dict = {}
+
+    try:
+        effects_dict[username].append(chosen_effect)
+        effects_dict[username] = sorted(set(effects_dict[username]))
+    except KeyError:
+        effects_dict[username] = [chosen_effect]
+    with open(ACTIVE_EFFECTS_PATH, 'w', encoding='utf-8') as f:
+        json.dump(effects_dict, f)
+
+    return chosen_effect
+
+def get_active_effects(username) -> str:
+    try:
+        with open(ACTIVE_EFFECTS_PATH, 'r', encoding='utf-8') as f:
+            effects_dict = json.load(f)
+    except FileNotFoundError:
+        return []
+
+    try:
+        active_effects = effects_dict[username]
+    except KeyError:
+        return []
+
+    return active_effects
+
+def reset_active_effects(username):
+    try:
+        with open(ACTIVE_EFFECTS_PATH, 'r', encoding='utf-8') as f:
+            effects_dict = json.load(f)
+    except FileNotFoundError:
+        effects_dict = {}
+
+    effects_dict[username] = []
+
+    with open(ACTIVE_EFFECTS_PATH, 'w', encoding='utf-8') as f:
+        json.dump(effects_dict, f)
