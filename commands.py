@@ -21,7 +21,7 @@ import trivia
 
 LOGGING_DIR_PATH = os.path.join("Data", "logging")
 LOGGING_FILE_PATH = os.path.join(LOGGING_DIR_PATH, "log.txt")
-VERSION_NUMBER = 'v1.0.5'
+VERSION_NUMBER = 'v1.0.6'
 RESPONSES_PATH = "Data/response_list.txt"
 
 # ==========================
@@ -430,11 +430,15 @@ async def vcsound_command(context, update=None) -> CommandResponse:
     if sound_path is None:
         return CommandResponse(f"Hey, play the sound {sound_name} in the voice channel.", random.choice(sound_manager.TXT_SOUND_NOT_FOUND))
 
+    # Stop the voice client if it's already playing a sound or stream
+    if context.voice_client.is_playing():
+        context.voice_client.stop()
+
     source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_path))
-    context.voice_client.play(source, after=lambda e: print(f'Player error: {e}') if e else None)
+
+    context.voice_client.play(source, after=lambda e: logging.exception(e) if e else None)
 
     await sound_manager.increment_playcount(sound_name)
-
     return CommandResponse(f"Hey, play the sound {sound_name} in the voice channel.", "Sure, here you go", send_to_chat=False)
 
 async def vcrandom_command(context, update=None) -> CommandResponse:
@@ -448,14 +452,14 @@ async def vcrandom_command(context, update=None) -> CommandResponse:
 
     sound_name, sound_path = sound_manager.get_random_sound()
 
+    # Stop the voice client if it's already playing a sound or stream
     if context.voice_client.is_playing():
         context.voice_client.stop()
 
     source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_path))
-    context.voice_client.play(source, after=lambda e: print(f'Player error: {e}') if e else None)
+    context.voice_client.play(source, after=lambda e: logging.exception(e) if e else None)
 
     await sound_manager.increment_playcount(sound_name)
-
     return CommandResponse(user_message, f"Sure, I chose the sound '{sound_name}", send_to_chat=False)
 
 async def vcstop_command(context, update=None) -> CommandResponse:
@@ -494,7 +498,7 @@ async def vcstream_command(context, update=None) -> CommandResponse:
 
     # Play the stream through the voice client
     async with context.typing():
-        context.voice_client.play(stream_player, after=lambda e: print(f'Player error: {e}') if e else None)
+        context.voice_client.play(stream_player, after=lambda e: logging.exception(e) if e else None)
 
     return CommandResponse("Stream this for me please.", f"Now playing: {stream_player.title}")
 

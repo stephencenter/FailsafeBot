@@ -15,6 +15,8 @@ import settings
 TELEGRAM_TOKEN_PATH = os.path.join("Data", "telegram_token.txt")
 DISCORD_TOKEN_PATH = os.path.join("Data", "discord_token.txt")
 
+discord_bot = None
+
 async def init_logging():
     # Configure log formatting
     log_formatter = logging.Formatter(f"---------------------\n%(asctime)s - {commands.VERSION_NUMBER} - %(name)s - %(levelname)s - %(message)s")
@@ -41,6 +43,8 @@ async def create_run_telegram_bot(telegram_token: str):
         await telegram_bot.updater.start_polling(drop_pending_updates=True)
 
 async def create_run_discord_bot(discord_token: str):
+    global discord_bot
+
     # Set intents for discord bot
     intents = discord.Intents.default()
     intents.members = True
@@ -53,7 +57,7 @@ async def create_run_discord_bot(discord_token: str):
     commands.register_commands(discord_bot)
     await discord_bot.start(discord_token)
 
-async def main():
+async def initialize_and_run():
     print(f"Starting script {commands.VERSION_NUMBER} at {datetime.now()}")
     config = settings.Config()
 
@@ -106,8 +110,25 @@ async def main():
 
     await asyncio.Event().wait()
 
+async def main():
+    try:
+        await initialize_and_run()
+    finally:
+        if isinstance(discord_bot, DiscordBot):
+            # Disconnect from discord voice channels if necessary
+            try:
+                bot_channel = discord_bot.voice_clients[0].channel
+            except IndexError:
+                return
+
+            if isinstance(bot_channel, discord.VoiceChannel):
+                print('Disconnecting from voice channel...')
+                await discord_bot.voice_clients[0].disconnect(force=False)
+
+        print('Exiting...')
+
 if __name__ == "__main__":
     try:
         asyncio.run(main())
-    except (KeyboardInterrupt, asyncio.exceptions.CancelledError, RuntimeError):
-        print('Exiting...')
+    except (KeyboardInterrupt, asyncio.exceptions.CancelledError, RuntimeError, RuntimeWarning):
+        pass
