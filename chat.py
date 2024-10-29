@@ -81,9 +81,9 @@ def generate_user_prompt(user_message: str, context, update=None) -> str:
     sender = helpers.get_sender(context, update)
 
     if helpers.is_private(context, update):
-        user_prompt = f'{sender} sent the following message in a private chat: "{user_message}". Write a message to send as a response.'
+        user_prompt = f'{sender} to you in a private chat: "{user_message}". Write a response.'
     else:
-        user_prompt = f'{sender} sent the following message in a group chat: "{user_message}". Write a message to send as a response.'
+        user_prompt = f'{sender} to you a group chat: "{user_message}". Write a response.'
 
     return user_prompt
 

@@ -36,14 +36,14 @@ class CommandResponse:
         self.send_to_chat: bool = send_to_chat  # Whether bot_message should be printed in chat
 
 class FileResponse(CommandResponse):
-    def __init__(self, user_message: str, bot_message: str, file_path: str, record_to_memory: bool = True, temp: bool = False):
-        super().__init__(user_message, bot_message, record_to_memory=record_to_memory, send_to_chat=True)
+    def __init__(self, user_message: str, bot_message: str, file_path: str, record_to_memory: bool = True, temp: bool = False, send_to_chat: bool = True):
+        super().__init__(user_message, bot_message, record_to_memory=record_to_memory, send_to_chat=send_to_chat)
         self.file_path: str = file_path  # The path of the file to send
         self.temp: bool = temp  # Whether the file should be deleted after being sent
 
 class SoundResponse(FileResponse):
     def __init__(self, user_message: str, bot_message: str, file_path: str, record_to_memory: bool = True):
-        super().__init__(user_message, bot_message, file_path, record_to_memory, False)
+        super().__init__(user_message, bot_message, file_path, record_to_memory, temp=False, send_to_chat=False)
 
 class NoResponse(CommandResponse):
     def __init__(self):
@@ -54,77 +54,72 @@ class NoResponse(CommandResponse):
 # RESPONSE HANDLERS
 # ==========================
 #region
-def telegram_handler(command: Callable) -> Callable:
-    # This function creates command handlers for the telegram bot.
-    # Provide this function with a command function and it will create a wrapper
-    # for that command function and return it. This wrapper automatically handles
-    # the bot's response to the command and writes it to memory if necessary
-    async def wrapper_function(update, context):
+async def send_response(bot: TelegramBot | DiscordBot, command: Callable, context, update=None) -> None:
+    if isinstance(bot, TelegramBot) and update is not None and not helpers.is_whitelisted(context, update):
         # Telegram doesn't allow you to make "private" bots, meaning anyone can add your bot to their chat
         # and use up your CPU time. This check prevents the bot from responding to commands unless it comes
         # from a whitelisted chat
-        if not helpers.is_whitelisted(context, update):
-            print("rejected", update.message.chat.id, datetime.now())
-            return
+        print("rejected", update.message.chat.id, datetime.now())
+        return
 
-        command_response: CommandResponse = await command(context, update=update)
+    command_response: CommandResponse = await command(context, update=update)
 
+    if command_response.send_to_chat and command_response.bot_message:
+        text_response = command_response.bot_message
+    else:
+        text_response = None
+
+    try:
         if isinstance(command_response, SoundResponse):
-            await context.bot.send_voice(chat_id=update.effective_chat.id, voice=command_response.file_path)
+            if isinstance(bot, TelegramBot) and update is not None:
+                await context.bot.send_voice(chat_id=update.effective_chat.id, voice=command_response.file_path, caption=text_response)
+
+            elif isinstance(bot, DiscordBot):
+                await context.send(content=text_response, file=discord.File(command_response.file_path))
 
         elif isinstance(command_response, FileResponse):
-            await context.bot.send_document(chat_id=update.effective_chat.id, document=command_response.file_path)
+            if isinstance(bot, TelegramBot) and update is not None:
+                await context.bot.send_document(chat_id=update.effective_chat.id, document=command_response.file_path, caption=text_response)
+
+            elif isinstance(bot, DiscordBot):
+                await context.send(content=text_response, file=discord.File(command_response.file_path))
+
             if command_response.temp:
                 os.remove(command_response.file_path)
 
-        elif command_response.send_to_chat:
-            try:
-                await context.bot.send_message(chat_id=update.effective_chat.id, text=command_response.bot_message)
+        elif text_response is not None:
+            if isinstance(bot, TelegramBot) and update is not None:
+                await context.bot.send_message(chat_id=update.effective_chat.id, text=text_response)
 
-            except (BadRequest, TimedOut, NetworkError) as e:
-                logging.exception(e)
-                error_response = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
-                await context.bot.send_message(chat_id=update.effective_chat.id, text=error_response)
+            elif isinstance(bot, DiscordBot):
+                await context.send(text_response)
 
-        # Add the command and its response to memory if necessary
-        if command_response.record_to_memory:
-            user_prompt = chat.generate_user_prompt(command_response.user_message, context, update)
-            chat.append_to_memory(user_prompt=user_prompt, bot_prompt=command_response.bot_message)
+    except (BadRequest, TimedOut, NetworkError, HTTPException) as e:
+        logging.exception(e)
+        error_response = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
 
-    return wrapper_function
+        if isinstance(bot, TelegramBot) and update is not None:
+            await context.bot.send_message(chat_id=update.effective_chat.id, text=error_response)
 
-def discord_handler(command: Callable) -> Callable:
-    # This function creates command handlers for the discord bot.
-    # Provide this function with a command function and it will create a wrapper
-    # for that command function and return it. This wrapper automatically handles
-    # the bot's response to the command and writes it to memory if necessary
-    async def wrapper_function(context):
-        command_response: CommandResponse = await command(context)
-
-        try:
-            if isinstance(command_response, SoundResponse):
-                await context.send(file=discord.File(command_response.file_path))
-
-            elif isinstance(command_response, FileResponse):
-                await context.send(content=command_response.bot_message, file=discord.File(command_response.file_path))
-                if command_response.temp:
-                    os.remove(command_response.file_path)
-
-            elif command_response.send_to_chat:
-                await context.send(command_response.bot_message)
-
-        except HTTPException as e:
-            logging.exception(e)
-            error_response = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
+        elif isinstance(bot, DiscordBot):
             await context.send(error_response)
 
-        # Add the command and its response to memory if necessary
-        if command_response.record_to_memory:
-            user_prompt = chat.generate_user_prompt(command_response.user_message, context)
-            chat.append_to_memory(user_prompt=user_prompt, bot_prompt=command_response.bot_message)
+    # Add the command and its response to memory if necessary
+    if command_response.record_to_memory:
+        user_prompt = chat.generate_user_prompt(command_response.user_message, context, update)
+        chat.append_to_memory(user_prompt=user_prompt, bot_prompt=command_response.bot_message)
+
+def telegram_handler(bot: TelegramBot, command: Callable) -> Callable:
+    async def wrapper_function(update, context):
+        await send_response(bot, command, context, update=update)
 
     return wrapper_function
 
+def discord_handler(bot: DiscordBot, command: Callable) -> Callable:
+    async def wrapper_function(context):
+        await send_response(bot, command, context)
+
+    return wrapper_function
 
 def register_commands(bot: TelegramBot | DiscordBot):
     # List of all commands, add commands here to register them.
@@ -149,6 +144,7 @@ def register_commands(bot: TelegramBot | DiscordBot):
         ("test", test_command),
         ("lobotomize", lobotomize_command),
         ("memory", memory_command),
+        ("memorylist", memorylist_command),
         ("logs", logs_command),
         ("vcsound", vcsound_command),
         ("vcrandom", vcrandom_command),
@@ -177,13 +173,13 @@ def register_commands(bot: TelegramBot | DiscordBot):
 
     if isinstance(bot, TelegramBot):
         for command in command_list:
-            bot.add_handler(CommandHandler(command[0], telegram_handler(command[1])))
+            bot.add_handler(CommandHandler(command[0], telegram_handler(bot, command[1])))
 
-        bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), telegram_handler(telegram_on_message)))
+        bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), telegram_handler(bot, telegram_on_message)))
 
     elif isinstance(bot, DiscordBot):
         for command in command_list:
-            new_command = discord_commands.Command(discord_handler(command[1]))
+            new_command = discord_commands.Command(discord_handler(bot, command[1]))
             new_command.name = command[0]
             bot.add_command(new_command)
 
@@ -704,7 +700,25 @@ async def memory_command(context, update=None) -> CommandResponse:
     if not helpers.is_admin(context, update):
         return NoResponse()
 
-    return FileResponse("Can you send me your memory file?", "Sure, here you go.", chat.MEMORY_PATH)
+    return FileResponse("Can you send me your memory file?", "Sure, here's my memory file.", chat.MEMORY_PATH)
+
+async def memorylist_command(context, update=None) -> CommandResponse:
+    if not helpers.is_admin(context, update):
+        return NoResponse()
+
+    memory_list = chat.load_memory()
+
+    if not memory_list:
+        return CommandResponse("Can you send me your memory as a list?", "My mind is a blank slate.")
+
+    memory_list = [f"{item['role']}: {item['content']}" for item in memory_list if 'content' in item]
+
+    temp_path = 'Data/mem_list.txt'
+    with open(temp_path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(memory_list))
+
+    return FileResponse("Can you send me your memory as a list?", "Sure, here's my memory list.", temp_path, temp=True)
+
 #endregion
 
 # ==========================

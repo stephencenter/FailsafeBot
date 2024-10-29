@@ -55,6 +55,7 @@ async def create_run_discord_bot(discord_token: str):
 
     # Register all commands to the discord bot
     commands.register_commands(discord_bot)
+
     await discord_bot.start(discord_token)
 
 async def initialize_and_run():
