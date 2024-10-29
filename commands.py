@@ -21,7 +21,7 @@ import trivia
 
 LOGGING_DIR_PATH = os.path.join("Data", "logging")
 LOGGING_FILE_PATH = os.path.join(LOGGING_DIR_PATH, "log.txt")
-VERSION_NUMBER = 'v1.0.6'
+VERSION_NUMBER = 'v1.0.7'
 RESPONSES_PATH = "Data/response_list.txt"
 
 # ==========================
