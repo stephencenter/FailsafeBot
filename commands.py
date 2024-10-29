@@ -700,6 +700,9 @@ async def memory_command(context, update=None) -> CommandResponse:
     if not helpers.is_admin(context, update):
         return NoResponse()
 
+    if not os.path.exists(chat.MEMORY_PATH):
+        return CommandResponse("Can you send me your memory file?", "My mind is a blank slate.")
+
     return FileResponse("Can you send me your memory file?", "Sure, here's my memory file.", chat.MEMORY_PATH)
 
 async def memorylist_command(context, update=None) -> CommandResponse:
@@ -813,6 +816,10 @@ async def logs_command(context, update=None) -> CommandResponse:
         return NoResponse()
 
     output_path = os.path.join(LOGGING_DIR_PATH, "log.txt")
+
+    if not os.path.exists(output_path):
+        return CommandResponse("Can you send me your error log?", "There are no logs recorded.")
+
     return FileResponse("Can you send me your error log?", "Sure, here you go.", output_path)
 
 async def test_command(context, update=None) -> CommandResponse:

@@ -110,7 +110,7 @@ def get_d10000_roll(username) -> str:
 
     return chosen_effect
 
-def get_active_effects(username) -> str:
+def get_active_effects(username) -> list:
     try:
         with open(ACTIVE_EFFECTS_PATH, 'r', encoding='utf-8') as f:
             effects_dict = json.load(f)
