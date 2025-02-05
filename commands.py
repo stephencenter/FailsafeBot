@@ -70,6 +70,7 @@ async def send_response(bot: TelegramBot | DiscordBot, command: Callable, contex
         text_response = None
 
     try:
+        # Respond with a sound effect
         if isinstance(command_response, SoundResponse):
             if isinstance(bot, TelegramBot) and update is not None:
                 await context.bot.send_voice(chat_id=update.effective_chat.id, voice=command_response.file_path, caption=text_response)
@@ -77,6 +78,7 @@ async def send_response(bot: TelegramBot | DiscordBot, command: Callable, contex
             elif isinstance(bot, DiscordBot):
                 await context.send(content=text_response, file=discord.File(command_response.file_path))
 
+        # Respond with a file
         elif isinstance(command_response, FileResponse):
             if isinstance(bot, TelegramBot) and update is not None:
                 await context.bot.send_document(chat_id=update.effective_chat.id, document=command_response.file_path, caption=text_response)
@@ -84,9 +86,11 @@ async def send_response(bot: TelegramBot | DiscordBot, command: Callable, contex
             elif isinstance(bot, DiscordBot):
                 await context.send(content=text_response, file=discord.File(command_response.file_path))
 
+            # Delete the file that was sent if it was a temporary file
             if command_response.temp:
                 os.remove(command_response.file_path)
 
+        # Respond with text
         elif text_response is not None:
             if isinstance(bot, TelegramBot) and update is not None:
                 await context.bot.send_message(chat_id=update.effective_chat.id, text=text_response)
@@ -679,7 +683,7 @@ async def triviarank_command(context, update=None):
     ranking = sorted(points_dict, key=lambda x: points_dict[x], reverse=True)
 
     message = '\n'.join(f'    {index + 1}. {player} @ {points_dict[player]:,} points' for index, player in enumerate(ranking))
-    return CommandResponse(f"What are the current trivia rankings?", f"The trivia rankings are:\n{message}")
+    return CommandResponse("What are the current trivia rankings?", f"The trivia rankings are:\n{message}")
 #endregion
 
 # ==========================
@@ -934,7 +938,7 @@ def discord_register_events(discord_bot: DiscordBot):
             await discord_bot.process_commands(message)
             return
 
-        message_handler = discord_handler(handle_message_event)
+        message_handler = discord_handler(discord_bot, handle_message_event)
         context = await discord_bot.get_context(message)
         await message_handler(context)
 
@@ -943,7 +947,7 @@ async def telegram_on_message(context, update) -> CommandResponse:
     response = await handle_message_event(message_text)
     return response
 
-async def handle_message_event(message) -> CommandResponse:
+async def handle_message_event(message, update=None) -> CommandResponse:
     config = settings.Config()
     bot_name = config.main.botname.lower()
 
