@@ -206,13 +206,18 @@ async def sound_command(context, update=None) -> CommandResponse:
 
     # Parse the arguments the user provided for the sound name
     sound_name = user_message[0].lower()
-    sound_path = sound_manager.get_sound(sound_name)
+    sound_results = sound_manager.get_sound(sound_name)
 
     user_prompt = f"Can you play the {sound_name} sound for me?"
 
     # Alert the user if the sound they requested does not exist
-    if sound_path is None:
+    if sound_results is None:
         return CommandResponse(user_prompt, random.choice(sound_manager.TXT_SOUND_NOT_FOUND))
+
+    if isinstance(sound_results, list):
+        num_candidates = len(sound_results)
+        candidate_string = ', '.join(sound_results)
+        return CommandResponse(user_prompt, f"There are {num_candidates} potential matches: {candidate_string}")
 
     # The bot has a 1 in 1000 chance of refusing to play a sound.
     # Have to keep the users on their toes
@@ -223,7 +228,7 @@ async def sound_command(context, update=None) -> CommandResponse:
     if not helpers.is_private(context, update):
         await sound_manager.increment_playcount(sound_name)
 
-    return SoundResponse(user_prompt, f"Sure, here's the {sound_name} sound.", sound_path)
+    return SoundResponse(user_prompt, f"Sure, here's the {sound_name} sound.", sound_results)
 
 async def randomsound_command(context, update=None) -> CommandResponse:
     user_prompt = "Can you play a random sound for me?"
@@ -337,13 +342,17 @@ async def search_command(context, update=None) -> CommandResponse:
 
     user_prompt = f"Can you search for sounds containing '{search_string}'?"
 
+    if num_matches == 0:
+        return CommandResponse(user_prompt, f"There are no sounds matching '{search_string}'")
+
     if num_matches == 1:
         return CommandResponse(user_prompt, f"There is one sound matching '{search_string}': {list_string}")
 
-    elif num_matches > 1:
-        return CommandResponse(user_prompt, f"There are {num_matches} sounds matching '{search_string}': {list_string}")
+    if num_matches > 100:
+        return CommandResponse(user_prompt, f"There are more than 100 sounds matching '{search_string}', try a more specific search")
 
-    return CommandResponse(user_prompt, f"There are no sounds matching '{search_string}'")
+    return CommandResponse(user_prompt, f"There are {num_matches} sounds matching '{search_string}': {list_string}")
+
 
 async def playcount_command(context, update=None) -> CommandResponse:
     user_message = helpers.get_args_list(context, update)
@@ -424,22 +433,29 @@ async def vcsound_command(context, update=None) -> CommandResponse:
 
     # Parse the arguments the user provided for the sound name
     sound_name = user_message[0].lower()
-    sound_path = sound_manager.get_sound(sound_name)
+    sound_results = sound_manager.get_sound(sound_name)
+
+    user_prompt = f"Can you play the {sound_name} sound in the voice channel?"
 
     # Alert the user if the sound they requested does not exist
-    if sound_path is None:
-        return CommandResponse(f"Hey, play the sound {sound_name} in the voice channel.", random.choice(sound_manager.TXT_SOUND_NOT_FOUND))
+    if sound_results is None:
+        return CommandResponse(user_prompt, random.choice(sound_manager.TXT_SOUND_NOT_FOUND))
+
+    if isinstance(sound_results, list):
+        num_candidates = len(sound_results)
+        candidate_string = ', '.join(sound_results)
+        return CommandResponse(user_prompt, f"There are {num_candidates} potential matches: {candidate_string}")
 
     # Stop the voice client if it's already playing a sound or stream
     if context.voice_client.is_playing():
         context.voice_client.stop()
 
-    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_path))
+    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_results))
 
     context.voice_client.play(source, after=lambda e: logging.exception(e) if e else None)
 
     await sound_manager.increment_playcount(sound_name)
-    return CommandResponse(f"Hey, play the sound {sound_name} in the voice channel.", "Sure, here you go", send_to_chat=False)
+    return CommandResponse(user_prompt, "Sure, here you go", send_to_chat=False)
 
 async def vcrandom_command(context, update=None) -> CommandResponse:
     user_message = "Can you play a random sound for me?"

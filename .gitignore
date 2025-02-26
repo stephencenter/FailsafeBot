@@ -1,6 +1,7 @@
 __pycache__/
 .vscode/
 .idea/
+.venv/
 Sounds/
 Data/
 Test/

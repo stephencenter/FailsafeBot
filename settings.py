@@ -25,6 +25,7 @@ class ConfigMain:
     maxmarkov: int = 255  # Maximum number of tokens for the markov chain command /wisdom
     usemegabytes: bool = True  # Whether the /system command should use megabytes (will use gigabytes if false)
     cmdautoyes: bool = False  # Whether the /terminal command should automatically say 'y' to y/n questions (prevents hanging)
+    minsimilarity: float = 0.75  # The minimum similarity threshold when searching for sound names (1.0 = exact matches only)
 
 @dataclass
 class Config:

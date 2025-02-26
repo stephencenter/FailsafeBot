@@ -183,6 +183,7 @@ dependencies = [
     { name = "pynacl" },
     { name = "python-telegram-bot" },
     { name = "requests" },
+    { name = "strsimpy" },
     { name = "toml" },
     { name = "tqdm" },
     { name = "unidecode" },
@@ -199,6 +200,7 @@ requires-dist = [
     { name = "pynacl", specifier = ">=1.5.0" },
     { name = "python-telegram-bot", specifier = ">=21.5" },
     { name = "requests", specifier = ">=2.32.3" },
+    { name = "strsimpy", specifier = ">=0.2.1" },
     { name = "toml", specifier = ">=0.10.2" },
     { name = "tqdm", specifier = ">=4.66.5" },
     { name = "unidecode", specifier = ">=1.3.8" },
@@ -499,6 +501,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/a2/87/a6771e1546d97e7e041b6ae58d80074f81b7d5121207425c964ddf5cfdbd/sniffio-1.3.1.tar.gz", hash = "sha256:f4324edc670a0f49750a81b895f35c3adb843cca46f0530f79fc1babb23789dc", size = 20372 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e9/44/75a9c9421471a6c4805dbf2356f7c181a29c1879239abab1ea2cc8f38b40/sniffio-1.3.1-py3-none-any.whl", hash = "sha256:2f6da418d1f1e0fddd844478f41680e794e6051915791a034ff65e5f100525a2", size = 10235 },
+]
+
+[[package]]
+name = "strsimpy"
+version = "0.2.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0d/7e/5ccf2edfa1e97154dbf3119fd240b1f5fbe32ad1edd1db5f7a94d3f7a037/strsimpy-0.2.1.tar.gz", hash = "sha256:0842eb57f7af86c882a59a1bc8721ec2580a267e563fd0503ced2972040372c9", size = 24403 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fc/90/bd55a4b18f4b75a76e32f444975d2c869d692eb23897d116d47122f88d1a/strsimpy-0.2.1-py3-none-any.whl", hash = "sha256:d676a440d5d3dbcf5ba92d01814a03a218776ce07bd7a8185da7019e04cf9ba7", size = 45870 },
 ]
 
 [[package]]

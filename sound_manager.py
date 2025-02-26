@@ -4,6 +4,7 @@ import random
 import discord
 import yt_dlp
 import settings
+from strsimpy import Damerau
 
 SOUNDS_PATH = "Sounds"
 ALIAS_PATH = "Data/sound_aliases.json"
@@ -75,10 +76,10 @@ def get_alias_dict() -> dict[str, str]:
 
 def get_playcount_dict() -> dict[str, int]:
     # Retrieve the sound and alias dictionaries
-    sound_dict = get_sound_dict()
+    sound_list = get_sound_list()
     alias_dict = get_alias_dict()
 
-    playcount_dict = {x: 0 for x in sound_dict}
+    playcount_dict = {x: 0 for x in sound_list}
 
     try:
         with open(PLAYCOUNTS_PATH, encoding='utf-8') as f:
@@ -92,7 +93,7 @@ def get_playcount_dict() -> dict[str, int]:
     changed = False
 
     # Ensure that all sounds are in the playcount dictionary
-    for sound_name in sound_dict:
+    for sound_name in sound_list:
         if sound_name not in playcount_dict:
             playcount_dict[sound_name] = 0
             changed = True
@@ -108,7 +109,7 @@ def get_playcount_dict() -> dict[str, int]:
 
     # Ensure that there aren't any nonexistent sounds in the playcount dictionary
     for sound_name in playcount_dict.copy():
-        if sound_name not in sound_dict:
+        if sound_name not in sound_list:
             del playcount_dict[sound_name]
             changed = True
 
@@ -140,22 +141,30 @@ def sound_exists(sound_name: str) -> bool:
 
     return False
 
-def get_sound(sound_name: str) -> str | None:
+def get_sound(sound_name: str) -> str | None | list[str]:
     # Get the dictionary of all sounds and the paths they're located at
     sound_dict = get_sound_dict()
-
-    # Sounds can have aliases, which are alternative names you can call
-    # them with. If an alias is provided, we determine what sound the
-    # alias corresponds to and play that sound
-    sound_aliases = get_alias_dict()
-    if sound_name in sound_aliases:
-        sound_name = sound_aliases[sound_name]
 
     try:
         return sound_dict[sound_name]
 
     except KeyError:
+        # Sounds can have aliases, which are alternative names you can call
+        # them with. If an alias is provided, we determine what sound the
+        # alias corresponds to and play that sound
+        sound_aliases = get_alias_dict()
+
+        if sound_name in sound_aliases:
+            return sound_dict[sound_aliases[sound_name]]
+
+    candidates = search_sounds(sound_name)
+    if not candidates or len(candidates) > 5:
         return None
+
+    if len(candidates) == 1:
+        return get_sound(candidates[0])
+
+    return candidates
 
 def get_random_sound() -> tuple[str, str]:
     # Get the dictionary of all sounds and the paths they're located at
@@ -238,17 +247,28 @@ async def del_sound_alias(alias_to_delete: str) -> str:
 
     return f"'{alias_to_delete}' is no longer an alias for '{prev_sound}'"
 
-
 def search_sounds(search_string: str) -> list[str]:
+    config = settings.Config()
+
     search_results: list[str] = []
-    for sound_name in get_sound_dict():
-        if search_string in sound_name:
-            search_results.append(sound_name)
-        else:
-            for alias in get_aliases(sound_name):
-                if search_string in alias:
-                    search_results.append(alias)
-                    break
+    for sound_name in get_sound_list():
+        for alias in [sound_name] + get_aliases(sound_name):
+            if search_string in alias:
+                search_results.append(alias)
+                break
+
+            if len(search_string) > len(alias):
+                continue
+
+            # Calculate the similarity between the search string and the current alias
+            calculator = Damerau()
+            distance = calculator.distance(search_string, alias)
+            larger_length = max(len(search_string), len(alias))
+            similarity = (larger_length - distance)/larger_length
+
+            if similarity >= config.main.minsimilarity:
+                search_results.append(alias)
+                break
 
     return sorted(search_results)
 
