@@ -717,22 +717,24 @@ async def lobotomize_command(context, update=None) -> CommandResponse:
     return CommandResponse('', random.choice(msg_options), record_to_memory=False)
 
 async def memory_command(context, update=None) -> CommandResponse:
+    user_message = "Can you send me your memory file?"
     if not helpers.is_admin(context, update):
-        return NoResponse()
+        return CommandResponse(user_message, random.choice(helpers.TXT_NO_PERMISSIONS))
 
     if not os.path.exists(chat.MEMORY_PATH):
-        return CommandResponse("Can you send me your memory file?", "My mind is a blank slate.")
+        return CommandResponse(user_message, "My mind is a blank slate.")
 
-    return FileResponse("Can you send me your memory file?", "Sure, here's my memory file.", chat.MEMORY_PATH)
+    return FileResponse(user_message, "Sure, here's my memory file.", chat.MEMORY_PATH)
 
 async def memorylist_command(context, update=None) -> CommandResponse:
+    user_message = "Can you send me your memory as a list?"
     if not helpers.is_admin(context, update):
-        return NoResponse()
+        return CommandResponse(user_message, random.choice(helpers.TXT_NO_PERMISSIONS))
 
     memory_list = chat.load_memory()
 
     if not memory_list:
-        return CommandResponse("Can you send me your memory as a list?", "My mind is a blank slate.")
+        return CommandResponse(user_message, "My mind is a blank slate.")
 
     memory_list = [f"{item['role']}: {item['content']}" for item in memory_list if 'content' in item]
 
@@ -740,7 +742,7 @@ async def memorylist_command(context, update=None) -> CommandResponse:
     with open(temp_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(memory_list))
 
-    return FileResponse("Can you send me your memory as a list?", "Sure, here's my memory list.", temp_path, temp=True)
+    return FileResponse(user_message, "Sure, here's my memory list.", temp_path, temp=True)
 
 #endregion
 
@@ -832,26 +834,24 @@ Look upon my works, ye mighty, and despair:
     return CommandResponse("What chat commands are available?", help_string)
 
 async def logs_command(context, update=None) -> CommandResponse:
+    user_message = "Can you send me your error log?"
     if not helpers.is_admin(context, update):
-        return NoResponse()
+        return CommandResponse(user_message, random.choice(helpers.TXT_NO_PERMISSIONS))
 
     output_path = os.path.join(LOGGING_DIR_PATH, "log.txt")
 
     if not os.path.exists(output_path):
-        return CommandResponse("Can you send me your error log?", "There are no logs recorded.")
+        return CommandResponse(user_message, "There are no logs recorded.")
 
     return FileResponse("Can you send me your error log?", "Sure, here you go.", output_path)
 
 async def test_command(context, update=None) -> CommandResponse:
     # This command is for verifying that the bot is online and receiving commands
-    if not helpers.is_admin(context, update):
-        return NoResponse()
-
     return CommandResponse("Hey, are you working?", "I'm still alive, unfortunately.")
 
 async def restart_command(context, update=None) -> CommandResponse:
     if not helpers.is_admin(context, update):
-        return NoResponse()
+        return CommandResponse("Can you restart your script for me?", random.choice(helpers.TXT_NO_PERMISSIONS))
 
     print("Restarting...")
 
@@ -863,8 +863,9 @@ async def restart_command(context, update=None) -> CommandResponse:
     os.execv(sys.executable, ['python'] + sys.argv)
 
 async def system_command(context, update=None) -> CommandResponse:
+    user_message = "Can you show me your resource usage?"
     if not helpers.is_admin(context, update):
-        return NoResponse()
+        return CommandResponse(user_message, random.choice(helpers.TXT_NO_PERMISSIONS))
 
     config = settings.Config()
     mem_usage = psutil.virtual_memory()
@@ -910,13 +911,16 @@ async def terminal_command(context, update=None) -> CommandResponse:
     return CommandResponse(user_message, "Done.")
 
 async def version_command(context, update=None) -> CommandResponse:
+    user_message = "What script version are you running?"
     if not helpers.is_admin(context, update):
-        return NoResponse()
-    return CommandResponse("What script version are you running?", VERSION_NUMBER)
+        return CommandResponse(user_message, random.choice(helpers.TXT_NO_PERMISSIONS))
+
+    return CommandResponse(user_message, VERSION_NUMBER)
 
 async def crash_command(context, update=None) -> CommandResponse:
     if not helpers.is_admin(context, update):
-        return NoResponse()
+        return CommandResponse("This statement is false.", random.choice(helpers.TXT_NO_PERMISSIONS))
+
     raise NotImplementedError("/crash command used")
 #endregion
 

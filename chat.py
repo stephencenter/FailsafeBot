@@ -81,9 +81,9 @@ def generate_user_prompt(user_message: str, context, update=None) -> str:
     sender = helpers.get_sender(context, update)
 
     if helpers.is_private(context, update):
-        user_prompt = f'{sender} to you in a private chat: "{user_message}". Write a response.'
+        user_prompt = f'{sender}: {user_message}'
     else:
-        user_prompt = f'{sender} to you in a group chat: "{user_message}". Write a response.'
+        user_prompt = f'{sender}: {user_message}'
 
     return user_prompt
 
@@ -115,7 +115,7 @@ def append_to_memory(user_prompt: str = '', bot_prompt: str = '') -> None:
     if bot_prompt:
         memory.append({"role": "assistant", "content": bot_prompt})
 
-    # The AI's memory has a size limit to keep API usage low, and too keep it from veering off track too much
+    # The AI's memory has a size limit to keep API usage low, and to keep it from veering off track too much
     if (size := len(memory)) > config.main.memorysize:
         memory = memory[size - config.main.memorysize:]
 
