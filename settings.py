@@ -20,6 +20,7 @@ class ConfigMain:
     usememory: bool = True  # Whether the bot will use the memory system for AI chatting
     memorysize: int = 24  # Maximum number of messages to record in memory for AI chatting (higher is probably more expensive)
     gptmodel: str = "gpt-4o-mini"  # What GPT model to use for AI chatting
+    gpttemp: float = 1.0  # Temperature for GPT chat completions (0 to 2, values outside this will break)
     usewhitelist: bool = False  # Whether a chat needs to be on the whitelist for commands to function
     minmarkov: int = 2  # Minimum number of tokens for the markov chain command /wisdom (higher takes longer exponentially)
     maxmarkov: int = 255  # Maximum number of tokens for the markov chain command /wisdom

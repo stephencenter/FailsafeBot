@@ -65,7 +65,7 @@ def get_gpt_response(user_message: str) -> str:
     messages += loaded_memory
     messages.append({"role": "user", "content": user_message})
 
-    gpt_creation = openai_client.chat.completions.create(messages=messages, model=config.main.gptmodel)
+    gpt_creation = openai_client.chat.completions.create(messages=messages, model=config.main.gptmodel, temperature=config.main.gpttemp)
     response = gpt_creation.choices[0].message.content
 
     if response is None:
@@ -79,11 +79,7 @@ def get_gpt_response(user_message: str) -> str:
 
 def generate_user_prompt(user_message: str, context, update=None) -> str:
     sender = helpers.get_sender(context, update)
-
-    if helpers.is_private(context, update):
-        user_prompt = f'{sender}: {user_message}'
-    else:
-        user_prompt = f'{sender}: {user_message}'
+    user_prompt = f'{sender}: {user_message}'
 
     return user_prompt
 
