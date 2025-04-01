@@ -5,11 +5,6 @@ TELEGRAM_WHITELIST_PATH = "Data/tg_whitelist.txt"
 ADMINS_PATH = "Data/admins.txt"
 USERNAME_MAP_PATH = "Data/username_map.json"
 
-TXT_NO_PERMISSIONS = (
-    "You don't have the right, O you don't have the right.",
-    "You think I'd let just anyone do this?"
-)
-
 def get_sender(context, update=None, map_name=False) -> str:
     # Returns the username of the user that sent the command or message
     if update is not None:
