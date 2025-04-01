@@ -84,7 +84,7 @@ def get_gpt_response(user_message: str) -> str:
     return response
 
 def generate_user_prompt(user_message: str, context, update=None) -> str:
-    sender = helpers.get_sender(context, update)
+    sender = helpers.get_sender(context, update, map_name=True)
     user_prompt = f'{sender}: {user_message}'
 
     return user_prompt

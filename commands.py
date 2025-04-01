@@ -67,11 +67,12 @@ async def send_response(bot: TelegramBot | DiscordBot, command: Callable, contex
 
     if command_response.send_to_chat and command_response.bot_message:
         text_response = command_response.bot_message
+
+        if len(text_response) > config.main.maxmessagelength:
+            text_response = text_response[:config.main.maxmessagelength]
+
     else:
         text_response = None
-
-    if len(text_response) > config.main.maxmessagelength:
-        text_response = text_response[:config.main.maxmessagelength]
 
     try:
         # Respond with a sound effect

@@ -10,19 +10,32 @@ TXT_NO_PERMISSIONS = (
     "You think I'd let just anyone do this?"
 )
 
-def get_sender(context, update=None) -> str:
-    # Returns the username of the user that send the command
+def get_sender(context, update=None, map_name=False) -> str:
+    # Returns the username of the user that sent the command or message
     if update is not None:
-        username = update.message.from_user["username"]
+        username = update.message.from_user.username
     else:
         username = context.author.name
 
-    return map_username(username)
+    if map_name:
+        return map_username(username)
+
+    return username
+
+def get_sender_id(context, update=None) -> str:
+    # Returns the user ID of the user that sent the command or message
+    if update is not None:
+        user_id = str(update.message.from_user.id)
+    else:
+        user_id = str(context.author.id)
+
+    return user_id
 
 def is_private(context, update=None) -> bool:
     # Returns whether the command was called in a private chat or a group chat
     if update is not None:
         return update.message.chat.type == "private"
+
     return context.guild is None
 
 def get_args_list(context, update=None) -> list[str]:
@@ -50,12 +63,12 @@ def is_admin(context, update=None) -> bool:
     if not settings.Config().main.requireadmin:
         return True
 
-    username = get_sender(context, update)
+    user_id = get_sender_id(context, update)
 
     with open(ADMINS_PATH, encoding='utf-8') as f:
         admin_list = [x.strip() for x in f.readlines()]
 
-    return username in admin_list
+    return user_id in admin_list
 
 def is_whitelisted(context, update) -> bool:
     # Returns whether the chat is on the bot's whitelist (telegram only)
