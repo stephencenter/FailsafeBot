@@ -65,8 +65,14 @@ def get_gpt_response(user_message: str) -> str:
     messages += loaded_memory
     messages.append({"role": "user", "content": user_message})
 
-    gpt_creation = openai_client.chat.completions.create(messages=messages, model=config.main.gptmodel, temperature=config.main.gpttemp)
-    response = gpt_creation.choices[0].message.content
+    gpt_completion= openai_client.chat.completions.create(
+        messages=messages,
+        model=config.main.gptmodel,
+        temperature=config.main.gpttemp,
+        max_completion_tokens=config.main.gptmaxtokens
+    )
+
+    response = gpt_completion.choices[0].message.content
 
     if response is None:
         return ''

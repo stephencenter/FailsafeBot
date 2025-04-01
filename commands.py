@@ -21,7 +21,7 @@ import trivia
 
 LOGGING_DIR_PATH = os.path.join("Data", "logging")
 LOGGING_FILE_PATH = os.path.join(LOGGING_DIR_PATH, "log.txt")
-VERSION_NUMBER = 'v1.0.7'
+VERSION_NUMBER = 'v1.0.8'
 RESPONSES_PATH = "Data/response_list.txt"
 
 # ==========================
@@ -62,12 +62,16 @@ async def send_response(bot: TelegramBot | DiscordBot, command: Callable, contex
         print("rejected", update.message.chat.id, datetime.now())
         return
 
+    config = settings.Config()
     command_response: CommandResponse = await command(context, update=update)
 
     if command_response.send_to_chat and command_response.bot_message:
         text_response = command_response.bot_message
     else:
         text_response = None
+
+    if len(text_response) > config.main.maxmessagelength:
+        text_response = text_response[:config.main.maxmessagelength]
 
     try:
         # Respond with a sound effect

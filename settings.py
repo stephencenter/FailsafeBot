@@ -21,6 +21,8 @@ class ConfigMain:
     memorysize: int = 24  # Maximum number of messages to record in memory for AI chatting (higher is probably more expensive)
     gptmodel: str = "gpt-4o-mini"  # What GPT model to use for AI chatting
     gpttemp: float = 1.0  # Temperature for GPT chat completions (0 to 2, values outside this will break)
+    gptmaxtokens: int = 1024  # Value to be passed for parameter max_completion_tokens for gpt chat completion
+    maxmessagelength: int = 1024  # Maximum amount of characters to allow in a CommandResponse object's bot_message property
     usewhitelist: bool = False  # Whether a chat needs to be on the whitelist for commands to function
     minmarkov: int = 2  # Minimum number of tokens for the markov chain command /wisdom (higher takes longer exponentially)
     maxmarkov: int = 255  # Maximum number of tokens for the markov chain command /wisdom
