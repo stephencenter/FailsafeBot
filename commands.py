@@ -952,6 +952,9 @@ async def addadmin_command(context, update=None) -> CommandResponse:
     user_id = args_list[0].lower()
     admin_list = helpers.try_read_lines(helpers.ADMINS_PATH, [])
 
+    if user_id in admin_list:
+        return CommandResponse(user_message, "That person is already an admin.")
+
     # TODO
 
     return NoResponse()
@@ -969,6 +972,9 @@ async def deladmin_command(context, update=None) -> CommandResponse:
 
     user_id = args_list[0].lower()
     admin_list = helpers.try_read_lines(helpers.ADMINS_PATH, [])
+
+    if user_id not in admin_list:
+        return CommandResponse(user_message, "That person is not an admin.")
 
     # TODO
 

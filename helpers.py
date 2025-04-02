@@ -1,9 +1,12 @@
 import json
 import settings
+import typing
 
 TELEGRAM_WHITELIST_PATH = "Data/tg_whitelist.txt"
 ADMINS_PATH = "Data/admins.txt"
 USERNAME_MAP_PATH = "Data/username_map.json"
+
+T = typing.TypeVar('T')
 
 def get_sender(context, update=None, map_name=False) -> str:
     # Returns the username of the user that sent the command or message
@@ -83,11 +86,11 @@ def map_username(username) -> str:
 
     return corrected_name
 
-def try_read_json(path, default) -> dict:
+def try_read_json(path, default: T) -> T:
     try:
         with open(path, 'r', encoding='utf-8') as f:
             return json.load(f)
-    except OSError:
+    except (OSError, json.JSONDecodeError):
         return default
 
 def try_read_lines(path, default) -> list:
@@ -96,3 +99,11 @@ def try_read_lines(path, default) -> list:
             return [x.strip() for x in f.readlines()]
     except OSError:
         return default
+
+def write_json_to_file(path, data) -> None:
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(data, f)
+
+def write_lines_to_file(path, lines) -> None:
+    with open(path, 'w', encoding='utf-8') as f:
+        f.writelines(f"{x}\n" for x in lines)

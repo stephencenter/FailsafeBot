@@ -93,15 +93,10 @@ def load_memory() -> list[ChatCompletionMessageParam]:
     # Load the AI's memory (if it exists)
     config = settings.Config()
 
-    memory = []
     if config.main.usememory:
-        try:
-            with open(MEMORY_PATH, encoding='utf-8') as f:
-                memory = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            pass
+        return helpers.try_read_json(MEMORY_PATH, [])
 
-    return memory
+    return []
 
 def append_to_memory(user_prompt: str = '', bot_prompt: str = '') -> None:
     config = settings.Config()

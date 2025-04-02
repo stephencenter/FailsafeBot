@@ -17,4 +17,6 @@ dependencies = [
     "openai==1.55.3",
     "requests>=2.32.3",
     "strsimpy>=0.2.1",
+    "jsonlines>=4.0.0",
+    "tiktoken>=0.9.0",
 ]

@@ -4,6 +4,7 @@ import random
 import discord
 import yt_dlp
 import settings
+import helpers
 from strsimpy import Damerau
 
 SOUNDS_PATH = "Sounds"
@@ -71,7 +72,7 @@ def get_sound_dict() -> dict[str, str]:
 def get_alias_dict() -> dict[str, str]:
     # Load a dictionary where the keys are aliases, and the values are the
     # sounds those aliases correspond to
-    with open(ALIAS_PATH, encoding='utf-8') as f:
+    with open(ALIAS_PATH, mode='r', encoding='utf-8') as f:
         return json.load(f)
 
 def get_playcount_dict() -> dict[str, int]:
@@ -79,15 +80,7 @@ def get_playcount_dict() -> dict[str, int]:
     sound_list = get_sound_list()
     alias_dict = get_alias_dict()
 
-    playcount_dict = {x: 0 for x in sound_list}
-
-    try:
-        with open(PLAYCOUNTS_PATH, encoding='utf-8') as f:
-            playcount_dict = json.load(f)
-
-    # If loading the stored dictionary fails, return the blank playcount dictionary
-    except (FileNotFoundError, json.decoder.JSONDecodeError):
-        return playcount_dict
+    playcount_dict = helpers.try_read_json(PLAYCOUNTS_PATH, {x: 0 for x in sound_list})
 
     # This variable makes note of whether a correction was made to the playcounts dictionary
     changed = False
