@@ -46,19 +46,16 @@ class SoundResponse(FileResponse):
         super().__init__(user_message, bot_message, file_path, record_to_memory, temp=False, send_to_chat=False)
 
 class NoPermissionsResponse(CommandResponse):
-    TXT_NO_PERMISSIONS = (
-        "You don't have the right, O you don't have the right.",
-        "You think I'd let just anyone do this?"
-    )
-
     def __init__(self, user_message: str):
-        chosen_response = random.choice(self.TXT_NO_PERMISSIONS)
+        chosen_response = random.choice([
+            "You don't have the right, O you don't have the right.",
+            "You think I'd let just anyone do this?"
+        ])
         super().__init__(user_message, chosen_response, record_to_memory=True, send_to_chat=True)
 
 class NoResponse(CommandResponse):
     def __init__(self):
         super().__init__('', '', record_to_memory=False, send_to_chat=False)
-
 #endregion
 
 # ==========================
@@ -762,7 +759,6 @@ async def memorylist_command(context, update=None) -> CommandResponse:
         f.write('\n'.join(memory_list))
 
     return FileResponse(user_message, "Sure, here's my memory list.", temp_path, temp=True)
-
 #endregion
 
 # ==========================
@@ -954,6 +950,7 @@ async def addadmin_command(context, update=None) -> CommandResponse:
         return CommandResponse(user_message, "Who do you want me to make an admin?")
 
     user_id = args_list[0].lower()
+    admin_list = helpers.try_read_lines(helpers.ADMINS_PATH, [])
 
     # TODO
 
@@ -971,6 +968,7 @@ async def deladmin_command(context, update=None) -> CommandResponse:
         return CommandResponse(user_message, "Who do you want me to remove from the admin list?")
 
     user_id = args_list[0].lower()
+    admin_list = helpers.try_read_lines(helpers.ADMINS_PATH, [])
 
     # TODO
 
@@ -988,6 +986,7 @@ async def addwhitelist_command(context, update=None) -> CommandResponse:
         return CommandResponse(user_message, "What chat do you want me to add to the whitelist?")
 
     chat_id = args_list[0].lower()
+    whitelist = helpers.try_read_lines(helpers.TELEGRAM_WHITELIST_PATH, [])
 
     # TODO
 
@@ -1005,11 +1004,11 @@ async def delwhitelist_command(context, update=None) -> CommandResponse:
         return CommandResponse(user_message, "What chat do you want me to remove from the whitelist?")
 
     chat_id = args_list[0].lower()
+    whitelist = helpers.try_read_lines(helpers.TELEGRAM_WHITELIST_PATH, [])
 
     # TODO
 
     return NoResponse()
-
 #endregion
 
 # ==========================
@@ -1073,14 +1072,11 @@ async def handle_message_event(message, update=None) -> CommandResponse:
     return response
 
 async def botname_event(message):
-    try:
-        with open(RESPONSES_PATH, encoding="utf-8") as f:
-            response_list = f.readlines()
-
-    except FileNotFoundError:
-        return NoResponse()
-
+    response_list = helpers.try_read_lines(RESPONSES_PATH, [])
     response_list = [line for line in response_list if not line.isspace() and not line.startswith("#")]
+
+    if not response_list:
+        return NoResponse()
 
     chosen_response = random.choice(response_list)
     if chosen_response.startswith('f"') or chosen_response.startswith("f'"):

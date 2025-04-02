@@ -59,9 +59,7 @@ def is_admin(context, update=None) -> bool:
         return True
 
     user_id = get_sender_id(context, update)
-
-    with open(ADMINS_PATH, encoding='utf-8') as f:
-        admin_list = [x.strip() for x in f.readlines()]
+    admin_list = try_read_lines(ADMINS_PATH, [])
 
     return user_id in admin_list
 
@@ -71,18 +69,12 @@ def is_whitelisted(context, update) -> bool:
         return True
 
     chat_id = str(update.message.chat.id)
-
-    with open(TELEGRAM_WHITELIST_PATH, encoding='utf-8') as f:
-        whitelist = [x.strip() for x in f.readlines()]
+    whitelist = try_read_lines(TELEGRAM_WHITELIST_PATH, [])
 
     return chat_id in whitelist
 
 def map_username(username) -> str:
-    try:
-        with open(USERNAME_MAP_PATH, 'r', encoding='utf-8') as f:
-            username_map = json.load(f)
-    except FileNotFoundError:
-        return username
+    username_map = try_read_json(USERNAME_MAP_PATH, dict())
 
     try:
         corrected_name = username_map[username.lower()]
@@ -90,3 +82,17 @@ def map_username(username) -> str:
         return username
 
     return corrected_name
+
+def try_read_json(path, default) -> dict:
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except OSError:
+        return default
+
+def try_read_lines(path, default) -> list:
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return [x.strip() for x in f.readlines()]
+    except OSError:
+        return default
