@@ -953,11 +953,12 @@ async def addadmin_command(context, update=None) -> CommandResponse:
     admin_list = helpers.try_read_lines(helpers.ADMINS_PATH, [])
 
     if user_id in admin_list:
-        return CommandResponse(user_message, "That person is already an admin.")
+        return CommandResponse(user_message, f"That user ID '{user_id}' is already on the admin list.")
 
-    # TODO
+    admin_list.append(user_id)
+    helpers.write_lines_to_file(helpers.ADMINS_PATH, admin_list)
 
-    return NoResponse()
+    return CommandResponse(user_message, f"Added new user ID '{user_id}' to admin list.")
 
 async def deladmin_command(context, update=None) -> CommandResponse:
     user_message = "Can you remove this person from the admin list?"
@@ -974,14 +975,15 @@ async def deladmin_command(context, update=None) -> CommandResponse:
     admin_list = helpers.try_read_lines(helpers.ADMINS_PATH, [])
 
     if user_id not in admin_list:
-        return CommandResponse(user_message, "That person is not an admin.")
+        return CommandResponse(user_message, f"That user ID '{user_id}' is not on the admin list.")
 
-    # TODO
+    admin_list = [x for x in admin_list if x != user_id]
+    helpers.write_lines_to_file(helpers.ADMINS_PATH, admin_list)
 
-    return NoResponse()
+    return CommandResponse(user_message, f"Removed user ID '{user_id}' from the admin list.")
 
 async def addwhitelist_command(context, update=None) -> CommandResponse:
-    user_message = "Can you add this chat to the whitelist?"
+    user_message = "Can you add this chat ID to the whitelist?"
 
     if not helpers.is_admin(context, update):
         return NoPermissionsResponse(user_message)
@@ -989,17 +991,21 @@ async def addwhitelist_command(context, update=None) -> CommandResponse:
     args_list = helpers.get_args_list(context, update)
 
     if not args_list or args_list[0].isspace():
-        return CommandResponse(user_message, "What chat do you want me to add to the whitelist?")
+        return CommandResponse(user_message, "What chat ID do you want me to add to the whitelist?")
 
     chat_id = args_list[0].lower()
     whitelist = helpers.try_read_lines(helpers.TELEGRAM_WHITELIST_PATH, [])
 
-    # TODO
+    if chat_id in whitelist:
+        return CommandResponse(user_message, f"The chat ID '{chat_id}' is already on the whitelist.")
 
-    return NoResponse()
+    whitelist.append(chat_id)
+    helpers.write_lines_to_file(helpers.TELEGRAM_WHITELIST_PATH, whitelist)
+
+    return CommandResponse(user_message, f"Added new chat ID '{chat_id}' to the whitelist.")
 
 async def delwhitelist_command(context, update=None) -> CommandResponse:
-    user_message = "Can you remove this chat from the whitelist?"
+    user_message = "Can you remove this chat ID from the whitelist?"
 
     if not helpers.is_admin(context, update):
         return NoPermissionsResponse(user_message)
@@ -1007,14 +1013,18 @@ async def delwhitelist_command(context, update=None) -> CommandResponse:
     args_list = helpers.get_args_list(context, update)
 
     if not args_list or args_list[0].isspace():
-        return CommandResponse(user_message, "What chat do you want me to remove from the whitelist?")
+        return CommandResponse(user_message, "What chat ID do you want me to remove from the whitelist?")
 
     chat_id = args_list[0].lower()
     whitelist = helpers.try_read_lines(helpers.TELEGRAM_WHITELIST_PATH, [])
 
-    # TODO
+    if chat_id not in whitelist:
+        return CommandResponse(user_message, f"The chat ID '{chat_id}' is not on the whitelist.")
 
-    return NoResponse()
+    whitelist = [x for x in whitelist if x != chat_id]
+    helpers.write_lines_to_file(helpers.TELEGRAM_WHITELIST_PATH, whitelist)
+
+    return CommandResponse(user_message, f"Removed chat ID '{chat_id}' from the whitelist.")
 #endregion
 
 # ==========================
