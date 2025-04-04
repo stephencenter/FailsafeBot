@@ -1067,10 +1067,10 @@ def discord_register_events(discord_bot: DiscordBot):
 
 async def telegram_on_message(context, update) -> CommandResponse:
     message_text = update.message.text.lower()
-    response = await handle_message_event(message_text)
+    response = await handle_message_event(message_text, context=context, update=update)
     return response
 
-async def handle_message_event(message, update=None) -> CommandResponse:
+async def handle_message_event(message, context=None, update=None) -> CommandResponse:
     config = settings.Config()
     bot_name = config.main.botname.lower()
 
@@ -1085,9 +1085,16 @@ async def handle_message_event(message, update=None) -> CommandResponse:
     elif config.main.replytoname and (bot_name in message or ''.join(bot_name.split()) in message):
         response = await botname_event(message)
 
+    elif random.random() < config.main.randreplychance:
+        response = await random_reply_event(message, context, update)
+
+    elif config.main.recordall:
+        user_prompt = chat.generate_user_prompt(message, context, update)
+        chat.append_to_memory(user_prompt=user_prompt)
+
     return response
 
-async def botname_event(message):
+async def botname_event(message) -> CommandResponse:
     response_list = helpers.try_read_lines(RESPONSES_PATH, [])
     response_list = [line for line in response_list if not line.isspace() and not line.startswith("#")]
 
@@ -1100,7 +1107,16 @@ async def botname_event(message):
 
     return CommandResponse(message, chosen_response)
 
-async def monkey_event(message):
+async def monkey_event(message) -> CommandResponse:
     # Discworld adventure game reference
     return SoundResponse(message, bot_message="AAAAAHHHHH-EEEEE-AAAAAHHHHH!", file_path="Sounds/monkey.mp3")
+
+async def random_reply_event(message, context, update=None):
+     # Create a prompt for GPT that includes the user's name and message, as well as whether it was a private message or not
+    user_prompt = chat.generate_user_prompt(message, context, update)
+
+    # Have GPT generate a response to the user prompt
+    response = chat.get_gpt_response(user_prompt)
+
+    return CommandResponse(message, response)
 #endregion

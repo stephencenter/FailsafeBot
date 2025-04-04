@@ -14,11 +14,13 @@ class ConfigMain:
     maxfaces: int = 10000  # Maximum number of faces for the dice for dice roller
     replytoname: bool = True  # Whether the bot should respond when their name is said
     replytomonkey: bool = False  # Whether the bot should play a monkey sound when the word monkey is said (Discworld adventure game reference)
+    randreplychance: float = 0.05  # The chance for the bot to randomly reply to any message in a chat they're in (0 = no chance 1 = every message)
     vcautodc: bool = True  # Whether the bot will automatically disconnect if they're the only ones in a voice call
     ytdldownload: bool = False  # Whether the vcstream command will download the video before playing it
     requireadmin: bool = True  # Whether certain commands require admin rights to perform. Note that some commands like /terminal are extremely dangerous in untrustworthy hands
     usememory: bool = True  # Whether the bot will use the memory system for AI chatting
     memorysize: int = 24  # Maximum number of messages to record in memory for AI chatting (higher is probably more expensive)
+    recordall: bool = False  # Whether the bot wil record ALL messages sent in chat to memory, or just messages directed towards it
     gptmodel: str = "gpt-4o-mini"  # What GPT model to use for AI chatting
     gpttemp: float = 1.0  # Temperature for GPT chat completions (0 to 2, values outside this will break)
     gptmaxtokens: int = 1024  # Value to be passed for parameter max_completion_tokens for gpt chat completion
