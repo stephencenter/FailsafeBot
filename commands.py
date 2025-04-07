@@ -63,13 +63,6 @@ class NoResponse(CommandResponse):
 # ==========================
 #region
 async def send_response(bot: TelegramBot | DiscordBot, command: Callable, context, update=None) -> None:
-    if isinstance(bot, TelegramBot) and update is not None and not helpers.is_whitelisted(context, update):
-        # Telegram doesn't allow you to make "private" bots, meaning anyone can add your bot to their chat
-        # and use up your CPU time. This check prevents the bot from responding to commands unless it comes
-        # from a whitelisted chat
-        print("rejected", update.message.chat.id, datetime.now())
-        return
-
     config = settings.Config()
     command_response: CommandResponse = await command(context, update=update)
 
@@ -128,6 +121,12 @@ async def send_response(bot: TelegramBot | DiscordBot, command: Callable, contex
 
 def telegram_handler(bot: TelegramBot, command: Callable) -> Callable:
     async def wrapper_function(update, context):
+        if not helpers.is_whitelisted(context, update):
+            # Telegram doesn't allow you to make "private" bots, meaning anyone can add your bot to their chat
+            # and use up your CPU time. This check prevents the bot from responding to commands unless it comes
+            # from a whitelisted chat
+            print("rejected", update.message.chat.id, datetime.now())
+            return
         await send_response(bot, command, context, update=update)
 
     return wrapper_function
@@ -843,7 +842,7 @@ Look upon my works, ye mighty, and despair:
 /chat (talk to me)
 /wisdom (request my wisdom)
 /roll (roll a dice)
-/d10000 (roll the d10000 table)
+/d10000 and /effects (roll the d10000 table)
 /pressf (pay respects)"""
 
     return CommandResponse("What chat commands are available?", help_string)
