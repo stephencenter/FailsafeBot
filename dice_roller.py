@@ -1,6 +1,6 @@
-import json
 import random
 import re
+import helpers
 
 D10000_LIST_PATH = "Data/d10000_list.txt"
 ACTIVE_EFFECTS_PATH = "Data/active_effects.json"
@@ -94,28 +94,20 @@ def get_d10000_roll(username) -> str:
 
     chosen_effect = random.choice(effects).strip()
 
-    try:
-        with open(ACTIVE_EFFECTS_PATH, 'r', encoding='utf-8') as f:
-            effects_dict = json.load(f)
-    except FileNotFoundError:
-        effects_dict = {}
+    effects_dict = helpers.try_read_json(ACTIVE_EFFECTS_PATH, dict())
 
     try:
         effects_dict[username].append(chosen_effect)
         effects_dict[username] = sorted(set(effects_dict[username]))
     except KeyError:
         effects_dict[username] = [chosen_effect]
-    with open(ACTIVE_EFFECTS_PATH, 'w', encoding='utf-8') as f:
-        json.dump(effects_dict, f)
+
+    helpers.write_json_to_file(ACTIVE_EFFECTS_PATH, effects_dict)
 
     return chosen_effect
 
 def get_active_effects(username) -> list:
-    try:
-        with open(ACTIVE_EFFECTS_PATH, 'r', encoding='utf-8') as f:
-            effects_dict = json.load(f)
-    except FileNotFoundError:
-        return []
+    effects_dict = helpers.try_read_json(ACTIVE_EFFECTS_PATH, dict())
 
     try:
         active_effects = effects_dict[username]
@@ -125,13 +117,7 @@ def get_active_effects(username) -> list:
     return active_effects
 
 def reset_active_effects(username):
-    try:
-        with open(ACTIVE_EFFECTS_PATH, 'r', encoding='utf-8') as f:
-            effects_dict = json.load(f)
-    except FileNotFoundError:
-        effects_dict = {}
-
+    effects_dict = helpers.try_read_json(ACTIVE_EFFECTS_PATH, dict())
     effects_dict[username] = []
 
-    with open(ACTIVE_EFFECTS_PATH, 'w', encoding='utf-8') as f:
-        json.dump(effects_dict, f)
+    helpers.write_json_to_file(ACTIVE_EFFECTS_PATH, effects_dict)

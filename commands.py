@@ -664,7 +664,7 @@ async def effects_command(context, update=None) -> CommandResponse:
 
     if active_effects:
         effects_string = '\n    '.join(active_effects)
-        response = f"Here's all of your active effects:\n    {effects_string}"
+        response = f"Here are {username}'s active effects:\n    {effects_string}"
     else:
         response = "You don't have any active effects, use the /d10000 command to get some!"
 
@@ -674,7 +674,7 @@ async def reset_effects_command(context, update=None):
     username = helpers.get_sender(context, update)
     dice_roller.reset_active_effects(username)
 
-    return CommandResponse("Can you reset my active d10000 effects?", "Active effects reset.")
+    return CommandResponse("Can you reset my active d10000 effects?", f"Active effects reset for {username}.")
 #endregion
 
 # ==========================
@@ -711,7 +711,7 @@ async def guess_command(context, update=None) -> CommandResponse:
     return CommandResponse(user_message, "That isn't an option for this question!")
 
 async def triviarank_command(context, update=None):
-    points_dict = trivia.get_points_dict()
+    points_dict = helpers.try_read_json(trivia.TRIVIA_POINTS_PATH, dict())
     ranking = sorted(points_dict, key=lambda x: points_dict[x], reverse=True)
 
     message = '\n'.join(f'    {index + 1}. {player} @ {points_dict[player]:,} points' for index, player in enumerate(ranking))

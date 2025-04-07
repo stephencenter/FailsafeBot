@@ -1,5 +1,4 @@
 import os
-import json
 import random
 import discord
 import yt_dlp
@@ -72,8 +71,7 @@ def get_sound_dict() -> dict[str, str]:
 def get_alias_dict() -> dict[str, str]:
     # Load a dictionary where the keys are aliases, and the values are the
     # sounds those aliases correspond to
-    with open(ALIAS_PATH, mode='r', encoding='utf-8') as f:
-        return json.load(f)
+    return helpers.try_read_json(ALIAS_PATH, dict())
 
 def get_playcount_dict() -> dict[str, int]:
     # Retrieve the sound and alias dictionaries
@@ -109,8 +107,7 @@ def get_playcount_dict() -> dict[str, int]:
     # If the playcount dictionary had to be corrected, then we write the corrected
     # dictionary to a file
     if changed:
-        with open(PLAYCOUNTS_PATH, 'w', encoding='utf-8') as f:
-            json.dump(playcount_dict, f, indent=4)
+        helpers.write_json_to_file(PLAYCOUNTS_PATH, playcount_dict)
 
     return playcount_dict
 
@@ -122,8 +119,7 @@ async def increment_playcount(sound_name: str) -> None:
     except KeyError:
         play_counts[sound_name] = 1
 
-    with open(PLAYCOUNTS_PATH, 'w', encoding='utf-8') as f:
-        json.dump(play_counts, f, indent=4)
+    helpers.write_json_to_file(PLAYCOUNTS_PATH, play_counts)
 
 def sound_exists(sound_name: str) -> bool:
     if sound_name in get_sound_dict():
@@ -174,8 +170,7 @@ def get_sound_list_txt() -> tuple[str, int]:
     count = len(sound_list)
     temp_path = 'Data/soundlist.txt'
 
-    with open(temp_path, 'w', encoding='utf-8') as f:
-        f.write('\n'.join(sound_list))
+    helpers.write_lines_to_file(temp_path, sound_list)
 
     return temp_path, count
 
@@ -219,9 +214,7 @@ def add_sound_alias(new_alias, sound_name) -> str:
             return f"'{sound_name}' is not an existing sound or alias"
 
     alias_dict[new_alias] = sound_name
-
-    with open(ALIAS_PATH, "w", encoding='utf-8') as f:
-        json.dump(alias_dict, f, indent=4)
+    helpers.write_json_to_file(ALIAS_PATH, alias_dict)
 
     return f"'{new_alias}' has been added as an alias for '{sound_name}'"
 
@@ -235,8 +228,7 @@ async def del_sound_alias(alias_to_delete: str) -> str:
     except KeyError:
         return f"{alias_to_delete} isn't an alias for anything"
 
-    with open(ALIAS_PATH, 'w', encoding='utf-8') as f:
-        json.dump(alias_dict, f, indent=4)
+    helpers.write_json_to_file(ALIAS_PATH, alias_dict)
 
     return f"'{alias_to_delete}' is no longer an alias for '{prev_sound}'"
 

@@ -1,4 +1,3 @@
-import json
 import numpy
 from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam
@@ -12,14 +11,16 @@ MARKOV_PATH = "Data/markov_chain.json"
 MEMORY_PATH = "Data/openai_memory.json"
 PREPEND_PATH = "Data/prepend_message.txt"
 
-with open(MARKOV_PATH, 'r', encoding='utf8') as markov:
-    markov_chain = json.load(markov)
-
 def generate_markov_text() -> str:
     # Markov-powered Text Generation Command
     config = settings.Config()
     if config.main.minmarkov > config.main.maxmarkov:
         raise ValueError("Markov minimum length cannot be greater than maximum length (config issue)")
+
+    markov_chain = helpers.try_read_json(MARKOV_PATH, dict())
+
+    if not markov_chain:
+        return "No markov chain data was found!"
 
     null_token = "NULL_TOKEN"
     chosen_tokens = []
@@ -128,5 +129,4 @@ def append_to_memory(user_prompt: str = '', bot_prompt: str = '') -> None:
         memory = memory[size - config.main.memorysize:]
 
     # Write the AI's memory to a file so it can be retrieved later
-    with open(MEMORY_PATH, mode='w', encoding='utf-8') as f:
-        json.dump(memory, f, indent=4)
+    helpers.write_json_to_file(MEMORY_PATH, memory)

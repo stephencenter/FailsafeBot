@@ -1,5 +1,4 @@
 import math
-import json
 import requests
 from unidecode import unidecode
 from html import unescape
@@ -72,7 +71,7 @@ Type /guess [your answer] to answer!
             current_question = None
 
         if points_gained > 0:
-            points_dict = get_points_dict()
+            points_dict = helpers.try_read_json(TRIVIA_POINTS_PATH, dict())
             player_name = helpers.get_sender(context, update)
 
             try:
@@ -80,7 +79,7 @@ Type /guess [your answer] to answer!
             except KeyError:
                 points_dict[player_name] = points_gained
 
-            write_points_dict(points_dict)
+            helpers.write_json_to_file(TRIVIA_POINTS_PATH, points_dict)
 
         return points_gained
 
@@ -136,8 +135,8 @@ def get_trivia_question() -> TriviaQuestion:
     if (size := len(previous_questions)) > TRIVIA_MEMORY_SIZE:
         previous_questions = previous_questions[size - TRIVIA_MEMORY_SIZE:]
 
-    with open(TRIVIA_MEMORY_PATH, mode='w', encoding='utf-8') as f:
-        f.write('\n'.join(previous_questions))
+    # Keep track of which trivia questions have already been asked recently
+    helpers.write_lines_to_file(TRIVIA_MEMORY_PATH, previous_questions)
 
     current_question = TriviaQuestion(chosen)
 
@@ -145,14 +144,3 @@ def get_trivia_question() -> TriviaQuestion:
 
 def get_current_question() -> TriviaQuestion | None:
     return current_question
-
-def get_points_dict() -> dict[str, int]:
-    try:
-        with open(TRIVIA_POINTS_PATH, mode='r', encoding='utf-8') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return dict()
-
-def write_points_dict(new_dict: dict[str, int]):
-    with open(TRIVIA_POINTS_PATH, mode='w', encoding='utf-8') as f:
-        json.dump(new_dict, f)
