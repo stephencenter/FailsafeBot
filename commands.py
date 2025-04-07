@@ -21,7 +21,7 @@ import trivia
 
 LOGGING_DIR_PATH = os.path.join("Data", "logging")
 LOGGING_FILE_PATH = os.path.join(LOGGING_DIR_PATH, "log.txt")
-VERSION_NUMBER = 'v1.0.9'
+VERSION_NUMBER = 'v1.0.10'
 RESPONSES_PATH = "Data/response_list.txt"
 
 # ==========================
@@ -861,8 +861,20 @@ async def logs_command(context, update=None) -> CommandResponse:
     return FileResponse("Can you send me your error log?", "Sure, here you go.", output_path)
 
 async def test_command(context, update=None) -> CommandResponse:
-    # This command is for verifying that the bot is online and receiving commands
-    return CommandResponse("Hey, are you working?", "I'm still alive, unfortunately.")
+    # This command is for verifying that the bot is online and receiving commands.
+    # You can also supply it with a list of responses and it will pick a random one
+    # I think of this as similar to how RTS units say things when you click them
+    response_list = helpers.try_read_lines(RESPONSES_PATH, [])
+    response_list = [line for line in response_list if not line.isspace() and not line.startswith("#")]
+
+    if not response_list:
+        CommandResponse("Hey, are you working?", "I'm still alive, unfortunately.")
+
+    chosen_response = random.choice(response_list)
+    if chosen_response.startswith('f"') or chosen_response.startswith("f'"):
+        chosen_response = eval(chosen_response)
+
+    return CommandResponse("Hey, are you working?", chosen_response)
 
 async def restart_command(context, update=None) -> CommandResponse:
     if not helpers.is_admin(context, update):
@@ -1083,10 +1095,10 @@ async def handle_message_event(message, context=None, update=None) -> CommandRes
         response = await monkey_event(message)
 
     elif config.main.replytoname and (bot_name in message or ''.join(bot_name.split()) in message):
-        response = await botname_event(message)
+        response = await reply_event(message, context, update)
 
     elif random.random() < config.main.randreplychance:
-        response = await random_reply_event(message, context, update)
+        response = await reply_event(message, context, update)
 
     elif config.main.recordall:
         user_prompt = chat.generate_user_prompt(message, context, update)
@@ -1094,24 +1106,11 @@ async def handle_message_event(message, context=None, update=None) -> CommandRes
 
     return response
 
-async def botname_event(message) -> CommandResponse:
-    response_list = helpers.try_read_lines(RESPONSES_PATH, [])
-    response_list = [line for line in response_list if not line.isspace() and not line.startswith("#")]
-
-    if not response_list:
-        return NoResponse()
-
-    chosen_response = random.choice(response_list)
-    if chosen_response.startswith('f"') or chosen_response.startswith("f'"):
-        chosen_response = eval(chosen_response)
-
-    return CommandResponse(message, chosen_response)
-
 async def monkey_event(message) -> CommandResponse:
     # Discworld adventure game reference
     return SoundResponse(message, bot_message="AAAAAHHHHH-EEEEE-AAAAAHHHHH!", file_path="Sounds/monkey.mp3")
 
-async def random_reply_event(message, context, update=None):
+async def reply_event(message, context, update=None):
      # Create a prompt for GPT that includes the user's name and message, as well as whether it was a private message or not
     user_prompt = chat.generate_user_prompt(message, context, update)
 

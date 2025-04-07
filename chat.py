@@ -10,6 +10,7 @@ ELEVENLABS_KEY_PATH = "Data/eleven_key.txt"
 GPT_PROMPT_PATH = "Data/gpt_prompt.txt"
 MARKOV_PATH = "Data/markov_chain.json"
 MEMORY_PATH = "Data/openai_memory.json"
+PREPEND_PATH = "Data/prepend_message.txt"
 
 with open(MARKOV_PATH, 'r', encoding='utf8') as markov:
     markov_chain = json.load(markov)
@@ -57,11 +58,21 @@ def get_gpt_response(user_message: str) -> str:
     with open(GPT_PROMPT_PATH, encoding='utf-8') as f:
         system_prompt = ''.join(f.readlines())
 
+    prepend_message = ''
+    with open(PREPEND_PATH, encoding='utf-8') as f:
+        prepend_message = ''.join(f.readlines())
+
     # Load the current conversation so far
     loaded_memory: list[ChatCompletionMessageParam] = load_memory()
 
     # Place the system prompt before the loaded memory to instruct the AI how to act
     messages: list[ChatCompletionMessageParam] = [{"role": "system", "content": system_prompt}]
+
+    # Place an assistant message after the system prompt but before the loaded memory
+    # This is useful specifically with fine-tuned models to set the tone for the bot's responses
+    if prepend_message:
+        messages.append({"role": "assistant", "content": prepend_message})
+
     messages += loaded_memory
     messages.append({"role": "user", "content": user_message})
 
