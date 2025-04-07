@@ -1,10 +1,13 @@
+import os
 import json
-import settings
 import typing
+import settings
 
 TELEGRAM_WHITELIST_PATH = "Data/tg_whitelist.txt"
 ADMINS_PATH = "Data/admins.txt"
 USERNAME_MAP_PATH = "Data/username_map.json"
+LOGGING_DIR_PATH = "Data/logging"
+LOGGING_FILE_PATH = os.path.join(LOGGING_DIR_PATH, "log.txt")
 
 T = typing.TypeVar('T')
 

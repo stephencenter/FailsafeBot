@@ -19,8 +19,6 @@ import dice_roller
 import helpers
 import trivia
 
-LOGGING_DIR_PATH = os.path.join("Data", "logging")
-LOGGING_FILE_PATH = os.path.join(LOGGING_DIR_PATH, "log.txt")
 VERSION_NUMBER = 'v1.0.10'
 RESPONSES_PATH = "Data/response_list.txt"
 
@@ -121,7 +119,7 @@ async def send_response(bot: TelegramBot | DiscordBot, command: Callable, contex
 
 def telegram_handler(bot: TelegramBot, command: Callable) -> Callable:
     async def wrapper_function(update, context):
-        if not helpers.is_whitelisted(context, update):
+        if isinstance(bot, TelegramBot) and update is not None and not helpers.is_whitelisted(context, update):
             # Telegram doesn't allow you to make "private" bots, meaning anyone can add your bot to their chat
             # and use up your CPU time. This check prevents the bot from responding to commands unless it comes
             # from a whitelisted chat
@@ -141,6 +139,7 @@ def register_commands(bot: TelegramBot | DiscordBot):
     # List of all commands, add commands here to register them.
     # The first item in each tuple is the name of the command, and the second is
     # the function that will be tied to that command
+
     command_list = [
         ("sound", sound_command),
         ("random", randomsound_command),
