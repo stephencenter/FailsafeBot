@@ -53,10 +53,10 @@ class ChatCommand:
             raise ValueError("Update cannot be None when sending message to telegram bot")
 
         if isinstance(target_bot, TelegramBot) != isinstance(context, TelegramContext):
-            raise ValueError("Context and bot type must match")
+            raise ValueError("Context type and bot type must match")
 
         if isinstance(target_bot, DiscordBot) != isinstance(context, DiscordContext):
-            raise ValueError("Context and bot type must match")
+            raise ValueError("Context type and bot type must match")
 
         if not isinstance(target_bot, TelegramBot) and not isinstance(target_bot, DiscordBot):
             raise NotImplementedError("Currently only supporting Telegram and Discord bots")
@@ -65,13 +65,19 @@ class ChatCommand:
         self.context = context
         self.update = update
 
-    def get_author(self, map_name=False) ->str:
+    def get_author(self, map_name=False) -> str:
         # Returns the username of the user that sent the command or message
-        if isinstance(self.context, TelegramContext):
+        if isinstance(self.update, TelegramUpdate):
             author_name = self.update.message.from_user.username
 
         elif isinstance(self.context, DiscordContext):
             author_name = self.context.author.name
+
+        else:
+            raise NotImplementedError()
+
+        if author_name is None:
+            return ''
 
         if map_name:
             return self.map_username(author_name)
@@ -85,6 +91,9 @@ class ChatCommand:
 
         elif isinstance(self.context, DiscordContext):
             user_id = str(self.context.author.id)
+
+        else:
+            raise NotImplementedError()
 
         return user_id
 
@@ -138,35 +147,47 @@ class ChatCommand:
         if not settings.Config().main.usewhitelist:
             return True
 
-        chat_id = str(self.update.message.chat.id)
-        whitelist = helpers.try_read_lines(TELEGRAM_WHITELIST_PATH, [])
+        if isinstance(self.update, TelegramUpdate):
+            chat_id = str(self.update.message.chat.id)
+            whitelist = helpers.try_read_lines(TELEGRAM_WHITELIST_PATH, [])
 
-        return chat_id in whitelist
+            return chat_id in whitelist
+
+        return True
 
     async def send_text_response(self, response: str | None):
-        if isinstance(self.target_bot, TelegramBot):
+        if isinstance(self.update, TelegramUpdate):
             await self.context.bot.send_message(chat_id=self.update.effective_chat.id, text=response)
 
-        elif isinstance(self.target_bot, DiscordBot):
+        elif isinstance(self.context, DiscordContext):
             await self.context.send(response)
 
+        else:
+            raise NotImplementedError()
+
     async def send_file_response(self, response: FileResponse, text: str | None):
-        if isinstance(self.target_bot, TelegramBot):
+        if isinstance(self.update, TelegramUpdate):
             await self.context.bot.send_document(chat_id=self.update.effective_chat.id, document=response.file_path, caption=text)
 
-        else:
+        elif isinstance(self.context, DiscordContext):
             await self.context.send(content=text, file=discord.File(response.file_path))
+
+        else:
+            raise NotImplementedError()
 
         # Delete the file that was sent if it was a temporary file
         if response.temp:
             os.remove(response.file_path)
 
     async def send_sound_response(self, response: SoundResponse, text: str | None):
-        if isinstance(self.target_bot, TelegramBot):
+        if isinstance(self.update, TelegramUpdate):
             await self.context.bot.send_voice(chat_id=self.update.effective_chat.id, voice=response.file_path, caption=text)
 
-        else:
+        elif isinstance(self.context, DiscordContext):
             await self.context.send(content=text, file=discord.File(response.file_path))
+
+        else:
+            raise NotImplementedError()
 
     def map_username(self, username: str) -> str:
         username_map = helpers.try_read_json(USERNAME_MAP_PATH, dict())
@@ -212,12 +233,12 @@ async def send_response(command: Callable, chat_command: ChatCommand) -> None:
 
     # Add the command and its response to memory if necessary
     if command_response.record_to_memory:
-        user_prompt = chat.generate_user_prompt(chat_command)
+        user_prompt = chat.generate_user_prompt(command_response.user_message, chat_command)
         chat.append_to_memory(user_prompt=user_prompt, bot_prompt=command_response.bot_message)
 
 def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable) -> Callable:
     if isinstance(bot, TelegramBot):
-        async def wrapper_function(update, context):
+        async def wrapper_function(update, context): # type: ignore
             chat_command = ChatCommand(bot, context, update=update)
 
             if not chat_command.is_whitelisted():

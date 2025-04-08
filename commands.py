@@ -974,13 +974,13 @@ async def handle_message_event(chat_command: ChatCommand) -> CommandResponse:
         response = await monkey_event(message)
 
     elif config.main.replytoname and (bot_name in message or ''.join(bot_name.split()) in message):
-        response = await reply_event(message, chat_command)
+        response = await reply_event(chat_command)
 
     elif random.random() < config.main.randreplychance:
-        response = await reply_event(message, chat_command)
+        response = await reply_event(chat_command)
 
     elif config.main.recordall:
-        user_prompt = chat.generate_user_prompt(chat_command)
+        user_prompt = chat.generate_user_prompt(message, chat_command)
         chat.append_to_memory(user_prompt=user_prompt)
 
     return response
@@ -989,8 +989,9 @@ async def monkey_event(message) -> CommandResponse:
     # Discworld adventure game reference
     return SoundResponse(message, bot_message="AAAAAHHHHH-EEEEE-AAAAAHHHHH!", file_path="Sounds/monkey.mp3")
 
-async def reply_event(message: str, chat_command: ChatCommand):
+async def reply_event(chat_command: ChatCommand):
+    user_message = chat_command.get_user_message()
     # Have GPT generate a response to the user's message
-    response = chat.get_gpt_response(message, chat_command)
-    return CommandResponse(message, response)
+    response = chat.get_gpt_response(user_message, chat_command)
+    return CommandResponse(user_message, response)
 #endregion
