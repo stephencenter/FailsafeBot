@@ -12,10 +12,9 @@ import sound_manager
 import chat
 import settings
 import dice_roller
-import helpers
 import trivia
-import command_utils
-from command_utils import CommandResponse, FileResponse, SoundResponse, NoPermissionsResponse, NoResponse, ChatCommand
+import common
+from common import CommandResponse, FileResponse, SoundResponse, NoPermissionsResponse, NoResponse, ChatCommand
 
 # ==========================
 # RESPONSE HANDLERS
@@ -25,7 +24,7 @@ from command_utils import CommandResponse, FileResponse, SoundResponse, NoPermis
 def register_commands(bot: TelegramBot | DiscordBot):
     # List of all commands, add commands here to register them.
     # The first item in each tuple is the name of the command, and the second is
-    # the function that will be tied to that command
+    # the function that will be assigned to that name
     command_list = [
         ("sound", sound_command),
         ("random", randomsound_command),
@@ -78,13 +77,13 @@ def register_commands(bot: TelegramBot | DiscordBot):
 
     if isinstance(bot, TelegramBot):
         for command in command_list:
-            bot.add_handler(CommandHandler(command[0], command_utils.command_wrapper(bot, command[1])))
+            bot.add_handler(CommandHandler(command[0], common.command_wrapper(bot, command[1])))
 
-        bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), command_utils.command_wrapper(bot, handle_message_event)))
+        bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), common.command_wrapper(bot, handle_message_event)))
 
     elif isinstance(bot, DiscordBot):
         for command in command_list:
-            new_command = discord_commands.Command(command_utils.command_wrapper(bot, command[1]))
+            new_command = discord_commands.Command(common.command_wrapper(bot, command[1]))
             new_command.name = command[0]
             bot.add_command(new_command)
 
@@ -102,7 +101,7 @@ async def sound_command(chat_command: ChatCommand) -> CommandResponse:
     args_list = chat_command.get_args_list()
 
     # Alert the user if they forgot to provide a sound name
-    if not args_list or args_list[0].isspace():
+    if not args_list:
         return CommandResponse("Can you play that sound for me?", random.choice(sound_manager.TXT_SOUND_NOT_PROVIDED))
 
     # Parse the arguments the user provided for the sound name
@@ -599,7 +598,7 @@ async def guess_command(chat_command: ChatCommand) -> CommandResponse:
     return CommandResponse(user_message, "That isn't an option for this question!")
 
 async def triviarank_command(chat_command: ChatCommand):
-    points_dict = helpers.try_read_json(trivia.TRIVIA_POINTS_PATH, dict())
+    points_dict = common.try_read_json(trivia.TRIVIA_POINTS_PATH, dict())
     ranking = sorted(points_dict, key=lambda x: points_dict[x], reverse=True)
 
     message = '\n'.join(f'    {index + 1}. {player} @ {points_dict[player]:,} points' for index, player in enumerate(ranking))
@@ -741,16 +740,16 @@ async def logs_command(chat_command: ChatCommand) -> CommandResponse:
     if not chat_command.is_admin():
         return NoPermissionsResponse(user_message)
 
-    if not os.path.exists(helpers.LOGGING_FILE_PATH):
+    if not os.path.exists(common.LOGGING_FILE_PATH):
         return CommandResponse(user_message, "There are no logs recorded.")
 
-    return FileResponse("Can you send me your error log?", "Sure, here you go.", helpers.LOGGING_FILE_PATH)
+    return FileResponse("Can you send me your error log?", "Sure, here you go.", common.LOGGING_FILE_PATH)
 
 async def test_command(chat_command: ChatCommand) -> CommandResponse:
     # This command is for verifying that the bot is online and receiving commands.
     # You can also supply it with a list of responses and it will pick a random one
     # I think of this as similar to how RTS units say things when you click them
-    response_list = helpers.try_read_lines(helpers.RESPONSES_PATH, [])
+    response_list = common.try_read_lines(common.RESPONSES_PATH, [])
     response_list = [line for line in response_list if not line.isspace() and not line.startswith("#")]
 
     if not response_list:
@@ -824,7 +823,7 @@ async def version_command(chat_command: ChatCommand) -> CommandResponse:
     if not chat_command.is_admin():
         return NoPermissionsResponse(user_message)
 
-    return CommandResponse(user_message, f"Running {helpers.APPLICATION_NAME} {helpers.VERSION_NUMBER}")
+    return CommandResponse(user_message, f"Running {common.APPLICATION_NAME} {common.VERSION_NUMBER}")
 
 async def crash_command(chat_command: ChatCommand) -> CommandResponse:
     if not chat_command.is_admin():
@@ -844,13 +843,13 @@ async def addadmin_command(chat_command: ChatCommand) -> CommandResponse:
         return CommandResponse(user_message, "Who do you want me to make an admin?")
 
     user_id = args_list[0].lower()
-    admin_list = helpers.try_read_lines(command_utils.ADMINS_PATH, [])
+    admin_list = common.try_read_lines(common.ADMINS_PATH, [])
 
     if user_id in admin_list:
         return CommandResponse(user_message, f"That user ID '{user_id}' is already on the admin list.")
 
     admin_list.append(user_id)
-    helpers.write_lines_to_file(command_utils.ADMINS_PATH, admin_list)
+    common.write_lines_to_file(common.ADMINS_PATH, admin_list)
 
     return CommandResponse(user_message, f"Added new user ID '{user_id}' to admin list.")
 
@@ -866,13 +865,13 @@ async def deladmin_command(chat_command: ChatCommand) -> CommandResponse:
         return CommandResponse(user_message, "Who do you want me to remove from the admin list?")
 
     user_id = args_list[0].lower()
-    admin_list = helpers.try_read_lines(command_utils.ADMINS_PATH, [])
+    admin_list = common.try_read_lines(common.ADMINS_PATH, [])
 
     if user_id not in admin_list:
         return CommandResponse(user_message, f"That user ID '{user_id}' is not on the admin list.")
 
     admin_list = [x for x in admin_list if x != user_id]
-    helpers.write_lines_to_file(command_utils.ADMINS_PATH, admin_list)
+    common.write_lines_to_file(common.ADMINS_PATH, admin_list)
 
     return CommandResponse(user_message, f"Removed user ID '{user_id}' from the admin list.")
 
@@ -888,13 +887,13 @@ async def addwhitelist_command(chat_command: ChatCommand) -> CommandResponse:
         return CommandResponse(user_message, "What chat ID do you want me to add to the whitelist?")
 
     chat_id = args_list[0].lower()
-    whitelist = helpers.try_read_lines(command_utils.TELEGRAM_WHITELIST_PATH, [])
+    whitelist = common.try_read_lines(common.TELEGRAM_WHITELIST_PATH, [])
 
     if chat_id in whitelist:
         return CommandResponse(user_message, f"The chat ID '{chat_id}' is already on the whitelist.")
 
     whitelist.append(chat_id)
-    helpers.write_lines_to_file(command_utils.TELEGRAM_WHITELIST_PATH, whitelist)
+    common.write_lines_to_file(common.TELEGRAM_WHITELIST_PATH, whitelist)
 
     return CommandResponse(user_message, f"Added new chat ID '{chat_id}' to the whitelist.")
 
@@ -910,13 +909,13 @@ async def delwhitelist_command(chat_command: ChatCommand) -> CommandResponse:
         return CommandResponse(user_message, "What chat ID do you want me to remove from the whitelist?")
 
     chat_id = args_list[0].lower()
-    whitelist = helpers.try_read_lines(command_utils.TELEGRAM_WHITELIST_PATH, [])
+    whitelist = common.try_read_lines(common.TELEGRAM_WHITELIST_PATH, [])
 
     if chat_id not in whitelist:
         return CommandResponse(user_message, f"The chat ID '{chat_id}' is not on the whitelist.")
 
     whitelist = [x for x in whitelist if x != chat_id]
-    helpers.write_lines_to_file(command_utils.TELEGRAM_WHITELIST_PATH, whitelist)
+    common.write_lines_to_file(common.TELEGRAM_WHITELIST_PATH, whitelist)
 
     return CommandResponse(user_message, f"Removed chat ID '{chat_id}' from the whitelist.")
 #endregion
@@ -927,7 +926,6 @@ async def delwhitelist_command(chat_command: ChatCommand) -> CommandResponse:
 #region
 def discord_register_events(discord_bot: DiscordBot):
     # This function assigns all of the event handlers to the discord bot
-    # It is called when the discord bot is created in main.py
 
     @discord_bot.event
     async def on_voice_state_update(member, before, after):
@@ -955,7 +953,7 @@ def discord_register_events(discord_bot: DiscordBot):
             await discord_bot.process_commands(message)
             return
 
-        message_handler = command_utils.command_wrapper(discord_bot, handle_message_event)
+        message_handler = common.command_wrapper(discord_bot, handle_message_event)
         context = await discord_bot.get_context(message)
         await message_handler(context)
 

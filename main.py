@@ -8,10 +8,10 @@ import discord
 from discord.ext.commands import Bot as DiscordBot
 from discord.errors import LoginFailure
 from loguru import logger
-import commands
+import command_list
 import sound_manager
 import settings
-import helpers
+import common
 
 TELEGRAM_TOKEN_PATH = os.path.join("Data", "telegram_token.txt")
 DISCORD_TOKEN_PATH = os.path.join("Data", "discord_token.txt")
@@ -63,7 +63,7 @@ async def create_run_telegram_bot(telegram_token: str):
     await telegram_bot.start()
 
     # Register all commands to the telegram bot
-    commands.register_commands(telegram_bot)
+    command_list.register_commands(telegram_bot)
 
     if telegram_bot.updater is not None:
         await telegram_bot.updater.start_polling(drop_pending_updates=True)
@@ -80,12 +80,12 @@ async def create_run_discord_bot(discord_token: str):
     discord_bot = DiscordBot(command_prefix='/', intents=intents, help_command=None)
 
     # Register all commands to the discord bot
-    commands.register_commands(discord_bot)
+    command_list.register_commands(discord_bot)
 
     await discord_bot.start(discord_token)
 
 async def initialize_and_run():
-    logger.info(f"Starting {helpers.APPLICATION_NAME} {helpers.VERSION_NUMBER}")
+    logger.info(f"Starting {common.APPLICATION_NAME} {common.VERSION_NUMBER}")
     config = settings.Config()
 
     for problem in sound_manager.verify_aliases():

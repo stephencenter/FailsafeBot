@@ -2,8 +2,7 @@ import numpy
 from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam
 import settings
-import helpers
-from command_utils import ChatCommand
+from common import ChatCommand
 
 OPENAI_KEY_PATH = "Data/openai_key.txt"
 ELEVENLABS_KEY_PATH = "Data/eleven_key.txt"
@@ -18,7 +17,7 @@ def generate_markov_text() -> str:
     if config.main.minmarkov > config.main.maxmarkov:
         raise ValueError("Markov minimum length cannot be greater than maximum length (config issue)")
 
-    markov_chain = helpers.try_read_json(MARKOV_PATH, dict())
+    markov_chain = common.try_read_json(MARKOV_PATH, dict())
 
     if not markov_chain:
         return "No markov chain data was found!"
@@ -109,7 +108,7 @@ def load_memory() -> list[ChatCompletionMessageParam]:
     config = settings.Config()
 
     if config.main.usememory:
-        return helpers.try_read_json(MEMORY_PATH, [])
+        return common.try_read_json(MEMORY_PATH, [])
 
     return []
 
