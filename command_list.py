@@ -2,10 +2,13 @@ import os
 import sys
 import random
 from subprocess import Popen, PIPE, STDOUT
-from telegram.ext import MessageHandler, filters, CommandHandler, Application as TelegramBot
+from typing import Callable
 import discord
 from discord.ext import commands as discord_commands
 from discord.ext.commands import CommandInvokeError, Bot as DiscordBot
+from discord.errors import HTTPException
+from telegram.ext import MessageHandler, filters, CommandHandler, Application as TelegramBot
+from telegram.error import BadRequest, TimedOut, NetworkError
 from loguru import logger
 import psutil
 import sound_manager
@@ -20,6 +23,63 @@ from common import CommandResponse, FileResponse, SoundResponse, NoPermissionsRe
 # RESPONSE HANDLERS
 # ==========================
 #region
+async def send_response(command: Callable, chat_command: ChatCommand) -> None:
+    config = settings.Config()
+    command_response: CommandResponse = await command(chat_command)
+
+    if command_response.send_to_chat and command_response.bot_message:
+        text_response = command_response.bot_message
+
+        if len(text_response) > config.main.maxmessagelength:
+            text_response = text_response[:config.main.maxmessagelength]
+            logger.info(f"Cut off bot response at {config.main.maxmessagelength} characters")
+
+    else:
+        text_response = None
+
+    try:
+        # Respond with a sound effect
+        if isinstance(command_response, SoundResponse):
+            await chat_command.send_sound_response(command_response, text_response)
+
+        # Respond with a file
+        elif isinstance(command_response, FileResponse):
+            await chat_command.send_file_response(command_response, text_response)
+
+        # Respond with text
+        elif text_response:
+            await chat_command.send_text_response(text_response)
+
+    except (BadRequest, TimedOut, NetworkError, HTTPException) as e:
+        logger.error(e)
+        error_response = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
+        await chat_command.send_text_response(error_response)
+
+    # Add the command and its response to memory if necessary
+    if command_response.record_to_memory:
+        user_prompt = chat.generate_user_prompt(command_response.user_message, chat_command)
+        chat.append_to_memory(user_prompt=user_prompt, bot_prompt=command_response.bot_message)
+
+def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable) -> Callable:
+    if isinstance(bot, TelegramBot):
+        async def wrapper_function(update, context): # type: ignore
+            chat_command = ChatCommand(bot, context, update=update)
+
+            if not chat_command.is_whitelisted():
+                # Telegram doesn't allow you to make "private" bots, meaning anyone can add your bot to their chat
+                # and use up your CPU time. This check prevents the bot from responding to commands unless it comes
+                # from a whitelisted chat
+                logger.warning(f"whitelist rejected {update.message.chat.id}")
+                return
+
+            await send_response(command, chat_command)
+
+    elif isinstance(bot, DiscordBot):
+        async def wrapper_function(context):
+            chat_command = ChatCommand(bot, context)
+            await send_response(command, chat_command)
+
+    return wrapper_function
 
 def register_commands(bot: TelegramBot | DiscordBot):
     # List of all commands, add commands here to register them.
@@ -77,13 +137,13 @@ def register_commands(bot: TelegramBot | DiscordBot):
 
     if isinstance(bot, TelegramBot):
         for command in command_list:
-            bot.add_handler(CommandHandler(command[0], common.command_wrapper(bot, command[1])))
+            bot.add_handler(CommandHandler(command[0], command_wrapper(bot, command[1])))
 
-        bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), common.command_wrapper(bot, handle_message_event)))
+        bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), command_wrapper(bot, handle_message_event)))
 
     elif isinstance(bot, DiscordBot):
         for command in command_list:
-            new_command = discord_commands.Command(common.command_wrapper(bot, command[1]))
+            new_command = discord_commands.Command(command_wrapper(bot, command[1]))
             new_command.name = command[0]
             bot.add_command(new_command)
 
@@ -98,14 +158,13 @@ def register_commands(bot: TelegramBot | DiscordBot):
 # ==========================
 #region
 async def sound_command(chat_command: ChatCommand) -> CommandResponse:
-    args_list = chat_command.get_args_list()
+    sound_name = chat_command.get_first_arg(lowercase=True)
 
     # Alert the user if they forgot to provide a sound name
-    if not args_list:
+    if sound_name is None:
         return CommandResponse("Can you play that sound for me?", random.choice(sound_manager.TXT_SOUND_NOT_PROVIDED))
 
     # Parse the arguments the user provided for the sound name
-    sound_name = args_list[0].lower()
     sound_results = sound_manager.get_sound(sound_name)
 
     user_message = f"Can you play the {sound_name} sound for me?"
@@ -191,19 +250,16 @@ async def delalias_command(chat_command: ChatCommand) -> CommandResponse:
     if not chat_command.is_admin():
         return NoPermissionsResponse("Can you delete a sound alias for me?")
 
-    try:
-        alias_to_delete = (chat_command.get_args_list())[0]
-    except IndexError:
+    alias_to_delete = chat_command.get_first_arg(lowercase=True)
+    if alias_to_delete is None:
         return CommandResponse("Can you delete a sound alias for me?", random.choice(sound_manager.TXT_SOUND_NOT_PROVIDED))
 
     response = await sound_manager.del_sound_alias(alias_to_delete)
     return CommandResponse(f"Can you delete the sound alias '{alias_to_delete}'?", response)
 
 async def getalias_command(chat_command: ChatCommand) -> CommandResponse:
-    try:
-        sound_name = (chat_command.get_args_list())[0].lower()
-
-    except IndexError:
+    sound_name = chat_command.get_first_arg(lowercase=True)
+    if sound_name is None:
         return CommandResponse("How many aliases does that sound have?", random.choice(sound_manager.TXT_SOUND_NOT_PROVIDED))
 
     user_prompt = f"How many aliases does the sound '{sound_name}' have?"
@@ -255,11 +311,9 @@ async def search_command(chat_command: ChatCommand) -> CommandResponse:
 
 
 async def playcount_command(chat_command: ChatCommand) -> CommandResponse:
-    args_list = chat_command.get_args_list()
-    if not args_list or args_list[0].isspace():
+    sound_name = chat_command.get_first_arg(lowercase=True)
+    if sound_name is None:
         return CommandResponse("How many times has that sound been played?", random.choice(sound_manager.TXT_SOUND_NOT_PROVIDED))
-
-    sound_name = args_list[0].lower()
 
     sound_aliases = sound_manager.get_alias_dict()
     if sound_name in sound_aliases:
@@ -324,14 +378,12 @@ async def vcsound_command(chat_command: ChatCommand) -> CommandResponse:
     if chat_command.context.voice_client is None:
         return CommandResponse(user_message, "I'm not in a voice channel!")
 
-    args_list = chat_command.get_args_list()
+    sound_name = chat_command.get_first_arg(lowercase=True)
 
     # Alert the user if they forgot to provide a sound name
-    if not args_list or args_list[0].isspace():
+    if sound_name is None:
         return CommandResponse(user_message, random.choice(sound_manager.TXT_SOUND_NOT_PROVIDED))
 
-    # Parse the arguments the user provided for the sound name
-    sound_name = args_list[0].lower()
     sound_results = sound_manager.get_sound(sound_name)
 
     user_message = f"Can you play the {sound_name} sound in the voice channel?"
@@ -523,18 +575,14 @@ async def statroll_command(chat_command: ChatCommand) -> CommandResponse:
 
     error_response = f"Please supply a valid game name. Options are {', '.join(game_functions.keys())}"
 
-    try:
-        game = (chat_command.get_args_list())[0].lower()
-        roll_string = game_functions[game]()
-
-    except IndexError:
+    game = chat_command.get_first_arg(lowercase=True)
+    if game is None:
         return CommandResponse("Can you roll me a tabletop character?", error_response)
 
     user_prompt = f"Can you roll me a character for {game}?"
 
     try:
         roll_string = game_functions[game]()
-
     except KeyError:
         return CommandResponse(user_prompt, error_response)
 
@@ -657,11 +705,8 @@ async def getconfig_command(chat_command: ChatCommand) -> CommandResponse:
     if not chat_command.is_admin():
         return NoPermissionsResponse(user_message)
 
-    args_list = chat_command.get_args_list()
-
-    try:
-        search_string = args_list[0]
-    except IndexError:
+    search_string = chat_command.get_first_arg(lowercase=True)
+    if search_string is None:
         return CommandResponse(user_message, "You need to provide a setting name to check.")
 
     config = settings.Config()
@@ -837,12 +882,10 @@ async def addadmin_command(chat_command: ChatCommand) -> CommandResponse:
     if not chat_command.is_admin():
         return NoPermissionsResponse(user_message)
 
-    args_list = chat_command.get_args_list()
-
-    if not args_list or args_list[0].isspace():
+    user_id = chat_command.get_first_arg(lowercase=True)
+    if user_id is None:
         return CommandResponse(user_message, "Who do you want me to make an admin?")
 
-    user_id = args_list[0].lower()
     admin_list = common.try_read_lines(common.ADMINS_PATH, [])
 
     if user_id in admin_list:
@@ -859,12 +902,10 @@ async def deladmin_command(chat_command: ChatCommand) -> CommandResponse:
     if not chat_command.is_admin():
         return NoPermissionsResponse(user_message)
 
-    args_list = chat_command.get_args_list()
-
-    if not args_list or args_list[0].isspace():
+    user_id = chat_command.get_first_arg(lowercase=True)
+    if user_id is None:
         return CommandResponse(user_message, "Who do you want me to remove from the admin list?")
 
-    user_id = args_list[0].lower()
     admin_list = common.try_read_lines(common.ADMINS_PATH, [])
 
     if user_id not in admin_list:
@@ -881,12 +922,10 @@ async def addwhitelist_command(chat_command: ChatCommand) -> CommandResponse:
     if not chat_command.is_admin():
         return NoPermissionsResponse(user_message)
 
-    args_list = chat_command.get_args_list()
-
-    if not args_list or args_list[0].isspace():
+    chat_id = chat_command.get_first_arg(lowercase=True)
+    if chat_id is None:
         return CommandResponse(user_message, "What chat ID do you want me to add to the whitelist?")
 
-    chat_id = args_list[0].lower()
     whitelist = common.try_read_lines(common.TELEGRAM_WHITELIST_PATH, [])
 
     if chat_id in whitelist:
@@ -903,12 +942,10 @@ async def delwhitelist_command(chat_command: ChatCommand) -> CommandResponse:
     if not chat_command.is_admin():
         return NoPermissionsResponse(user_message)
 
-    args_list = chat_command.get_args_list()
-
-    if not args_list or args_list[0].isspace():
+    chat_id = chat_command.get_first_arg(lowercase=True)
+    if chat_id is None:
         return CommandResponse(user_message, "What chat ID do you want me to remove from the whitelist?")
 
-    chat_id = args_list[0].lower()
     whitelist = common.try_read_lines(common.TELEGRAM_WHITELIST_PATH, [])
 
     if chat_id not in whitelist:
@@ -953,7 +990,7 @@ def discord_register_events(discord_bot: DiscordBot):
             await discord_bot.process_commands(message)
             return
 
-        message_handler = common.command_wrapper(discord_bot, handle_message_event)
+        message_handler = command_wrapper(discord_bot, handle_message_event)
         context = await discord_bot.get_context(message)
         await message_handler(context)
 

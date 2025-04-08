@@ -1,18 +1,15 @@
 import os
 import random
 import json
-from typing import Callable, TypeVar
+import typing
 import discord
 from discord.ext.commands import Bot as DiscordBot
 from discord.ext.commands import Context as DiscordContext
-from discord.errors import HTTPException
 from telegram.ext import Application as TelegramBot
 from telegram.ext import CallbackContext as TelegramContext
 from telegram import Update as TelegramUpdate
-from telegram.error import BadRequest, TimedOut, NetworkError
 from loguru import logger
 import settings
-import chat
 import common
 
 APPLICATION_NAME = 'FailsafeBot'
@@ -24,7 +21,7 @@ USERNAME_MAP_PATH = "Data/username_map.json"
 TELEGRAM_WHITELIST_PATH = "Data/tg_whitelist.txt"
 ADMINS_PATH = "Data/admins.txt"
 
-T = TypeVar('T')
+T = typing.TypeVar('T')
 
 class CommandResponse:
     def __init__(self, user_message: str, bot_message: str, record_to_memory: bool = True, send_to_chat: bool = True):
@@ -140,6 +137,26 @@ class ChatCommand:
 
         raise NotImplementedError()
 
+    def get_first_arg(self, lowercase=False) -> str | None:
+        args_list = []
+
+        if isinstance(self.context, TelegramContext) and self.context.args is not None:
+            args_list = self.context.args
+
+        elif isinstance(self.context, DiscordContext) and len(self.context.message.content) > 0:
+            args_list = self.context.message.content.split()[1:]
+
+        else:
+            raise NotImplementedError()
+
+        try:
+            if lowercase:
+                return args_list[0].lower()
+            return args_list[0]
+
+        except KeyError:
+            return None
+
     def is_admin(self) -> bool:
         # Returns whether the message sender is on the bot's admin list
         if not settings.Config().main.requireadmin:
@@ -206,64 +223,6 @@ class ChatCommand:
             return username
 
         return corrected_name
-
-async def send_response(command: Callable, chat_command: ChatCommand) -> None:
-    config = settings.Config()
-    command_response: CommandResponse = await command(chat_command)
-
-    if command_response.send_to_chat and command_response.bot_message:
-        text_response = command_response.bot_message
-
-        if len(text_response) > config.main.maxmessagelength:
-            text_response = text_response[:config.main.maxmessagelength]
-            logger.info(f"Cut off bot response at {config.main.maxmessagelength} characters")
-
-    else:
-        text_response = None
-
-    try:
-        # Respond with a sound effect
-        if isinstance(command_response, SoundResponse):
-            await chat_command.send_sound_response(command_response, text_response)
-
-        # Respond with a file
-        elif isinstance(command_response, FileResponse):
-            await chat_command.send_file_response(command_response, text_response)
-
-        # Respond with text
-        elif text_response:
-            await chat_command.send_text_response(text_response)
-
-    except (BadRequest, TimedOut, NetworkError, HTTPException) as e:
-        logger.error(e)
-        error_response = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
-        await chat_command.send_text_response(error_response)
-
-    # Add the command and its response to memory if necessary
-    if command_response.record_to_memory:
-        user_prompt = chat.generate_user_prompt(command_response.user_message, chat_command)
-        chat.append_to_memory(user_prompt=user_prompt, bot_prompt=command_response.bot_message)
-
-def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable) -> Callable:
-    if isinstance(bot, TelegramBot):
-        async def wrapper_function(update, context): # type: ignore
-            chat_command = ChatCommand(bot, context, update=update)
-
-            if not chat_command.is_whitelisted():
-                # Telegram doesn't allow you to make "private" bots, meaning anyone can add your bot to their chat
-                # and use up your CPU time. This check prevents the bot from responding to commands unless it comes
-                # from a whitelisted chat
-                logger.warning(f"whitelist rejected {update.message.chat.id}")
-                return
-
-            await send_response(command, chat_command)
-
-    elif isinstance(bot, DiscordBot):
-        async def wrapper_function(context):
-            chat_command = ChatCommand(bot, context)
-            await send_response(command, chat_command)
-
-    return wrapper_function
 
 def try_read_json(path: str, default: T) -> T:
     try:

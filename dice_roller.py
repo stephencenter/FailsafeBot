@@ -1,6 +1,6 @@
 import random
 import re
-import helpers
+import common
 
 D10000_LIST_PATH = "Data/d10000_list.txt"
 ACTIVE_EFFECTS_PATH = "Data/active_effects.json"
@@ -94,7 +94,7 @@ def get_d10000_roll(username) -> str:
 
     chosen_effect = random.choice(effects).strip()
 
-    effects_dict = helpers.try_read_json(ACTIVE_EFFECTS_PATH, dict())
+    effects_dict = common.try_read_json(ACTIVE_EFFECTS_PATH, dict())
 
     try:
         effects_dict[username].append(chosen_effect)
@@ -102,12 +102,12 @@ def get_d10000_roll(username) -> str:
     except KeyError:
         effects_dict[username] = [chosen_effect]
 
-    helpers.write_json_to_file(ACTIVE_EFFECTS_PATH, effects_dict)
+    common.write_json_to_file(ACTIVE_EFFECTS_PATH, effects_dict)
 
     return chosen_effect
 
 def get_active_effects(username) -> list:
-    effects_dict = helpers.try_read_json(ACTIVE_EFFECTS_PATH, dict())
+    effects_dict = common.try_read_json(ACTIVE_EFFECTS_PATH, dict())
 
     try:
         active_effects = effects_dict[username]
@@ -117,7 +117,7 @@ def get_active_effects(username) -> list:
     return active_effects
 
 def reset_active_effects(username):
-    effects_dict = helpers.try_read_json(ACTIVE_EFFECTS_PATH, dict())
+    effects_dict = common.try_read_json(ACTIVE_EFFECTS_PATH, dict())
     effects_dict[username] = []
 
-    helpers.write_json_to_file(ACTIVE_EFFECTS_PATH, effects_dict)
+    common.write_json_to_file(ACTIVE_EFFECTS_PATH, effects_dict)

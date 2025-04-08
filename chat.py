@@ -2,6 +2,7 @@ import numpy
 from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam
 import settings
+import common
 from common import ChatCommand
 
 OPENAI_KEY_PATH = "Data/openai_key.txt"
@@ -131,4 +132,4 @@ def append_to_memory(user_prompt: str = '', bot_prompt: str = '') -> None:
         memory = memory[size - config.main.memorysize:]
 
     # Write the AI's memory to a file so it can be retrieved later
-    helpers.write_json_to_file(MEMORY_PATH, memory)
+    common.write_json_to_file(MEMORY_PATH, memory)
