@@ -2,7 +2,6 @@ import os
 import sys
 import asyncio
 import logging
-from datetime import datetime
 from telegram.ext import ApplicationBuilder
 from telegram.error import InvalidToken
 import discord
@@ -12,6 +11,7 @@ from loguru import logger
 import commands
 import sound_manager
 import settings
+import helpers
 
 TELEGRAM_TOKEN_PATH = os.path.join("Data", "telegram_token.txt")
 DISCORD_TOKEN_PATH = os.path.join("Data", "discord_token.txt")
@@ -33,7 +33,8 @@ def init_logging():
     logger.remove()
 
     # Add console output
-    logger.add(sys.stderr, level="INFO", backtrace=False, diagnose=False)
+    info_format = "{message} <level>[{level}]</level> <green>{time:YYYY-MM-DD HH:mm:ss}</green> <cyan>{name}:{function}:{line}</cyan>"
+    logger.add(sys.stderr, level="INFO", backtrace=False, diagnose=False, format=info_format)
 
     # Add file output with error logging
     logger.add("Data/logging/log.txt", level="WARNING", backtrace=False, diagnose=False)
@@ -41,7 +42,7 @@ def init_logging():
     logging.root.handlers = [InterceptHandler()]
     logging.root.setLevel(logging.INFO)
 
-    # Optional: override individual modules' logging levels if needed
+    # Override logging levels for individual modules
     logging.getLogger("telegram").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -84,11 +85,11 @@ async def create_run_discord_bot(discord_token: str):
     await discord_bot.start(discord_token)
 
 async def initialize_and_run():
-    print(f"Starting script {commands.VERSION_NUMBER} at {datetime.now()}")
+    logger.info(f"Starting script {helpers.VERSION_NUMBER}")
     config = settings.Config()
 
     for problem in sound_manager.verify_aliases():
-        print(problem)
+        logger.warning(problem)
 
     if config.main.runtelegram:
         # Retrieve telegram bot token from file
@@ -100,15 +101,15 @@ async def initialize_and_run():
 
         # Attempt to run Telgram bot
         if telegram_token is not None:
-            print("Starting telegram bot")
+            logger.info("Starting telegram bot")
             try:
                 await create_run_telegram_bot(telegram_token)
             except InvalidToken:
-                print(f"Telegram token at {TELEGRAM_TOKEN_PATH} is invalid, couldn't start bot")
+                logger.error(f"Telegram token at {TELEGRAM_TOKEN_PATH} is invalid, couldn't start bot")
         else:
-            print(f"Telegram token not found at {TELEGRAM_TOKEN_PATH}, couldn't start bot")
+            logger.error(f"Telegram token not found at {TELEGRAM_TOKEN_PATH}, couldn't start bot")
     else:
-        print("Telegram bot disabled in settings.toml, skipping")
+        logger.info(f"Telegram bot disabled in {settings.CONFIG_PATH}, skipping")
 
     if config.main.rundiscord:
         # Retrieve discord bot token from file
@@ -120,15 +121,15 @@ async def initialize_and_run():
 
         # Attempt to run Discord bot
         if discord_token is not None:
-            print("Starting discord bot")
+            logger.info("Starting discord bot")
             try:
                 await create_run_discord_bot(discord_token)
             except LoginFailure:
-                print(f"Discord token at {DISCORD_TOKEN_PATH} is invalid, couldn't start bot")
+                logger.error(f"Discord token at {DISCORD_TOKEN_PATH} is invalid, couldn't start bot")
         else:
-            print(f"Discord token not found at {DISCORD_TOKEN_PATH}, couldn't start bot")
+            logger.error(f"Discord token not found at {DISCORD_TOKEN_PATH}, couldn't start bot")
     else:
-        print(f"Discord bot disabled in {settings.CONFIG_PATH}, skipping")
+        logger.info(f"Discord bot disabled in {settings.CONFIG_PATH}, skipping")
 
     await asyncio.Event().wait()
 

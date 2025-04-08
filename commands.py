@@ -1,7 +1,6 @@
 import os
 import sys
 import random
-import logging
 from datetime import datetime
 from subprocess import Popen, PIPE, STDOUT
 from typing import Callable
@@ -11,6 +10,7 @@ import discord
 from discord.ext import commands as discord_commands
 from discord.ext.commands import CommandInvokeError, Bot as DiscordBot
 from discord.errors import HTTPException
+from loguru import logger
 import psutil
 import sound_manager
 import chat
@@ -18,9 +18,6 @@ import settings
 import dice_roller
 import helpers
 import trivia
-
-VERSION_NUMBER = 'v1.0.10'
-RESPONSES_PATH = "Data/response_list.txt"
 
 # ==========================
 # RESPONSE CLASSES
@@ -103,7 +100,7 @@ async def send_response(bot: TelegramBot | DiscordBot, command: Callable, contex
                 await context.send(text_response)
 
     except (BadRequest, TimedOut, NetworkError, HTTPException) as e:
-        logging.exception(e)
+        logger.error(e)
         error_response = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
 
         if isinstance(bot, TelegramBot) and update is not None:
@@ -123,7 +120,7 @@ def telegram_handler(bot: TelegramBot, command: Callable) -> Callable:
             # Telegram doesn't allow you to make "private" bots, meaning anyone can add your bot to their chat
             # and use up your CPU time. This check prevents the bot from responding to commands unless it comes
             # from a whitelisted chat
-            print("rejected", update.message.chat.id, datetime.now())
+            logger.warning(f"whitelist rejected {update.message.chat.id}")
             return
         await send_response(bot, command, context, update=update)
 
@@ -467,7 +464,7 @@ async def vcsound_command(context, update=None) -> CommandResponse:
 
     source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_results))
 
-    context.voice_client.play(source, after=lambda e: logging.exception(e) if e else None)
+    context.voice_client.play(source, after=lambda e: logger.error(e) if e else None)
 
     await sound_manager.increment_playcount(sound_name)
     return CommandResponse(user_prompt, "Sure, here you go", send_to_chat=False)
@@ -488,7 +485,7 @@ async def vcrandom_command(context, update=None) -> CommandResponse:
         context.voice_client.stop()
 
     source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_path))
-    context.voice_client.play(source, after=lambda e: logging.exception(e) if e else None)
+    context.voice_client.play(source, after=lambda e: logger.error(e) if e else None)
 
     await sound_manager.increment_playcount(sound_name)
     return CommandResponse(user_message, f"Sure, I chose the sound '{sound_name}", send_to_chat=False)
@@ -529,7 +526,7 @@ async def vcstream_command(context, update=None) -> CommandResponse:
 
     # Play the stream through the voice client
     async with context.typing():
-        context.voice_client.play(stream_player, after=lambda e: logging.exception(e) if e else None)
+        context.voice_client.play(stream_player, after=lambda e: logger.error(e) if e else None)
 
     return CommandResponse("Stream this for me please.", f"Now playing: {stream_player.title}")
 
@@ -851,18 +848,16 @@ async def logs_command(context, update=None) -> CommandResponse:
     if not helpers.is_admin(context, update):
         return NoPermissionsResponse(user_message)
 
-    output_path = os.path.join(LOGGING_DIR_PATH, "log.txt")
-
-    if not os.path.exists(output_path):
+    if not os.path.exists(helpers.LOGGING_FILE_PATH):
         return CommandResponse(user_message, "There are no logs recorded.")
 
-    return FileResponse("Can you send me your error log?", "Sure, here you go.", output_path)
+    return FileResponse("Can you send me your error log?", "Sure, here you go.", helpers.LOGGING_FILE_PATH)
 
 async def test_command(context, update=None) -> CommandResponse:
     # This command is for verifying that the bot is online and receiving commands.
     # You can also supply it with a list of responses and it will pick a random one
     # I think of this as similar to how RTS units say things when you click them
-    response_list = helpers.try_read_lines(RESPONSES_PATH, [])
+    response_list = helpers.try_read_lines(helpers.RESPONSES_PATH, [])
     response_list = [line for line in response_list if not line.isspace() and not line.startswith("#")]
 
     if not response_list:
@@ -940,13 +935,13 @@ async def version_command(context, update=None) -> CommandResponse:
     if not helpers.is_admin(context, update):
         return NoPermissionsResponse(user_message)
 
-    return CommandResponse(user_message, VERSION_NUMBER)
+    return CommandResponse(user_message, helpers.VERSION_NUMBER)
 
 async def crash_command(context, update=None) -> CommandResponse:
     if not helpers.is_admin(context, update):
         return NoPermissionsResponse("This statement is false.")
 
-    raise NotImplementedError("/crash command used")
+    raise ZeroDivisionError("/crash command used")
 
 async def addadmin_command(context, update=None) -> CommandResponse:
     user_message = "Can you make this person an admin?"
