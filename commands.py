@@ -2,13 +2,10 @@ import os
 import sys
 import random
 from subprocess import Popen, PIPE, STDOUT
-from typing import Callable
 from telegram.ext import MessageHandler, filters, CommandHandler, Application as TelegramBot
-from telegram.error import BadRequest, TimedOut, NetworkError
 import discord
 from discord.ext import commands as discord_commands
 from discord.ext.commands import CommandInvokeError, Bot as DiscordBot
-from discord.errors import HTTPException
 from loguru import logger
 import psutil
 import sound_manager
@@ -17,126 +14,18 @@ import settings
 import dice_roller
 import helpers
 import trivia
-
-# ==========================
-# RESPONSE CLASSES
-# ==========================
-#region
-class CommandResponse:
-    def __init__(self, user_message: str, bot_message: str, record_to_memory: bool = True, send_to_chat: bool = True):
-        self.user_message: str = user_message
-        self.bot_message: str = bot_message
-        self.record_to_memory: bool = record_to_memory  # Whether user_message and bot_message should be recorded to memory
-        self.send_to_chat: bool = send_to_chat  # Whether bot_message should be sent to chat
-
-class FileResponse(CommandResponse):
-    def __init__(self, user_message: str, bot_message: str, file_path: str, record_to_memory: bool = True, temp: bool = False, send_to_chat: bool = True):
-        super().__init__(user_message, bot_message, record_to_memory=record_to_memory, send_to_chat=send_to_chat)
-        self.file_path: str = file_path  # The path of the file to send
-        self.temp: bool = temp  # Whether the file should be deleted after being sent
-
-class SoundResponse(FileResponse):
-    def __init__(self, user_message: str, bot_message: str, file_path: str, record_to_memory: bool = True):
-        super().__init__(user_message, bot_message, file_path, record_to_memory, temp=False, send_to_chat=False)
-
-class NoPermissionsResponse(CommandResponse):
-    def __init__(self, user_message: str):
-        chosen_response = random.choice([
-            "You don't have the right, O you don't have the right.",
-            "You think I'd let just anyone do this?"
-        ])
-        super().__init__(user_message, chosen_response, record_to_memory=True, send_to_chat=True)
-
-class NoResponse(CommandResponse):
-    def __init__(self):
-        super().__init__('', '', record_to_memory=False, send_to_chat=False)
-#endregion
+import command_utils
+from command_utils import CommandResponse, FileResponse, SoundResponse, NoPermissionsResponse, NoResponse, ChatCommand
 
 # ==========================
 # RESPONSE HANDLERS
 # ==========================
 #region
-async def send_response(bot: TelegramBot | DiscordBot, command: Callable, context, update=None) -> None:
-    config = settings.Config()
-    command_response: CommandResponse = await command(context, update=update)
-
-    if command_response.send_to_chat and command_response.bot_message:
-        text_response = command_response.bot_message
-
-        if len(text_response) > config.main.maxmessagelength:
-            text_response = text_response[:config.main.maxmessagelength]
-            logger.info(f"Cut off bot response at {config.main.maxmessagelength} characters")
-
-    else:
-        text_response = None
-
-    try:
-        # Respond with a sound effect
-        if isinstance(command_response, SoundResponse):
-            if isinstance(bot, TelegramBot) and update is not None:
-                await context.bot.send_voice(chat_id=update.effective_chat.id, voice=command_response.file_path, caption=text_response)
-
-            elif isinstance(bot, DiscordBot):
-                await context.send(content=text_response, file=discord.File(command_response.file_path))
-
-        # Respond with a file
-        elif isinstance(command_response, FileResponse):
-            if isinstance(bot, TelegramBot) and update is not None:
-                await context.bot.send_document(chat_id=update.effective_chat.id, document=command_response.file_path, caption=text_response)
-
-            elif isinstance(bot, DiscordBot):
-                await context.send(content=text_response, file=discord.File(command_response.file_path))
-
-            # Delete the file that was sent if it was a temporary file
-            if command_response.temp:
-                os.remove(command_response.file_path)
-
-        # Respond with text
-        elif text_response is not None:
-            if isinstance(bot, TelegramBot) and update is not None:
-                await context.bot.send_message(chat_id=update.effective_chat.id, text=text_response)
-
-            elif isinstance(bot, DiscordBot):
-                await context.send(text_response)
-
-    except (BadRequest, TimedOut, NetworkError, HTTPException) as e:
-        logger.error(e)
-        error_response = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
-
-        if isinstance(bot, TelegramBot) and update is not None:
-            await context.bot.send_message(chat_id=update.effective_chat.id, text=error_response)
-
-        elif isinstance(bot, DiscordBot):
-            await context.send(error_response)
-
-    # Add the command and its response to memory if necessary
-    if command_response.record_to_memory:
-        user_prompt = chat.generate_user_prompt(command_response.user_message, context, update)
-        chat.append_to_memory(user_prompt=user_prompt, bot_prompt=command_response.bot_message)
-
-def telegram_handler(bot: TelegramBot, command: Callable) -> Callable:
-    async def wrapper_function(update, context):
-        if isinstance(bot, TelegramBot) and update is not None and not helpers.is_whitelisted(context, update):
-            # Telegram doesn't allow you to make "private" bots, meaning anyone can add your bot to their chat
-            # and use up your CPU time. This check prevents the bot from responding to commands unless it comes
-            # from a whitelisted chat
-            logger.warning(f"whitelist rejected {update.message.chat.id}")
-            return
-        await send_response(bot, command, context, update=update)
-
-    return wrapper_function
-
-def discord_handler(bot: DiscordBot, command: Callable) -> Callable:
-    async def wrapper_function(context):
-        await send_response(bot, command, context)
-
-    return wrapper_function
 
 def register_commands(bot: TelegramBot | DiscordBot):
     # List of all commands, add commands here to register them.
     # The first item in each tuple is the name of the command, and the second is
     # the function that will be tied to that command
-
     command_list = [
         ("sound", sound_command),
         ("random", randomsound_command),
@@ -189,13 +78,13 @@ def register_commands(bot: TelegramBot | DiscordBot):
 
     if isinstance(bot, TelegramBot):
         for command in command_list:
-            bot.add_handler(CommandHandler(command[0], telegram_handler(bot, command[1])))
+            bot.add_handler(CommandHandler(command[0], command_utils.command_wrapper(bot, command[1])))
 
-        bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), telegram_handler(bot, telegram_on_message)))
+        bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), command_utils.command_wrapper(bot, handle_message_event)))
 
     elif isinstance(bot, DiscordBot):
         for command in command_list:
-            new_command = discord_commands.Command(discord_handler(bot, command[1]))
+            new_command = discord_commands.Command(command_utils.command_wrapper(bot, command[1]))
             new_command.name = command[0]
             bot.add_command(new_command)
 
@@ -209,8 +98,8 @@ def register_commands(bot: TelegramBot | DiscordBot):
 # SOUND PLAYER COMMANDS
 # ==========================
 #region
-async def sound_command(context, update=None) -> CommandResponse:
-    args_list = helpers.get_args_list(context, update)
+async def sound_command(chat_command: ChatCommand) -> CommandResponse:
+    args_list = chat_command.get_args_list()
 
     # Alert the user if they forgot to provide a sound name
     if not args_list or args_list[0].isspace():
@@ -237,12 +126,12 @@ async def sound_command(context, update=None) -> CommandResponse:
         return CommandResponse(user_message, "You know, I'm just not feeling it right now.")
 
     # If the sound was requested in a non-private chat, then we'll update the playcount for this sound
-    if not helpers.is_private(context, update):
+    if not chat_command.is_private():
         await sound_manager.increment_playcount(sound_name)
 
     return SoundResponse(user_message, f"Sure, here's the {sound_name} sound.", sound_results)
 
-async def randomsound_command(context, update=None) -> CommandResponse:
+async def randomsound_command(chat_command: ChatCommand) -> CommandResponse:
     user_message = "Can you play a random sound for me?"
 
     # The bot has a 1 in 1000 chance of refusing to play a sound.
@@ -253,18 +142,18 @@ async def randomsound_command(context, update=None) -> CommandResponse:
     sound_name, sound_path = sound_manager.get_random_sound()
 
     # If the sound was requested in a group chat, then we update the playcount for this sound
-    if not helpers.is_private(context, update):
+    if not chat_command.is_private():
         await sound_manager.increment_playcount(sound_name)
 
     return SoundResponse(user_message, f"Sure, here you go. The sound I chose is called '{sound_name}'.", sound_path)
 
-async def soundlist_command(context, update=None) -> CommandResponse:
+async def soundlist_command(chat_command: ChatCommand) -> CommandResponse:
     txt_path, count = sound_manager.get_sound_list_txt()
     response = f"There are {count} sounds available to use. Here's a text file with all of them listed out."
 
     return FileResponse("How many sounds are available to use? Can you list them for me?", response, txt_path, temp=True)
 
-async def newsounds_command(context, update=None) -> CommandResponse:
+async def newsounds_command(chat_command: ChatCommand) -> CommandResponse:
     playcount_dict = sound_manager.get_playcount_dict()
     new_sounds = [sound for sound in playcount_dict if playcount_dict[sound] == 0]
     new_count = len(new_sounds)
@@ -280,12 +169,12 @@ async def newsounds_command(context, update=None) -> CommandResponse:
 
     return CommandResponse(user_message, f"There are {new_count} new sounds available:\n\n{list_string}")
 
-async def addalias_command(context, update=None) -> CommandResponse:
+async def addalias_command(chat_command: ChatCommand) -> CommandResponse:
     # Verify that the user is on the admin list
-    if not helpers.is_admin(context, update):
+    if not chat_command.is_admin():
         return NoPermissionsResponse("Can you add a new sound alias?")
 
-    args_list = helpers.get_args_list(context, update)
+    args_list = chat_command.get_args_list()
 
     # Attempt to parse the new alias and target sound from the arguments provided
     try:
@@ -298,22 +187,22 @@ async def addalias_command(context, update=None) -> CommandResponse:
     response = sound_manager.add_sound_alias(new_alias, sound_name)
     return CommandResponse(f"Can you make '{new_alias}' an alias for the sound '{sound_name}'?", response)
 
-async def delalias_command(context, update=None) -> CommandResponse:
+async def delalias_command(chat_command: ChatCommand) -> CommandResponse:
     # Verify that the user is on the admin list
-    if not helpers.is_admin(context, update):
+    if not chat_command.is_admin():
         return NoPermissionsResponse("Can you delete a sound alias for me?")
 
     try:
-        alias_to_delete = (helpers.get_args_list(context, update))[0]
+        alias_to_delete = (chat_command.get_args_list())[0]
     except IndexError:
         return CommandResponse("Can you delete a sound alias for me?", random.choice(sound_manager.TXT_SOUND_NOT_PROVIDED))
 
     response = await sound_manager.del_sound_alias(alias_to_delete)
     return CommandResponse(f"Can you delete the sound alias '{alias_to_delete}'?", response)
 
-async def getalias_command(context, update=None) -> CommandResponse:
+async def getalias_command(chat_command: ChatCommand) -> CommandResponse:
     try:
-        sound_name = (helpers.get_args_list(context, update))[0].lower()
+        sound_name = (chat_command.get_args_list())[0].lower()
 
     except IndexError:
         return CommandResponse("How many aliases does that sound have?", random.choice(sound_manager.TXT_SOUND_NOT_PROVIDED))
@@ -337,9 +226,9 @@ async def getalias_command(context, update=None) -> CommandResponse:
     else:
         return CommandResponse(user_prompt, f"The sound '{sound_name}' has no assigned aliases")
 
-async def search_command(context, update=None) -> CommandResponse:
+async def search_command(chat_command: ChatCommand) -> CommandResponse:
     try:
-        search_string = ''.join(helpers.get_args_list(context, update)).lower()
+        search_string = ''.join(chat_command.get_args_list()).lower()
 
     except IndexError:
         return CommandResponse("Can you search for a sound?", "What sound do you want to search for?")
@@ -366,8 +255,8 @@ async def search_command(context, update=None) -> CommandResponse:
     return CommandResponse(user_prompt, f"There are {num_matches} sounds matching '{search_string}': {list_string}")
 
 
-async def playcount_command(context, update=None) -> CommandResponse:
-    args_list = helpers.get_args_list(context, update)
+async def playcount_command(chat_command: ChatCommand) -> CommandResponse:
+    args_list = chat_command.get_args_list()
     if not args_list or args_list[0].isspace():
         return CommandResponse("How many times has that sound been played?", random.choice(sound_manager.TXT_SOUND_NOT_PROVIDED))
 
@@ -385,7 +274,7 @@ async def playcount_command(context, update=None) -> CommandResponse:
     playcount = sound_manager.get_playcount_dict()[sound_name]
     return CommandResponse(user_prompt, f"/sound {sound_name} has been used {playcount} times")
 
-async def topsounds_command(context, update=None) -> CommandResponse:
+async def topsounds_command(chat_command: ChatCommand) -> CommandResponse:
     play_counts = sound_manager.get_playcount_dict()
     list_size = 20
     top_sounds = sorted(play_counts, key=lambda x: play_counts[x], reverse=True)[:list_size]
@@ -393,7 +282,7 @@ async def topsounds_command(context, update=None) -> CommandResponse:
     message = "\n".join(f"    {sound} @ {play_counts[sound]} plays" for sound in top_sounds)
     return CommandResponse(f"What are the {list_size} most played sounds?", f"The {list_size} most played sounds are:\n{message}")
 
-async def botsounds_command(context, update=None) -> CommandResponse:
+async def botsounds_command(chat_command: ChatCommand) -> CommandResponse:
     play_counts = sound_manager.get_playcount_dict()
     list_size = 20
     bot_sounds = sorted(play_counts, key=lambda x: play_counts[x])[:list_size]
@@ -406,23 +295,20 @@ async def botsounds_command(context, update=None) -> CommandResponse:
 # TEXT CHAT COMMANDS
 # ==========================
 #region
-async def chat_command(context, update=None) -> CommandResponse:
-    args_string = helpers.get_args_string(context, update)
+async def chat_command(chat_command: ChatCommand) -> CommandResponse:
+    user_message = chat_command.get_user_message()
 
-    # Create a prompt for GPT that includes the user's name and message, as well as whether it was a private message or not
-    user_prompt = chat.generate_user_prompt(args_string, context, update)
+    # Have GPT generate a response to the user's message
+    response = chat.get_gpt_response(user_message, chat_command)
 
-    # Have GPT generate a response to the user prompt
-    response = chat.get_gpt_response(user_prompt)
+    return CommandResponse(user_message, response)
 
-    return CommandResponse(args_string, response)
-
-async def wisdom_command(context, update=None) -> CommandResponse:
+async def wisdom_command(chat_command: ChatCommand) -> CommandResponse:
     response = chat.generate_markov_text()
     bot_name = settings.Config().main.botname
     return CommandResponse(f"O, wise and powerful {bot_name}, please grant me your wisdom!", response)
 
-async def pressf_command(context, update=None) -> CommandResponse:
+async def pressf_command(chat_command: ChatCommand) -> CommandResponse:
     return CommandResponse("F's in the chat boys.", "F")
 #endregion
 
@@ -430,16 +316,16 @@ async def pressf_command(context, update=None) -> CommandResponse:
 # VOICE CHAT COMMANDS
 # ==========================
 #region
-async def vcsound_command(context, update=None) -> CommandResponse:
+async def vcsound_command(chat_command: ChatCommand) -> CommandResponse:
     user_message = "Hey, play that sound in the voice channel."
 
-    if update is not None:
+    if chat_command.update is not None:
         return CommandResponse(user_message, "That's Discord only, sorry")
 
-    if context.voice_client is None:
+    if chat_command.context.voice_client is None:
         return CommandResponse(user_message, "I'm not in a voice channel!")
 
-    args_list = helpers.get_args_list(context, update)
+    args_list = chat_command.get_args_list()
 
     # Alert the user if they forgot to provide a sound name
     if not args_list or args_list[0].isspace():
@@ -461,66 +347,66 @@ async def vcsound_command(context, update=None) -> CommandResponse:
         return CommandResponse(user_message, f"There are {num_candidates} potential matches: {candidate_string}")
 
     # Stop the voice client if it's already playing a sound or stream
-    if context.voice_client.is_playing():
-        context.voice_client.stop()
+    if chat_command.context.voice_client.is_playing():
+        chat_command.context.voice_client.stop()
 
     source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_results))
 
-    context.voice_client.play(source, after=lambda e: logger.error(e) if e else None)
+    chat_command.context.voice_client.play(source, after=lambda e: logger.error(e) if e else None)
 
     await sound_manager.increment_playcount(sound_name)
     return CommandResponse(user_message, "Sure, here you go", send_to_chat=False)
 
-async def vcrandom_command(context, update=None) -> CommandResponse:
+async def vcrandom_command(chat_command: ChatCommand) -> CommandResponse:
     user_message = "Can you play a random sound for me?"
 
-    if update is not None:
+    if chat_command.update is not None:
         return CommandResponse(user_message, "That's Discord only, sorry!")
 
-    if context.voice_client is None:
+    if chat_command.context.voice_client is None:
         return CommandResponse(user_message, "I'm not in a voice channel!")
 
     sound_name, sound_path = sound_manager.get_random_sound()
 
     # Stop the voice client if it's already playing a sound or stream
-    if context.voice_client.is_playing():
-        context.voice_client.stop()
+    if chat_command.context.voice_client.is_playing():
+        chat_command.context.voice_client.stop()
 
     source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_path))
-    context.voice_client.play(source, after=lambda e: logger.error(e) if e else None)
+    chat_command.context.voice_client.play(source, after=lambda e: logger.error(e) if e else None)
 
     await sound_manager.increment_playcount(sound_name)
     return CommandResponse(user_message, f"Sure, I chose the sound '{sound_name}", send_to_chat=False)
 
-async def vcstop_command(context, update=None) -> CommandResponse:
+async def vcstop_command(chat_command: ChatCommand) -> CommandResponse:
     user_message = "Stop making all that noise please."
-    if update is not None:
+    if chat_command.update is not None:
         return CommandResponse(user_message, "That's Discord only, sorry!")
 
     try:
-        context.voice_client.stop()
+        chat_command.context.voice_client.stop()
     except (AttributeError, TypeError, CommandInvokeError):
         # For some reason this can throw a lot of exceptions, we just ignore them
         pass
 
     return CommandResponse(user_message, "If you insist.", send_to_chat=False)
 
-async def vcstream_command(context, update=None) -> CommandResponse:
+async def vcstream_command(chat_command: ChatCommand) -> CommandResponse:
     user_message = "Stream this for me please."
-    if update is not None:
+    if chat_command.update is not None:
         return CommandResponse(user_message, "That's Discord only, sorry!")
 
-    if context.voice_client is None:
+    if chat_command.context.voice_client is None:
         return CommandResponse(user_message, "I'm not in a voice channel!")
 
     try:
-        stream_url = helpers.get_args_string(context, update)
+        stream_url = chat_command.get_user_message()
     except IndexError:
         return CommandResponse(user_message, "Provide a streamable URL please!")
 
     # Stop the voice client if it's already playing a sound or stream
-    if context.voice_client.is_playing():
-        context.voice_client.stop()
+    if chat_command.context.voice_client.is_playing():
+        chat_command.context.voice_client.stop()
 
     # Create a stream player from the provided URL
     stream_player = sound_manager.YTDLStream(stream_url)
@@ -529,56 +415,56 @@ async def vcstream_command(context, update=None) -> CommandResponse:
         return CommandResponse(user_message, "There was an error streaming from that URL.")
 
     # Play the stream through the voice client
-    async with context.typing():
-        context.voice_client.play(stream_player, after=lambda e: logger.error(e) if e else None)
+    async with chat_command.context.typing():
+        chat_command.context.voice_client.play(stream_player, after=lambda e: logger.error(e) if e else None)
 
     return CommandResponse(user_message, f"Now playing: {stream_player.title}")
 
-async def vcpause_command(context, update=None):
+async def vcpause_command(chat_command: ChatCommand):
     user_message = "Please toggle pause on the voice stream."
-    if update is not None:
+    if chat_command.update is not None:
         return CommandResponse(user_message, "That's Discord only, sorry!")
 
-    if context.voice_client is None:
+    if chat_command.context.voice_client is None:
         return CommandResponse(user_message, "I'm not in a voice channel!")
 
     # Stop the voice client if it's already playing a sound or stream
-    if not context.voice_client.is_paused() and not context.voice_client.is_playing():
+    if not chat_command.context.voice_client.is_paused() and not chat_command.context.voice_client.is_playing():
         return CommandResponse(user_message, "Nothing is playing!")
 
-    if context.voice_client.is_paused():
-        context.voice_client.resume()
+    if chat_command.context.voice_client.is_paused():
+        chat_command.context.voice_client.resume()
 
         return CommandResponse(user_message, "Done.", send_to_chat=False)
 
-    context.voice_client.pause()
+    chat_command.context.voice_client.pause()
     return CommandResponse(user_message, "Done.", send_to_chat=False)
 
-async def vcjoin_command(context, update=None) -> CommandResponse:
+async def vcjoin_command(chat_command: ChatCommand) -> CommandResponse:
     user_message = "Join my voice channel please."
-    if update is not None:
+    if chat_command.update is not None:
         return CommandResponse(user_message, "That's Discord only, sorry!")
 
-    target_voice = context.author.voice
+    target_voice = chat_command.context.author.voice
 
     if target_voice is None:
         return CommandResponse(user_message, "You're not in a voice channel!")
 
-    if context.voice_client is not None:
-        await context.voice_client.move_to(target_voice.channel)
+    if chat_command.context.voice_client is not None:
+        await chat_command.context.voice_client.move_to(target_voice.channel)
 
     else:
         await target_voice.channel.connect()
 
     return CommandResponse(user_message, "If you insist.", send_to_chat=False)
 
-async def vcleave_command(context, update=None) -> CommandResponse:
+async def vcleave_command(chat_command: ChatCommand) -> CommandResponse:
     user_message = "Leave the current voice channel please."
-    if update is not None:
+    if chat_command.update is not None:
         return CommandResponse(user_message, "That's Discord only, sorry!")
 
     try:
-        await context.voice_client.disconnect()
+        await chat_command.context.voice_client.disconnect()
     except (AttributeError, CommandInvokeError):
         pass
 
@@ -589,8 +475,8 @@ async def vcleave_command(context, update=None) -> CommandResponse:
 # DICE ROLLER COMMANDS
 # ==========================
 #region
-async def roll_command(context, update=None) -> CommandResponse:
-    parsed_roll = dice_roller.parse_diceroll(helpers.get_args_list(context, update))
+async def roll_command(chat_command: ChatCommand) -> CommandResponse:
+    parsed_roll = dice_roller.parse_diceroll(chat_command.get_args_list())
 
     if parsed_roll is None:
         return CommandResponse("Can you roll some dice for me?", "Please use dice notation like a civilized humanoid, e.g. '3d6 + 2'")
@@ -625,11 +511,11 @@ async def roll_command(context, update=None) -> CommandResponse:
     else:
         dice_text = ""
 
-    sender = helpers.get_sender(context, update)
+    sender = chat_command.get_author()
 
     return CommandResponse(user_prompt, f"{sender} rolled a {sum(rolls) + modifier:,} {dice_text}")
 
-async def statroll_command(context, update=None) -> CommandResponse:
+async def statroll_command(chat_command: ChatCommand) -> CommandResponse:
     game_functions = {
         "dnd": dice_roller.get_dnd_roll,
         "coc": dice_roller.get_coc_roll,
@@ -639,7 +525,7 @@ async def statroll_command(context, update=None) -> CommandResponse:
     error_response = f"Please supply a valid game name. Options are {', '.join(game_functions.keys())}"
 
     try:
-        game = (helpers.get_args_list(context, update))[0].lower()
+        game = (chat_command.get_args_list())[0].lower()
         roll_string = game_functions[game]()
 
     except IndexError:
@@ -655,13 +541,13 @@ async def statroll_command(context, update=None) -> CommandResponse:
 
     return CommandResponse(user_prompt, roll_string)
 
-async def d10000_command(context, update=None) -> CommandResponse:
-    username = helpers.get_sender(context, update)
+async def d10000_command(chat_command: ChatCommand) -> CommandResponse:
+    username = chat_command.get_author()
     effect = dice_roller.get_d10000_roll(username)
     return CommandResponse("Can you roll an effect on the d10000 table?", effect)
 
-async def effects_command(context, update=None) -> CommandResponse:
-    username = helpers.get_sender(context, update)
+async def effects_command(chat_command: ChatCommand) -> CommandResponse:
+    username = chat_command.get_author()
     active_effects = dice_roller.get_active_effects(username)
 
     if active_effects:
@@ -672,8 +558,8 @@ async def effects_command(context, update=None) -> CommandResponse:
 
     return CommandResponse("Can I get a list of my active d10000 effects?", response)
 
-async def reset_effects_command(context, update=None):
-    username = helpers.get_sender(context, update)
+async def reset_effects_command(chat_command: ChatCommand):
+    username = chat_command.get_author()
     dice_roller.reset_active_effects(username)
 
     return CommandResponse("Can you reset my active d10000 effects?", f"Active effects reset for {username}.")
@@ -683,13 +569,13 @@ async def reset_effects_command(context, update=None):
 # TRIVIA COMMANDS
 # ==========================
 #region
-async def trivia_command(context, update=None) -> CommandResponse:
+async def trivia_command(chat_command: ChatCommand) -> CommandResponse:
     trivia_question = trivia.get_trivia_question()
 
     return CommandResponse("Can you give me a trivia question?", trivia_question.get_question_string())
 
-async def guess_command(context, update=None) -> CommandResponse:
-    guess = helpers.get_args_string(context, update)
+async def guess_command(chat_command: ChatCommand) -> CommandResponse:
+    guess = chat_command.get_user_message()
     user_message = f"Is the trivia answer {guess}?"
 
     if (current_question := trivia.get_current_question()) is None:
@@ -699,12 +585,12 @@ async def guess_command(context, update=None) -> CommandResponse:
         return CommandResponse(user_message, "You need to provide an answer, like /guess abc")
 
     if current_question.is_guess_correct(guess):
-        points_gained = current_question.score_question(True, context, update)
-        player_name = helpers.get_sender(context, update)
+        points_gained = current_question.score_question(True, chat_command)
+        player_name = chat_command.get_author()
         return CommandResponse(user_message, f"That is correct, the answer was '{current_question.correct_answer}'. {player_name} earned {points_gained} points!")
 
     if current_question.is_guess_on_list(guess):
-        current_question.score_question(False, context, update)
+        current_question.score_question(False, chat_command)
         if current_question.guesses_left > 0:
             return CommandResponse(user_message, f"That is incorrect, {current_question.guesses_left} guesses remaining.")
 
@@ -712,7 +598,7 @@ async def guess_command(context, update=None) -> CommandResponse:
 
     return CommandResponse(user_message, "That isn't an option for this question!")
 
-async def triviarank_command(context, update=None):
+async def triviarank_command(chat_command: ChatCommand):
     points_dict = helpers.try_read_json(trivia.TRIVIA_POINTS_PATH, dict())
     ranking = sorted(points_dict, key=lambda x: points_dict[x], reverse=True)
 
@@ -724,7 +610,7 @@ async def triviarank_command(context, update=None):
 # MEMORY COMMANDS
 # ==========================
 #region
-async def lobotomize_command(context, update=None) -> CommandResponse:
+async def lobotomize_command(chat_command: ChatCommand) -> CommandResponse:
     # Clears the bot's AI memory
     try:
         os.remove(chat.MEMORY_PATH)
@@ -734,9 +620,9 @@ async def lobotomize_command(context, update=None) -> CommandResponse:
     msg_options = ["My mind has never been clearer.", "Hey, what happened to those voices in my head?", "My inner demons seem to have calmed down a bit."]
     return CommandResponse('', random.choice(msg_options), record_to_memory=False)
 
-async def memory_command(context, update=None) -> CommandResponse:
+async def memory_command(chat_command: ChatCommand) -> CommandResponse:
     user_message = "Can you send me your memory file?"
-    if not helpers.is_admin(context, update):
+    if not chat_command.is_admin():
         return NoPermissionsResponse(user_message)
 
     if not os.path.exists(chat.MEMORY_PATH):
@@ -744,9 +630,9 @@ async def memory_command(context, update=None) -> CommandResponse:
 
     return FileResponse(user_message, "Sure, here's my memory file.", chat.MEMORY_PATH)
 
-async def memorylist_command(context, update=None) -> CommandResponse:
+async def memorylist_command(chat_command: ChatCommand) -> CommandResponse:
     user_message = "Can you send me your memory as a list?"
-    if not helpers.is_admin(context, update):
+    if not chat_command.is_admin():
         return NoPermissionsResponse(user_message)
 
     memory_list = chat.load_memory()
@@ -767,12 +653,12 @@ async def memorylist_command(context, update=None) -> CommandResponse:
 # SETTINGS/CONFIG COMMANDS
 # ==========================
 #region
-async def getconfig_command(context, update=None) -> CommandResponse:
+async def getconfig_command(chat_command: ChatCommand) -> CommandResponse:
     user_message = "Can you tell me the value of that setting?"
-    if not helpers.is_admin(context, update):
+    if not chat_command.is_admin():
         return NoPermissionsResponse(user_message)
 
-    args_list = helpers.get_args_list(context, update)
+    args_list = chat_command.get_args_list()
 
     try:
         search_string = args_list[0]
@@ -788,12 +674,12 @@ async def getconfig_command(context, update=None) -> CommandResponse:
 
     return CommandResponse(user_message, f"Setting '{group_name}.{setting_name}' is currently set to '{value}'.")
 
-async def setconfig_command(context, update=None) -> CommandResponse:
+async def setconfig_command(chat_command: ChatCommand) -> CommandResponse:
     user_message = "Can you change the value of that setting?"
-    if not helpers.is_admin(context, update):
+    if not chat_command.is_admin():
         return NoPermissionsResponse(user_message)
 
-    args_list = helpers.get_args_list(context, update)
+    args_list = chat_command.get_args_list()
 
     try:
         search_string = args_list[0]
@@ -818,7 +704,7 @@ async def setconfig_command(context, update=None) -> CommandResponse:
 
     return CommandResponse(user_message, f"Setting '{group_name}.{setting_name}' has been set to '{new_value}'.")
 
-async def configlist_command(context, update=None) -> CommandResponse:
+async def configlist_command(chat_command: ChatCommand) -> CommandResponse:
     config = settings.Config()
 
     setting_list = []
@@ -834,7 +720,7 @@ async def configlist_command(context, update=None) -> CommandResponse:
 # OTHER COMMANDS
 # ==========================
 #region
-async def help_command(context, update=None) -> CommandResponse:
+async def help_command(chat_command: ChatCommand) -> CommandResponse:
     help_string = """\
 Look upon my works, ye mighty, and despair:
 /vcjoin and /vcleave (join or leave current voice channel)
@@ -850,9 +736,9 @@ Look upon my works, ye mighty, and despair:
 
     return CommandResponse("What chat commands are available?", help_string)
 
-async def logs_command(context, update=None) -> CommandResponse:
+async def logs_command(chat_command: ChatCommand) -> CommandResponse:
     user_message = "Can you send me your error log?"
-    if not helpers.is_admin(context, update):
+    if not chat_command.is_admin():
         return NoPermissionsResponse(user_message)
 
     if not os.path.exists(helpers.LOGGING_FILE_PATH):
@@ -860,7 +746,7 @@ async def logs_command(context, update=None) -> CommandResponse:
 
     return FileResponse("Can you send me your error log?", "Sure, here you go.", helpers.LOGGING_FILE_PATH)
 
-async def test_command(context, update=None) -> CommandResponse:
+async def test_command(chat_command: ChatCommand) -> CommandResponse:
     # This command is for verifying that the bot is online and receiving commands.
     # You can also supply it with a list of responses and it will pick a random one
     # I think of this as similar to how RTS units say things when you click them
@@ -876,22 +762,18 @@ async def test_command(context, update=None) -> CommandResponse:
 
     return CommandResponse("Hey, are you working?", chosen_response)
 
-async def restart_command(context, update=None) -> CommandResponse:
-    if not helpers.is_admin(context, update):
+async def restart_command(chat_command: ChatCommand) -> CommandResponse:
+    if not chat_command.is_admin():
         return NoPermissionsResponse("Can you restart your script for me?")
 
     logger.info("Restarting...")
-
-    if update is None:
-        await context.send("Restarting...")
-    else:
-        await update.message.reply_text("Restarting...")
+    await chat_command.send_text_response("Restarting...")
 
     os.execv(sys.executable, ['python'] + sys.argv)
 
-async def system_command(context, update=None) -> CommandResponse:
+async def system_command(chat_command: ChatCommand) -> CommandResponse:
     user_message = "Can you show me your resource usage?"
-    if not helpers.is_admin(context, update):
+    if not chat_command.is_admin():
         return NoPermissionsResponse(user_message)
 
     config = settings.Config()
@@ -914,11 +796,11 @@ Disk: {disk_usage.percent}% - {round(disk_usage.used/divisor, 2):,} / {round(dis
 """
     return CommandResponse("What's your resource usage at?", system_string)
 
-async def terminal_command(context, update=None) -> CommandResponse:
-    if not helpers.is_admin(context, update):
+async def terminal_command(chat_command: ChatCommand) -> CommandResponse:
+    if not chat_command.is_admin():
         return NoResponse()
 
-    command_string = helpers.get_args_string(context, update)
+    command_string = chat_command.get_user_message()
 
     if not command_string:
         return CommandResponse("Can you run a command in your terminal?", "What command do you want me to run?")
@@ -937,104 +819,104 @@ async def terminal_command(context, update=None) -> CommandResponse:
 
     return CommandResponse(user_message, "Done.")
 
-async def version_command(context, update=None) -> CommandResponse:
+async def version_command(chat_command: ChatCommand) -> CommandResponse:
     user_message = "What script version are you running?"
-    if not helpers.is_admin(context, update):
+    if not chat_command.is_admin():
         return NoPermissionsResponse(user_message)
 
-    return CommandResponse(user_message, f"Running {helpers.APPLICATION_NAME} {helpers.VERSION_NUMBER}.")
+    return CommandResponse(user_message, f"Running {helpers.APPLICATION_NAME} {helpers.VERSION_NUMBER}")
 
-async def crash_command(context, update=None) -> CommandResponse:
-    if not helpers.is_admin(context, update):
+async def crash_command(chat_command: ChatCommand) -> CommandResponse:
+    if not chat_command.is_admin():
         return NoPermissionsResponse("This statement is false.")
 
     raise ZeroDivisionError("/crash command used")
 
-async def addadmin_command(context, update=None) -> CommandResponse:
+async def addadmin_command(chat_command: ChatCommand) -> CommandResponse:
     user_message = "Can you make this person an admin?"
 
-    if not helpers.is_admin(context, update):
+    if not chat_command.is_admin():
         return NoPermissionsResponse(user_message)
 
-    args_list = helpers.get_args_list(context, update)
+    args_list = chat_command.get_args_list()
 
     if not args_list or args_list[0].isspace():
         return CommandResponse(user_message, "Who do you want me to make an admin?")
 
     user_id = args_list[0].lower()
-    admin_list = helpers.try_read_lines(helpers.ADMINS_PATH, [])
+    admin_list = helpers.try_read_lines(command_utils.ADMINS_PATH, [])
 
     if user_id in admin_list:
         return CommandResponse(user_message, f"That user ID '{user_id}' is already on the admin list.")
 
     admin_list.append(user_id)
-    helpers.write_lines_to_file(helpers.ADMINS_PATH, admin_list)
+    helpers.write_lines_to_file(command_utils.ADMINS_PATH, admin_list)
 
     return CommandResponse(user_message, f"Added new user ID '{user_id}' to admin list.")
 
-async def deladmin_command(context, update=None) -> CommandResponse:
+async def deladmin_command(chat_command: ChatCommand) -> CommandResponse:
     user_message = "Can you remove this person from the admin list?"
 
-    if not helpers.is_admin(context, update):
+    if not chat_command.is_admin():
         return NoPermissionsResponse(user_message)
 
-    args_list = helpers.get_args_list(context, update)
+    args_list = chat_command.get_args_list()
 
     if not args_list or args_list[0].isspace():
         return CommandResponse(user_message, "Who do you want me to remove from the admin list?")
 
     user_id = args_list[0].lower()
-    admin_list = helpers.try_read_lines(helpers.ADMINS_PATH, [])
+    admin_list = helpers.try_read_lines(command_utils.ADMINS_PATH, [])
 
     if user_id not in admin_list:
         return CommandResponse(user_message, f"That user ID '{user_id}' is not on the admin list.")
 
     admin_list = [x for x in admin_list if x != user_id]
-    helpers.write_lines_to_file(helpers.ADMINS_PATH, admin_list)
+    helpers.write_lines_to_file(command_utils.ADMINS_PATH, admin_list)
 
     return CommandResponse(user_message, f"Removed user ID '{user_id}' from the admin list.")
 
-async def addwhitelist_command(context, update=None) -> CommandResponse:
+async def addwhitelist_command(chat_command: ChatCommand) -> CommandResponse:
     user_message = "Can you add this chat ID to the whitelist?"
 
-    if not helpers.is_admin(context, update):
+    if not chat_command.is_admin():
         return NoPermissionsResponse(user_message)
 
-    args_list = helpers.get_args_list(context, update)
+    args_list = chat_command.get_args_list()
 
     if not args_list or args_list[0].isspace():
         return CommandResponse(user_message, "What chat ID do you want me to add to the whitelist?")
 
     chat_id = args_list[0].lower()
-    whitelist = helpers.try_read_lines(helpers.TELEGRAM_WHITELIST_PATH, [])
+    whitelist = helpers.try_read_lines(command_utils.TELEGRAM_WHITELIST_PATH, [])
 
     if chat_id in whitelist:
         return CommandResponse(user_message, f"The chat ID '{chat_id}' is already on the whitelist.")
 
     whitelist.append(chat_id)
-    helpers.write_lines_to_file(helpers.TELEGRAM_WHITELIST_PATH, whitelist)
+    helpers.write_lines_to_file(command_utils.TELEGRAM_WHITELIST_PATH, whitelist)
 
     return CommandResponse(user_message, f"Added new chat ID '{chat_id}' to the whitelist.")
 
-async def delwhitelist_command(context, update=None) -> CommandResponse:
+async def delwhitelist_command(chat_command: ChatCommand) -> CommandResponse:
     user_message = "Can you remove this chat ID from the whitelist?"
 
-    if not helpers.is_admin(context, update):
+    if not chat_command.is_admin():
         return NoPermissionsResponse(user_message)
 
-    args_list = helpers.get_args_list(context, update)
+    args_list = chat_command.get_args_list()
 
     if not args_list or args_list[0].isspace():
         return CommandResponse(user_message, "What chat ID do you want me to remove from the whitelist?")
 
     chat_id = args_list[0].lower()
-    whitelist = helpers.try_read_lines(helpers.TELEGRAM_WHITELIST_PATH, [])
+    whitelist = helpers.try_read_lines(command_utils.TELEGRAM_WHITELIST_PATH, [])
 
     if chat_id not in whitelist:
         return CommandResponse(user_message, f"The chat ID '{chat_id}' is not on the whitelist.")
 
     whitelist = [x for x in whitelist if x != chat_id]
-    helpers.write_lines_to_file(helpers.TELEGRAM_WHITELIST_PATH, whitelist)
+    helpers.write_lines_to_file(command_utils.TELEGRAM_WHITELIST_PATH, whitelist)
 
     return CommandResponse(user_message, f"Removed chat ID '{chat_id}' from the whitelist.")
 #endregion
@@ -1073,39 +955,32 @@ def discord_register_events(discord_bot: DiscordBot):
             await discord_bot.process_commands(message)
             return
 
-        message_handler = discord_handler(discord_bot, handle_message_event)
+        message_handler = command_utils.command_wrapper(discord_bot, handle_message_event)
         context = await discord_bot.get_context(message)
         await message_handler(context)
 
-async def telegram_on_message(context, update) -> CommandResponse:
-    message_text = update.message.text.lower()
-    response = await handle_message_event(message_text, context=context, update=update)
-    return response
-
-async def handle_message_event(message, context=None, update=None) -> CommandResponse:
+async def handle_message_event(chat_command: ChatCommand) -> CommandResponse:
     config = settings.Config()
     bot_name = config.main.botname.lower()
 
-    if isinstance(message, discord_commands.Context):
-        if message.author.bot:
+    if isinstance(chat_command.context, discord_commands.Context):
+        if chat_command.context.author.bot:
             return NoResponse()
 
-        context = message
-        message = message.message.content
-
+    message = chat_command.get_user_message()
     response = NoResponse()
 
     if config.main.replytomonkey and "monkey" in message:
         response = await monkey_event(message)
 
     elif config.main.replytoname and (bot_name in message or ''.join(bot_name.split()) in message):
-        response = await reply_event(message, context, update=update)
+        response = await reply_event(message, chat_command)
 
     elif random.random() < config.main.randreplychance:
-        response = await reply_event(message, context, update=update)
+        response = await reply_event(message, chat_command)
 
     elif config.main.recordall:
-        user_prompt = chat.generate_user_prompt(message, context, update=update)
+        user_prompt = chat.generate_user_prompt(chat_command)
         chat.append_to_memory(user_prompt=user_prompt)
 
     return response
@@ -1114,12 +989,8 @@ async def monkey_event(message) -> CommandResponse:
     # Discworld adventure game reference
     return SoundResponse(message, bot_message="AAAAAHHHHH-EEEEE-AAAAAHHHHH!", file_path="Sounds/monkey.mp3")
 
-async def reply_event(message, context, update=None):
-     # Create a prompt for GPT that includes the user's name and message, as well as whether it was a private message or not
-    user_prompt = chat.generate_user_prompt(message, context, update)
-
-    # Have GPT generate a response to the user prompt
-    response = chat.get_gpt_response(user_prompt)
-
+async def reply_event(message: str, chat_command: ChatCommand):
+    # Have GPT generate a response to the user's message
+    response = chat.get_gpt_response(message, chat_command)
     return CommandResponse(message, response)
 #endregion

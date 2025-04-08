@@ -55,7 +55,7 @@ Type /guess [your answer] to answer!
 
         return question_string
 
-    def score_question(self, was_correct: bool, context, update=None) -> int:
+    def score_question(self, was_correct: bool, chat_command) -> int:
         global current_question
 
         points_gained = 0
@@ -73,7 +73,7 @@ Type /guess [your answer] to answer!
 
         if points_gained > 0:
             points_dict = helpers.try_read_json(TRIVIA_POINTS_PATH, dict())
-            player_name = helpers.get_sender(context, update)
+            player_name = chat_command.get_sender()
 
             try:
                 points_dict[player_name] += points_gained

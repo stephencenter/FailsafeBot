@@ -3,6 +3,7 @@ from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam
 import settings
 import helpers
+from command_utils import ChatCommand
 
 OPENAI_KEY_PATH = "Data/openai_key.txt"
 ELEVENLABS_KEY_PATH = "Data/eleven_key.txt"
@@ -46,7 +47,7 @@ def generate_markov_text() -> str:
     output_message = output_message[0].upper() + output_message[1:]
     return output_message
 
-def get_gpt_response(user_message: str) -> str:
+def get_gpt_response(message: str, chat_command: ChatCommand) -> str:
     config = settings.Config()
 
     # Load and set the OpenAI API key
@@ -75,7 +76,9 @@ def get_gpt_response(user_message: str) -> str:
         messages.append({"role": "assistant", "content": prepend_message})
 
     messages += loaded_memory
-    messages.append({"role": "user", "content": user_message})
+
+    user_prompt = generate_user_prompt(chat_command)
+    messages.append({"role": "user", "content": user_prompt})
 
     gpt_completion= openai_client.chat.completions.create(
         messages=messages,
@@ -95,9 +98,9 @@ def get_gpt_response(user_message: str) -> str:
 
     return response
 
-def generate_user_prompt(user_message: str, context, update=None) -> str:
-    sender = helpers.get_sender(context, update, map_name=True)
-    user_prompt = f'{sender}: {user_message}'
+def generate_user_prompt(chat_command: ChatCommand) -> str:
+    sender = chat_command.get_author(map_name=True)
+    user_prompt = f'{sender}: {chat_command.get_user_message()}'
 
     return user_prompt
 
