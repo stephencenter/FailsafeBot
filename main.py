@@ -1,34 +1,60 @@
 import os
-import logging
+import sys
 import asyncio
-from datetime import datetime
-from logging.handlers import RotatingFileHandler
+import logging
 from telegram.ext import ApplicationBuilder
 from telegram.error import InvalidToken
 import discord
 from discord.ext.commands import Bot as DiscordBot
 from discord.errors import LoginFailure
+from loguru import logger
 import commands
 import sound_manager
 import settings
+import helpers
 
 TELEGRAM_TOKEN_PATH = os.path.join("Data", "telegram_token.txt")
 DISCORD_TOKEN_PATH = os.path.join("Data", "discord_token.txt")
 
 discord_bot = None
 
-async def init_logging():
-    # Configure log formatting
-    log_formatter = logging.Formatter(f"---------------------\n%(asctime)s - {commands.VERSION_NUMBER} - %(name)s - %(levelname)s - %(message)s")
+class InterceptHandler(logging.Handler):
+    def emit(self, record):
+        # Convert LogRecord to Loguru format
+        try:
+            level = logger.level(record.levelname).name
+        except ValueError:
+            level = record.levelno
 
-    # Create a rotating log handler - this ensures that the log is
-    log_handler = RotatingFileHandler(commands.LOGGING_FILE_PATH, mode='a', maxBytes=1024*1024, backupCount=1, encoding=None, delay=True)
-    log_handler.setFormatter(log_formatter)
-    log_handler.setLevel(logging.ERROR)
+        logger.bind(request_id="app").opt(depth=6, exception=record.exc_info).log(level, record.getMessage())
 
-    app_log = logging.getLogger("root")
-    app_log.setLevel(logging.WARNING)
-    app_log.addHandler(log_handler)
+def init_logging():
+    # Clear default logger
+    logger.remove()
+
+    # Add console output
+    info_format = "{message} <level>[{level}]</level> <green>{time:YYYY-MM-DD HH:mm:ss}</green> <cyan>{name}:{function}:{line}</cyan>"
+    logger.add(sys.stderr, level="INFO", backtrace=False, diagnose=False, format=info_format)
+
+    # Add file output with error logging
+    logger.add("Data/logging/log.txt", level="WARNING", backtrace=False, diagnose=False)
+
+    logging.root.handlers = [InterceptHandler()]
+    logging.root.setLevel(logging.INFO)
+
+    # Override logging levels for individual modules
+    logging.getLogger("telegram").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("discord").setLevel(logging.WARNING)
+
+    # Hook unhandled exceptions
+    def log_exceptions(exc_type, exc_value, exc_traceback):
+        logger.error("Unhandled exception")
+
+    sys.excepthook = log_exceptions
+
+    return
 
 async def create_run_telegram_bot(telegram_token: str):
     # Create telegram bot object
@@ -59,15 +85,11 @@ async def create_run_discord_bot(discord_token: str):
     await discord_bot.start(discord_token)
 
 async def initialize_and_run():
-    print(f"Starting script {commands.VERSION_NUMBER} at {datetime.now()}")
+    logger.info(f"Starting script {helpers.VERSION_NUMBER}")
     config = settings.Config()
 
-    # Initialize logging
-    if config.main.uselogging:
-        await init_logging()
-
     for problem in sound_manager.verify_aliases():
-        print(problem)
+        logger.warning(problem)
 
     if config.main.runtelegram:
         # Retrieve telegram bot token from file
@@ -79,15 +101,15 @@ async def initialize_and_run():
 
         # Attempt to run Telgram bot
         if telegram_token is not None:
-            print("Starting telegram bot")
+            logger.info("Starting telegram bot")
             try:
                 await create_run_telegram_bot(telegram_token)
             except InvalidToken:
-                print(f"Telegram token at {TELEGRAM_TOKEN_PATH} is invalid, couldn't start bot")
+                logger.error(f"Telegram token at {TELEGRAM_TOKEN_PATH} is invalid, couldn't start bot")
         else:
-            print(f"Telegram token not found at {TELEGRAM_TOKEN_PATH}, couldn't start bot")
+            logger.error(f"Telegram token not found at {TELEGRAM_TOKEN_PATH}, couldn't start bot")
     else:
-        print("Telegram bot disabled in settings.toml, skipping")
+        logger.info(f"Telegram bot disabled in {settings.CONFIG_PATH}, skipping")
 
     if config.main.rundiscord:
         # Retrieve discord bot token from file
@@ -99,21 +121,22 @@ async def initialize_and_run():
 
         # Attempt to run Discord bot
         if discord_token is not None:
-            print("Starting discord bot")
+            logger.info("Starting discord bot")
             try:
                 await create_run_discord_bot(discord_token)
             except LoginFailure:
-                print(f"Discord token at {DISCORD_TOKEN_PATH} is invalid, couldn't start bot")
+                logger.error(f"Discord token at {DISCORD_TOKEN_PATH} is invalid, couldn't start bot")
         else:
-            print(f"Discord token not found at {DISCORD_TOKEN_PATH}, couldn't start bot")
+            logger.error(f"Discord token not found at {DISCORD_TOKEN_PATH}, couldn't start bot")
     else:
-        print(f"Discord bot disabled in {settings.CONFIG_PATH}, skipping")
+        logger.info(f"Discord bot disabled in {settings.CONFIG_PATH}, skipping")
 
     await asyncio.Event().wait()
 
 async def main():
     try:
-        await initialize_and_run()
+        with logger.catch():
+            await initialize_and_run()
     finally:
         if isinstance(discord_bot, DiscordBot):
             # Disconnect from discord voice channels if necessary
@@ -123,12 +146,15 @@ async def main():
                 return
 
             if isinstance(bot_channel, discord.VoiceChannel):
-                print('Disconnecting from voice channel...')
+                logger.info('Disconnecting from voice channel...')
                 await discord_bot.voice_clients[0].disconnect(force=False)
 
-        print('Exiting...')
+        logger.info('Exiting...')
 
 if __name__ == "__main__":
+    # Initialize logging
+    init_logging()
+
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, asyncio.exceptions.CancelledError, RuntimeError, RuntimeWarning):

@@ -1,10 +1,13 @@
 import json
-import settings
 import typing
+import settings
 
+VERSION_NUMBER = 'v1.0.10'
 TELEGRAM_WHITELIST_PATH = "Data/tg_whitelist.txt"
 ADMINS_PATH = "Data/admins.txt"
 USERNAME_MAP_PATH = "Data/username_map.json"
+LOGGING_FILE_PATH = "Data/logging/log.txt"
+RESPONSES_PATH = "Data/response_list.txt"
 
 T = typing.TypeVar('T')
 
