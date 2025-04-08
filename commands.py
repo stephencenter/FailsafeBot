@@ -1,7 +1,6 @@
 import os
 import sys
 import random
-from datetime import datetime
 from subprocess import Popen, PIPE, STDOUT
 from typing import Callable
 from telegram.ext import MessageHandler, filters, CommandHandler, Application as TelegramBot
@@ -28,7 +27,7 @@ class CommandResponse:
         self.user_message: str = user_message
         self.bot_message: str = bot_message
         self.record_to_memory: bool = record_to_memory  # Whether user_message and bot_message should be recorded to memory
-        self.send_to_chat: bool = send_to_chat  # Whether bot_message should be printed in chat
+        self.send_to_chat: bool = send_to_chat  # Whether bot_message should be sent to chat
 
 class FileResponse(CommandResponse):
     def __init__(self, user_message: str, bot_message: str, file_path: str, record_to_memory: bool = True, temp: bool = False, send_to_chat: bool = True):
@@ -66,6 +65,7 @@ async def send_response(bot: TelegramBot | DiscordBot, command: Callable, contex
 
         if len(text_response) > config.main.maxmessagelength:
             text_response = text_response[:config.main.maxmessagelength]
+            logger.info(f"Cut off bot response at {config.main.maxmessagelength} characters")
 
     else:
         text_response = None
@@ -431,32 +431,34 @@ async def pressf_command(context, update=None) -> CommandResponse:
 # ==========================
 #region
 async def vcsound_command(context, update=None) -> CommandResponse:
+    user_message = "Hey, play that sound in the voice channel."
+
     if update is not None:
-        return CommandResponse("Hey, play that sound in the voice channel.", "That's Discord only, sorry")
+        return CommandResponse(user_message, "That's Discord only, sorry")
 
     if context.voice_client is None:
-        return CommandResponse("Hey, play that sound in the voice channel.", "I'm not in a voice channel!")
+        return CommandResponse(user_message, "I'm not in a voice channel!")
 
     args_list = helpers.get_args_list(context, update)
 
     # Alert the user if they forgot to provide a sound name
     if not args_list or args_list[0].isspace():
-        return CommandResponse("Hey, play that sound in the voice channel.", random.choice(sound_manager.TXT_SOUND_NOT_PROVIDED))
+        return CommandResponse(user_message, random.choice(sound_manager.TXT_SOUND_NOT_PROVIDED))
 
     # Parse the arguments the user provided for the sound name
     sound_name = args_list[0].lower()
     sound_results = sound_manager.get_sound(sound_name)
 
-    user_prompt = f"Can you play the {sound_name} sound in the voice channel?"
+    user_message = f"Can you play the {sound_name} sound in the voice channel?"
 
     # Alert the user if the sound they requested does not exist
     if sound_results is None:
-        return CommandResponse(user_prompt, random.choice(sound_manager.TXT_SOUND_NOT_FOUND))
+        return CommandResponse(user_message, random.choice(sound_manager.TXT_SOUND_NOT_FOUND))
 
     if isinstance(sound_results, list):
         num_candidates = len(sound_results)
         candidate_string = ', '.join(sound_results)
-        return CommandResponse(user_prompt, f"There are {num_candidates} potential matches: {candidate_string}")
+        return CommandResponse(user_message, f"There are {num_candidates} potential matches: {candidate_string}")
 
     # Stop the voice client if it's already playing a sound or stream
     if context.voice_client.is_playing():
@@ -467,7 +469,7 @@ async def vcsound_command(context, update=None) -> CommandResponse:
     context.voice_client.play(source, after=lambda e: logger.error(e) if e else None)
 
     await sound_manager.increment_playcount(sound_name)
-    return CommandResponse(user_prompt, "Sure, here you go", send_to_chat=False)
+    return CommandResponse(user_message, "Sure, here you go", send_to_chat=False)
 
 async def vcrandom_command(context, update=None) -> CommandResponse:
     user_message = "Can you play a random sound for me?"
@@ -491,8 +493,9 @@ async def vcrandom_command(context, update=None) -> CommandResponse:
     return CommandResponse(user_message, f"Sure, I chose the sound '{sound_name}", send_to_chat=False)
 
 async def vcstop_command(context, update=None) -> CommandResponse:
+    user_message = "Stop making all that noise please."
     if update is not None:
-        return CommandResponse("Stop making all that noise please.", "That's Discord only, sorry!")
+        return CommandResponse(user_message, "That's Discord only, sorry!")
 
     try:
         context.voice_client.stop()
@@ -500,19 +503,20 @@ async def vcstop_command(context, update=None) -> CommandResponse:
         # For some reason this can throw a lot of exceptions, we just ignore them
         pass
 
-    return CommandResponse("Stop making all that noise please.", "If you insist.", send_to_chat=False)
+    return CommandResponse(user_message, "If you insist.", send_to_chat=False)
 
 async def vcstream_command(context, update=None) -> CommandResponse:
+    user_message = "Stream this for me please."
     if update is not None:
-        return CommandResponse("Stream this for me please.", "That's Discord only, sorry!")
+        return CommandResponse(user_message, "That's Discord only, sorry!")
 
     if context.voice_client is None:
-        return CommandResponse("Stream this for me please.", "I'm not in a voice channel!")
+        return CommandResponse(user_message, "I'm not in a voice channel!")
 
     try:
         stream_url = helpers.get_args_string(context, update)
     except IndexError:
-        return CommandResponse("Stream this for me please.", "Provide a streamable URL please!")
+        return CommandResponse(user_message, "Provide a streamable URL please!")
 
     # Stop the voice client if it's already playing a sound or stream
     if context.voice_client.is_playing():
@@ -522,41 +526,43 @@ async def vcstream_command(context, update=None) -> CommandResponse:
     stream_player = sound_manager.YTDLStream(stream_url)
 
     if stream_player is None:
-        return CommandResponse("Stream this for me please.", "There was an error streaming from that URL.")
+        return CommandResponse(user_message, "There was an error streaming from that URL.")
 
     # Play the stream through the voice client
     async with context.typing():
         context.voice_client.play(stream_player, after=lambda e: logger.error(e) if e else None)
 
-    return CommandResponse("Stream this for me please.", f"Now playing: {stream_player.title}")
+    return CommandResponse(user_message, f"Now playing: {stream_player.title}")
 
 async def vcpause_command(context, update=None):
+    user_message = "Please toggle pause on the voice stream."
     if update is not None:
-        return CommandResponse("Please toggle pause on the voice stream.", "That's Discord only, sorry!")
+        return CommandResponse(user_message, "That's Discord only, sorry!")
 
     if context.voice_client is None:
-        return CommandResponse("Please toggle pause on the voice stream.", "I'm not in a voice channel!")
+        return CommandResponse(user_message, "I'm not in a voice channel!")
 
     # Stop the voice client if it's already playing a sound or stream
     if not context.voice_client.is_paused() and not context.voice_client.is_playing():
-        return CommandResponse("Please toggle pause on the voice stream.", "Nothing is playing!")
+        return CommandResponse(user_message, "Nothing is playing!")
 
     if context.voice_client.is_paused():
         context.voice_client.resume()
 
-        return CommandResponse("Please unpause the voice stream.", "Done.", send_to_chat=False)
+        return CommandResponse(user_message, "Done.", send_to_chat=False)
 
     context.voice_client.pause()
-    return CommandResponse("Please pause the voice stream.", "Done.", send_to_chat=False)
+    return CommandResponse(user_message, "Done.", send_to_chat=False)
 
 async def vcjoin_command(context, update=None) -> CommandResponse:
+    user_message = "Join my voice channel please."
     if update is not None:
-        return CommandResponse("Join my voice channel please.", "That's Discord only, sorry!")
+        return CommandResponse(user_message, "That's Discord only, sorry!")
 
     target_voice = context.author.voice
 
     if target_voice is None:
-        return CommandResponse("Join my voice channel please.", "You're not in a voice channel!")
+        return CommandResponse(user_message, "You're not in a voice channel!")
 
     if context.voice_client is not None:
         await context.voice_client.move_to(target_voice.channel)
@@ -564,18 +570,19 @@ async def vcjoin_command(context, update=None) -> CommandResponse:
     else:
         await target_voice.channel.connect()
 
-    return CommandResponse("Join my voice channel please.", "If you insist.", send_to_chat=False)
+    return CommandResponse(user_message, "If you insist.", send_to_chat=False)
 
 async def vcleave_command(context, update=None) -> CommandResponse:
+    user_message = "Leave the current voice channel please."
     if update is not None:
-        return CommandResponse("Leave the current voice channel please.", "That's Discord only, sorry!")
+        return CommandResponse(user_message, "That's Discord only, sorry!")
 
     try:
         await context.voice_client.disconnect()
     except (AttributeError, CommandInvokeError):
         pass
 
-    return CommandResponse("Leave the current voice channel please.", "If you insist", send_to_chat=False)
+    return CommandResponse(user_message, "If you insist", send_to_chat=False)
 #endregion
 
 # ==========================
@@ -873,7 +880,7 @@ async def restart_command(context, update=None) -> CommandResponse:
     if not helpers.is_admin(context, update):
         return NoPermissionsResponse("Can you restart your script for me?")
 
-    print("Restarting...")
+    logger.info("Restarting...")
 
     if update is None:
         await context.send("Restarting...")

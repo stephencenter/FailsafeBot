@@ -9,7 +9,6 @@ class ConfigMain:
     botname: str = "Failsafe"  #  Name of the bot, if replytoname is True then the bot will respond to this string
     runtelegram: bool = True  # Whether to run the telegram bot or skip it
     rundiscord: bool = True  # Whether to run the discord bot or skip it
-    uselogging: bool = True  # Whether to utilize the logging module or not
     maxdice: int = 100  # Maximum number of dice in one command for dice roller (bigger numbers might make messages too large for telegram)
     maxfaces: int = 10000  # Maximum number of faces for the dice for dice roller
     replytoname: bool = True  # Whether the bot should respond when their name is said

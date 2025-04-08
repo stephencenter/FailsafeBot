@@ -146,10 +146,10 @@ async def main():
                 return
 
             if isinstance(bot_channel, discord.VoiceChannel):
-                print('Disconnecting from voice channel...')
+                logger.info('Disconnecting from voice channel...')
                 await discord_bot.voice_clients[0].disconnect(force=False)
 
-        print('Exiting...')
+        logger.info('Exiting...')
 
 if __name__ == "__main__":
     # Initialize logging

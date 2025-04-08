@@ -2,6 +2,7 @@ import math
 import requests
 from unidecode import unidecode
 from html import unescape
+from loguru import logger
 import helpers
 
 TRIVIA_URL = "https://opentdb.com/api.php?amount="
@@ -127,7 +128,7 @@ def get_trivia_question() -> TriviaQuestion:
             chosen = item
             break
         else:
-            print(f"skipped duplicate question: {item['question']}")
+            logger.info(f"skipped duplicate question: {item['question']}")
     else:
         chosen = response[0]
 
