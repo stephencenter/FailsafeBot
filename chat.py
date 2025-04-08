@@ -61,8 +61,11 @@ def get_gpt_response(user_message: str, chat_command: ChatCommand) -> str:
         system_prompt = ''.join(f.readlines())
 
     prepend_message = ''
-    with open(PREPEND_PATH, encoding='utf-8') as f:
-        prepend_message = ''.join(f.readlines())
+    try:
+        with open(PREPEND_PATH, encoding='utf-8') as f:
+            prepend_message = ''.join(f.readlines())
+    except FileNotFoundError:
+        pass
 
     # Load the current conversation so far
     loaded_memory: list[ChatCompletionMessageParam] = load_memory()

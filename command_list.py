@@ -516,6 +516,7 @@ async def vcleave_command(chat_command: ChatCommand) -> CommandResponse:
 
     try:
         await chat_command.context.voice_client.disconnect()
+        chat_command.context.voice_client.cleanup()
     except (AttributeError, CommandInvokeError):
         pass
 

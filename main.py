@@ -135,8 +135,7 @@ async def initialize_and_run():
 
 async def main():
     try:
-        with logger.catch():
-            await initialize_and_run()
+        await initialize_and_run()
     finally:
         if isinstance(discord_bot, DiscordBot):
             # Disconnect from discord voice channels if necessary
@@ -152,12 +151,9 @@ async def main():
         logger.info('Exiting...')
 
 if __name__ == "__main__":
-    # Initialize logging
     init_logging()
 
     try:
         asyncio.run(main())
-    except (KeyboardInterrupt, asyncio.exceptions.CancelledError, RuntimeError, RuntimeWarning):
-        pass
-    finally:
-        sys.exit()
+    except KeyboardInterrupt:
+        sys.exit(130)
