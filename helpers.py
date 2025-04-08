@@ -2,7 +2,8 @@ import json
 import typing
 import settings
 
-VERSION_NUMBER = 'v1.0.10'
+APPLICATION_NAME = 'FailsafeBot'
+VERSION_NUMBER = 'v1.0.11'
 TELEGRAM_WHITELIST_PATH = "Data/tg_whitelist.txt"
 ADMINS_PATH = "Data/admins.txt"
 USERNAME_MAP_PATH = "Data/username_map.json"

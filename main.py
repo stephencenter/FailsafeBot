@@ -85,7 +85,7 @@ async def create_run_discord_bot(discord_token: str):
     await discord_bot.start(discord_token)
 
 async def initialize_and_run():
-    logger.info(f"Starting script {helpers.VERSION_NUMBER}")
+    logger.info(f"Starting {helpers.APPLICATION_NAME} {helpers.VERSION_NUMBER}")
     config = settings.Config()
 
     for problem in sound_manager.verify_aliases():
@@ -159,3 +159,5 @@ if __name__ == "__main__":
         asyncio.run(main())
     except (KeyboardInterrupt, asyncio.exceptions.CancelledError, RuntimeError, RuntimeWarning):
         pass
+    finally:
+        sys.exit()

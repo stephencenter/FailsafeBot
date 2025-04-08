@@ -942,7 +942,7 @@ async def version_command(context, update=None) -> CommandResponse:
     if not helpers.is_admin(context, update):
         return NoPermissionsResponse(user_message)
 
-    return CommandResponse(user_message, helpers.VERSION_NUMBER)
+    return CommandResponse(user_message, f"Running {helpers.APPLICATION_NAME} {helpers.VERSION_NUMBER}.")
 
 async def crash_command(context, update=None) -> CommandResponse:
     if not helpers.is_admin(context, update):
