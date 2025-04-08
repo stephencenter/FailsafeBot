@@ -1087,6 +1087,10 @@ async def handle_message_event(message, context=None, update=None) -> CommandRes
     bot_name = config.main.botname.lower()
 
     if isinstance(message, discord_commands.Context):
+        if message.author.bot:
+            return NoResponse()
+
+        context = message
         message = message.message.content
 
     response = NoResponse()
@@ -1095,13 +1099,13 @@ async def handle_message_event(message, context=None, update=None) -> CommandRes
         response = await monkey_event(message)
 
     elif config.main.replytoname and (bot_name in message or ''.join(bot_name.split()) in message):
-        response = await reply_event(message, context, update)
+        response = await reply_event(message, context, update=update)
 
     elif random.random() < config.main.randreplychance:
-        response = await reply_event(message, context, update)
+        response = await reply_event(message, context, update=update)
 
     elif config.main.recordall:
-        user_prompt = chat.generate_user_prompt(message, context, update)
+        user_prompt = chat.generate_user_prompt(message, context, update=update)
         chat.append_to_memory(user_prompt=user_prompt)
 
     return response
