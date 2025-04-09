@@ -137,6 +137,7 @@ def register_commands(bot: TelegramBot | DiscordBot) -> None:
         ("vcleave", vcleave_command),
         ("vcstream", vcstream_command),
         ("vcpause", vcpause_command),
+        ("vcsay", vcsay_command),
         ("roll", roll_command),
         ("statroll", statroll_command),
         ("d10000", d10000_command),
@@ -387,27 +388,31 @@ async def wisdom_command(_: ChatCommand) -> CommandResponse:
 async def pressf_command(_: ChatCommand) -> CommandResponse:
     return CommandResponse("F's in the chat boys.", "F")
 
-# Elevenlabs-powered
-
-
 async def say_command(chat_command: ChatCommand) -> CommandResponse:
+    # AI text-to-speech powered by elevenlabs
     text_prompt = chat_command.get_user_message()
 
+    # Say whatever string the user provided. If the user didn't provide a string, say the
+    # most recent thing the bot said in memory
     if not text_prompt:
         try:
             text_prompt = chat.load_memory()[-1]['content']
         except (IndexError, KeyError):
             return CommandResponse("Can you say that last thing you said out loud?", "My memory unit appears to be malfuncitoning.")
 
-    hard_cap = 1000
-    text_prompt = text_prompt[:min(len(text_prompt), hard_cap)]
 
-    soft_cap = 800
+    config = settings.Config()
+
+    # Hard cap cuts off the text abruptly, to keep costs down (longer strings = more elevenlabs credits)
+    text_prompt = text_prompt[:min(len(text_prompt), config.main.sayhardcap)]
+
+    # Soft cap cuts off the text gently, only at certain punctuation marks
     for index, char in enumerate(text_prompt):
-        if index >= soft_cap and char in ['.', '?', '!']:
+        if index >= config.main.saysoftcap and char in ('.', '?', '!'):
             text_prompt = text_prompt[:index]
             break
 
+    # Get elevenlabs key from file
     elevenlabs_key = common.try_read_single_line(common.ELEVENLABS_KEY_PATH, None)
     if elevenlabs_key is None:
         raise ValueError("Couldn't retrieve elevenlabs key!")
@@ -415,18 +420,19 @@ async def say_command(chat_command: ChatCommand) -> CommandResponse:
     elevenlabs_client = ElevenLabs(api_key=elevenlabs_key)
     user_message = f"Can you say this for me: {text_prompt}"
 
+    # Get text-to-speech response from elevenlabs
     try:
         audio = elevenlabs_client.text_to_speech.convert(
             text=text_prompt,
-            voice_id="XB0fDUnXU5powFXDhCwa",
-            model_id='eleven_multilingual_v2'
+            voice_id=config.main.sayvoiceid,
+            model_id=config.main.saymodelid
         )
     except elevenlabs.core.api_error.ApiError:
         return CommandResponse(user_message, "Sorry, but someone was a cheap bastard and didn't renew their elevenlabs subscription.")
 
+    # Save sound to temp file
     temp_path = Path(common.TEMP_FOLDER_PATH) / f"{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.mp3"
     Path(common.TEMP_FOLDER_PATH).mkdir(parents=True, exist_ok=True)
-
     elevenlabs.save(audio, temp_path)
 
     return SoundResponse(user_message, "Fine, I'll say your stupid phrase.", temp_path, temp=True)
@@ -594,6 +600,9 @@ async def vcleave_command(chat_command: ChatCommand) -> CommandResponse:
         pass
 
     return CommandResponse(user_message, "If you insist", send_to_chat=False)
+
+async def vcsay_command(chat_command: ChatCommand) -> CommandResponse:
+    pass
 #endregion
 
 # ==========================
@@ -844,6 +853,7 @@ async def help_command(_: ChatCommand) -> CommandResponse:
     help_string = """\
 Look upon my works, ye mighty, and despair:
 /vcjoin and /vcleave (join or leave current voice channel)
+/say and /vcsay (AI voice)
 /sound and /vcsound (play a sound effect)
 /random and /vcrandom (play a random sound effect)
 /soundlist and /search (find sounds to play)

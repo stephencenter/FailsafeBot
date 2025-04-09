@@ -31,6 +31,11 @@ class ConfigMain:
     usemegabytes: bool = True  # Whether the /system command should use megabytes (will use gigabytes if false)
     cmdautoyes: bool = False  # Whether the /terminal command should automatically say 'y' to y/n questions (prevents hanging)
     minsimilarity: float = 0.75  # The minimum similarity threshold when searching for sound names (1.0 = exact matches only)
+    saysoftcap: int = 224  # The "soft cap" for elevenlabs text-to-speech input length (soft cap only breaks on punctuation)
+    sayhardcap: int = 256  # The "hard cap" for elevenlabs text-to-speech input length (hard cap breaks no matter what)
+    sayvoiceid: str = "XB0fDUnXU5powFXDhCwa"  # The voice to use for elevenlabs (defaults to Charlotte)
+    saymodelid: str = "eleven_multilingual_v2"  # The base model to use for elevenlabs
+
 
 @dataclass
 class Config:
