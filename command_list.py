@@ -1,4 +1,5 @@
 import contextlib
+import datetime
 import os
 import random
 import sys
@@ -7,12 +8,14 @@ from pathlib import Path
 from subprocess import PIPE, STDOUT, Popen
 
 import discord
+import elevenlabs
 import psutil
 from discord.errors import HTTPException
 from discord.ext import commands as discord_commands
 from discord.ext.commands import Bot as DiscordBot
 from discord.ext.commands import CommandInvokeError
 from discord.ext.commands import Context as DiscordContext
+from elevenlabs.client import ElevenLabs
 from loguru import logger
 from telegram import Update as TelegramUpdate
 from telegram.error import BadRequest, NetworkError, TimedOut
@@ -117,6 +120,7 @@ def register_commands(bot: TelegramBot | DiscordBot) -> None:
         ("delalias", delalias_command),
         ("getalias", getalias_command),
         ("search", search_command),
+        ("say", say_command),
         ("pressf", pressf_command),
         ("wisdom", wisdom_command),
         ("help", help_command),
@@ -382,6 +386,50 @@ async def wisdom_command(_: ChatCommand) -> CommandResponse:
 
 async def pressf_command(_: ChatCommand) -> CommandResponse:
     return CommandResponse("F's in the chat boys.", "F")
+
+# Elevenlabs-powered
+
+
+async def say_command(chat_command: ChatCommand) -> CommandResponse:
+    text_prompt = chat_command.get_user_message()
+
+    if not text_prompt:
+        try:
+            text_prompt = chat.load_memory()[-1]['content']
+        except (IndexError, KeyError):
+            return CommandResponse("Can you say that last thing you said out loud?", "My memory unit appears to be malfuncitoning.")
+
+    hard_cap = 1000
+    text_prompt = text_prompt[:min(len(text_prompt), hard_cap)]
+
+    soft_cap = 800
+    for index, char in enumerate(text_prompt):
+        if index >= soft_cap and char in ['.', '?', '!']:
+            text_prompt = text_prompt[:index]
+            break
+
+    elevenlabs_key = common.try_read_single_line(common.ELEVENLABS_KEY_PATH, None)
+    if elevenlabs_key is None:
+        raise ValueError("Couldn't retrieve elevenlabs key!")
+
+    elevenlabs_client = ElevenLabs(api_key=elevenlabs_key)
+    user_message = f"Can you say this for me: {text_prompt}"
+
+    try:
+        audio = elevenlabs_client.text_to_speech.convert(
+            text=text_prompt,
+            voice_id="XB0fDUnXU5powFXDhCwa",
+            model_id='eleven_multilingual_v2'
+        )
+    except elevenlabs.core.api_error.ApiError:
+        return CommandResponse(user_message, "Sorry, but someone was a cheap bastard and didn't renew their elevenlabs subscription.")
+
+    temp_path = Path(common.TEMP_FOLDER_PATH) / f"{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.mp3"
+    Path(common.TEMP_FOLDER_PATH).mkdir(parents=True, exist_ok=True)
+
+    elevenlabs.save(audio, temp_path)
+
+    return SoundResponse(user_message, "Fine, I'll say your stupid phrase.", temp_path, temp=True)
 #endregion
 
 # ==========================
@@ -718,7 +766,7 @@ async def memorylist_command(chat_command: ChatCommand) -> CommandResponse:
 
     memory_list = [f"{item['role']}: {item['content']}" for item in memory_list if 'content' in item]
 
-    temp_path = 'Data/mem_list.txt'
+    temp_path = Path(common.TEMP_FOLDER_PATH) / 'mem_list.txt'
     common.write_lines_to_file(temp_path, memory_list)
 
     return FileResponse(user_message, "Sure, here's my memory list.", temp_path, temp=True)

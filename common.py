@@ -15,12 +15,14 @@ import common
 import settings
 
 APPLICATION_NAME = 'FailsafeBot'
-VERSION_NUMBER = 'v1.1.0'
+VERSION_NUMBER = 'v1.1.1'
 
+ELEVENLABS_KEY_PATH = "Data/eleven_key.txt"
 LOGGING_FILE_PATH = "Data/logging/log.txt"
 RESPONSES_PATH = "Data/response_list.txt"
 USERNAME_MAP_PATH = "Data/username_map.json"
 TELEGRAM_WHITELIST_PATH = "Data/tg_whitelist.txt"
+TEMP_FOLDER_PATH = ".temp"
 ADMINS_PATH = "Data/admins.txt"
 
 T = typing.TypeVar('T')
@@ -39,8 +41,8 @@ class FileResponse(CommandResponse):
         self.temp: bool = temp  # Whether the file should be deleted after being sent
 
 class SoundResponse(FileResponse):
-    def __init__(self, user_message: str, bot_message: str, file_path: str, *, record_to_memory: bool = True):
-        super().__init__(user_message, bot_message, file_path, record_to_memory=record_to_memory, temp=False)
+    def __init__(self, user_message: str, bot_message: str, file_path: str, *, record_to_memory: bool = True, temp: bool = False):
+        super().__init__(user_message, bot_message, file_path, record_to_memory=record_to_memory, temp=temp)
 
 class NoPermissionsResponse(CommandResponse):
     def __init__(self, user_message: str):
@@ -224,6 +226,10 @@ class ChatCommand:
         else:
             raise NotImplementedError
 
+        # Delete the file that was sent if it was a temporary file
+        if response.temp:
+            Path(response.file_path).unlink()
+
     def is_telegram(self) -> bool:
         return isinstance(self.target_bot, TelegramBot)
 
@@ -287,9 +293,11 @@ def try_read_single_line(path: str, default: T) -> str | T:
         return default
 
 def write_json_to_file(path: str, data: Iterable) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
 
 def write_lines_to_file(path: str, lines: list) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, 'w', encoding='utf-8') as f:
         f.writelines(f"{x}\n" for x in lines)
