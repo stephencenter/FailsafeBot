@@ -1,25 +1,26 @@
-import os
-import sys
 import asyncio
 import logging
-from telegram.ext import ApplicationBuilder
-from telegram.error import InvalidToken
-import discord
-from discord.ext.commands import Bot as DiscordBot
-from discord.errors import LoginFailure
-from loguru import logger
-import command_list
-import sound_manager
-import settings
-import common
+import sys
 
-TELEGRAM_TOKEN_PATH = os.path.join("Data", "telegram_token.txt")
-DISCORD_TOKEN_PATH = os.path.join("Data", "discord_token.txt")
+import discord
+from discord.errors import LoginFailure
+from discord.ext.commands import Bot as DiscordBot
+from loguru import logger
+from telegram.error import InvalidToken
+from telegram.ext import ApplicationBuilder
+
+import command_list
+import common
+import settings
+import sound_manager
+
+TELEGRAM_TOKEN_PATH = "Data/telegram_token.txt"
+DISCORD_TOKEN_PATH = "Data/discord_token.txt"
 
 discord_bot = None
 
 class InterceptHandler(logging.Handler):
-    def emit(self, record):
+    def emit(self, record: logging.LogRecord) -> None:
         # Convert LogRecord to Loguru format
         try:
             level = logger.level(record.levelname).name
@@ -28,7 +29,7 @@ class InterceptHandler(logging.Handler):
 
         logger.bind(request_id="app").opt(depth=6, exception=record.exc_info).log(level, record.getMessage())
 
-def init_logging():
+def init_logging() -> None:
     # Clear default logger
     logger.remove()
 
@@ -49,14 +50,12 @@ def init_logging():
     logging.getLogger("discord").setLevel(logging.WARNING)
 
     # Hook unhandled exceptions
-    def log_exceptions(exc_type, exc_value, exc_traceback):
+    def log_exceptions(exc_type, exc_value, exc_traceback) -> None: # noqa: ANN001, ARG001
         logger.error("Unhandled exception")
 
     sys.excepthook = log_exceptions
 
-    return
-
-async def create_run_telegram_bot(telegram_token: str):
+async def create_run_telegram_bot(telegram_token: str) -> None:
     # Create telegram bot object
     telegram_bot = ApplicationBuilder().token(telegram_token).build()
     await telegram_bot.initialize()
@@ -68,7 +67,7 @@ async def create_run_telegram_bot(telegram_token: str):
     if telegram_bot.updater is not None:
         await telegram_bot.updater.start_polling(drop_pending_updates=True)
 
-async def create_run_discord_bot(discord_token: str):
+async def create_run_discord_bot(discord_token: str) -> None:
     global discord_bot
 
     # Set intents for discord bot
@@ -84,7 +83,7 @@ async def create_run_discord_bot(discord_token: str):
 
     await discord_bot.start(discord_token)
 
-async def initialize_and_run():
+async def initialize_and_run() -> None:
     logger.info(f"Starting {common.APPLICATION_NAME} {common.VERSION_NUMBER}")
     config = settings.Config()
 
@@ -93,11 +92,7 @@ async def initialize_and_run():
 
     if config.main.runtelegram:
         # Retrieve telegram bot token from file
-        try:
-            with open(TELEGRAM_TOKEN_PATH, encoding='utf-8') as f:
-                telegram_token = f.readline().strip()
-        except FileNotFoundError:
-            telegram_token = None
+        telegram_token = common.try_read_single_line(TELEGRAM_TOKEN_PATH, None)
 
         # Attempt to run Telgram bot
         if telegram_token is not None:
@@ -113,11 +108,7 @@ async def initialize_and_run():
 
     if config.main.rundiscord:
         # Retrieve discord bot token from file
-        try:
-            with open(DISCORD_TOKEN_PATH, encoding='utf-8') as f:
-                discord_token = f.readline().strip()
-        except FileNotFoundError:
-            discord_token = None
+        discord_token = common.try_read_single_line(DISCORD_TOKEN_PATH, None)
 
         # Attempt to run Discord bot
         if discord_token is not None:
@@ -133,7 +124,7 @@ async def initialize_and_run():
 
     await asyncio.Event().wait()
 
-async def main():
+async def main() -> None:
     try:
         await initialize_and_run()
     finally:

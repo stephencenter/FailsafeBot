@@ -55,7 +55,7 @@ Type /guess [your answer] to answer!
 
         return question_string
 
-    def score_question(self, was_correct: bool, chat_command) -> int:
+    def score_question(self, chat_command, *, was_correct: bool, ) -> int:
         global current_question
 
         points_gained = 0

@@ -1,8 +1,9 @@
-import numpy
+import numpy as np
 from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam
-import settings
+
 import common
+import settings
 from common import ChatCommand
 
 OPENAI_KEY_PATH = "Data/openai_key.txt"
@@ -18,7 +19,7 @@ def generate_markov_text() -> str:
     if config.main.minmarkov > config.main.maxmarkov:
         raise ValueError("Markov minimum length cannot be greater than maximum length (config issue)")
 
-    markov_chain = common.try_read_json(MARKOV_PATH, dict())
+    markov_chain = common.try_read_json(MARKOV_PATH, {})
 
     if not markov_chain:
         return "No markov chain data was found!"
@@ -31,7 +32,7 @@ def generate_markov_text() -> str:
         else:
             prev_token = chosen_tokens[-1]
 
-        new_token = numpy.random.choice(list(markov_chain[prev_token].keys()), 1, p=list(markov_chain[prev_token].values()))[0]
+        new_token = np.random.choice(list(markov_chain[prev_token].keys()), 1, p=list(markov_chain[prev_token].values()))[0]
 
         if new_token == null_token:
             if len(chosen_tokens) < config.main.minmarkov:
@@ -47,7 +48,7 @@ def generate_markov_text() -> str:
     output_message = output_message[0].upper() + output_message[1:]
     return output_message
 
-def get_gpt_response(user_message: str, chat_command: ChatCommand) -> str:
+def get_gpt_response(chat_command: ChatCommand) -> str:
     config = settings.Config()
 
     # Load and set the OpenAI API key
@@ -80,7 +81,7 @@ def get_gpt_response(user_message: str, chat_command: ChatCommand) -> str:
 
     messages += loaded_memory
 
-    user_prompt = generate_user_prompt(user_message, chat_command)
+    user_prompt = chat_command.get_user_prompt()
     messages.append({"role": "user", "content": user_prompt})
 
     gpt_completion= openai_client.chat.completions.create(
@@ -100,12 +101,6 @@ def get_gpt_response(user_message: str, chat_command: ChatCommand) -> str:
         response = response[1:-1]
 
     return response
-
-def generate_user_prompt(user_message: str, chat_command: ChatCommand) -> str:
-    sender = chat_command.get_author(map_name=True)
-    user_prompt = f'{sender}: {user_message}'
-
-    return user_prompt
 
 def load_memory() -> list[ChatCompletionMessageParam]:
     # Load the AI's memory (if it exists)

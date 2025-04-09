@@ -1,11 +1,12 @@
 import random
 import re
+
 import common
 
 D10000_LIST_PATH = "Data/d10000_list.txt"
 ACTIVE_EFFECTS_PATH = "Data/active_effects.json"
 
-def parse_diceroll(dice_roll) -> tuple[int, int, int] | None:
+def parse_diceroll(dice_roll: list) -> tuple[int, int, int] | None:
     try:
         if dice_roll[0].startswith("d"):
             dice_roll[0] = f"1{dice_roll[0]}"
@@ -85,16 +86,16 @@ def get_mythras_roll() -> str:
 
     return roll_string
 
-def get_d10000_roll(username) -> str:
+def get_d10000_roll(username: str) -> str:
     try:
-        with open(D10000_LIST_PATH, 'r', encoding='utf-8') as f:
+        with open(D10000_LIST_PATH, encoding='utf-8') as f:
             effects = f.readlines()
     except FileNotFoundError:
         return "The d10000 file couldn't be found!"
 
     chosen_effect = random.choice(effects).strip()
 
-    effects_dict = common.try_read_json(ACTIVE_EFFECTS_PATH, dict())
+    effects_dict = common.try_read_json(ACTIVE_EFFECTS_PATH, {})
 
     try:
         effects_dict[username].append(chosen_effect)
@@ -106,8 +107,8 @@ def get_d10000_roll(username) -> str:
 
     return chosen_effect
 
-def get_active_effects(username) -> list:
-    effects_dict = common.try_read_json(ACTIVE_EFFECTS_PATH, dict())
+def get_active_effects(username: str) -> list:
+    effects_dict = common.try_read_json(ACTIVE_EFFECTS_PATH, {})
 
     try:
         active_effects = effects_dict[username]
@@ -116,8 +117,8 @@ def get_active_effects(username) -> list:
 
     return active_effects
 
-def reset_active_effects(username):
-    effects_dict = common.try_read_json(ACTIVE_EFFECTS_PATH, dict())
+def reset_active_effects(username: str) -> None:
+    effects_dict = common.try_read_json(ACTIVE_EFFECTS_PATH, {})
     effects_dict[username] = []
 
     common.write_json_to_file(ACTIVE_EFFECTS_PATH, effects_dict)
