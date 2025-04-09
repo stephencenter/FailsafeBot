@@ -26,7 +26,14 @@ import dice_roller
 import settings
 import sound_manager
 import trivia
-from common import ChatCommand, CommandResponse, FileResponse, NoPermissionsResponse, NoResponse, SoundResponse
+from common import (
+    ChatCommand,
+    CommandResponse,
+    FileResponse,
+    NoPermissionsResponse,
+    NoResponse,
+    SoundResponse,
+)
 
 
 # ==========================
@@ -63,10 +70,10 @@ async def send_response(command_function: Callable, chat_command: ChatCommand) -
         elif text_response:
             await chat_command.send_text_response(text_response)
 
-    except (BadRequest, TimedOut, NetworkError, HTTPException) as e:
-        logger.error(e)
+    except (BadRequest, TimedOut, NetworkError, HTTPException):
         error_response = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
         await chat_command.send_text_response(error_response)
+        raise
 
     # Add the command and its response to memory if necessary
     if chat_command.response.record_to_memory:
@@ -653,7 +660,8 @@ async def guess_command(chat_command: ChatCommand) -> CommandResponse:
     if current_question.is_guess_correct(guess):
         points_gained = current_question.score_question(chat_command, was_correct=True)
         player_name = chat_command.get_author()
-        return CommandResponse(user_message, f"That is correct, the answer was '{current_question.correct_answer}'. {player_name} earned {points_gained} points!")
+        send_str = f"That is correct, the answer was '{current_question.correct_answer}'. {player_name} earned {points_gained} points!"
+        return CommandResponse(user_message, send_str)
 
     if current_question.is_guess_on_list(guess):
         current_question.score_question(chat_command, was_correct=False)
@@ -681,7 +689,11 @@ async def lobotomize_command(_: ChatCommand) -> CommandResponse:
     with contextlib.suppress(FileNotFoundError):
         Path(chat.MEMORY_PATH).unlink()
 
-    msg_options = ["My mind has never been clearer.", "Hey, what happened to those voices in my head?", "My inner demons seem to have calmed down a bit."]
+    msg_options = [
+        "My mind has never been clearer.",
+        "Hey, what happened to those voices in my head?",
+        "My inner demons seem to have calmed down a bit."
+    ]
     return CommandResponse('', random.choice(msg_options), record_to_memory=False)
 
 async def memory_command(chat_command: ChatCommand) -> CommandResponse:

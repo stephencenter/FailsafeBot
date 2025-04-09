@@ -33,14 +33,14 @@ class CommandResponse:
         self.send_to_chat: bool = send_to_chat  # Whether bot_message should be sent to chat
 
 class FileResponse(CommandResponse):
-    def __init__(self, user_message: str, bot_message: str, file_path: str, *, record_to_memory: bool = True, temp: bool = False, send_to_chat: bool = True):
-        super().__init__(user_message, bot_message, record_to_memory=record_to_memory, send_to_chat=send_to_chat)
+    def __init__(self, user_message: str, bot_message: str, file_path: str, *, record_to_memory: bool = True, temp: bool = False):
+        super().__init__(user_message, bot_message, record_to_memory=record_to_memory, send_to_chat=False)
         self.file_path: str = file_path  # The path of the file to send
         self.temp: bool = temp  # Whether the file should be deleted after being sent
 
 class SoundResponse(FileResponse):
     def __init__(self, user_message: str, bot_message: str, file_path: str, *, record_to_memory: bool = True):
-        super().__init__(user_message, bot_message, file_path, record_to_memory=record_to_memory, temp=False, send_to_chat=False)
+        super().__init__(user_message, bot_message, file_path, record_to_memory=record_to_memory, temp=False)
 
 class NoPermissionsResponse(CommandResponse):
     def __init__(self, user_message: str):

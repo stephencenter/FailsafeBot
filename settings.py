@@ -1,5 +1,6 @@
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from typing import Any
+
 import toml
 
 CONFIG_PATH = "Data/settings.toml"
@@ -16,7 +17,7 @@ class ConfigMain:
     randreplychance: float = 0.05  # The chance for the bot to randomly reply to any message in a chat they're in (0 = no chance 1 = every message)
     vcautodc: bool = True  # Whether the bot will automatically disconnect if they're the only ones in a voice call
     ytdldownload: bool = False  # Whether the vcstream command will download the video before playing it
-    requireadmin: bool = True  # Whether certain commands require admin rights to perform. Note that some commands like /terminal are extremely dangerous in untrustworthy hands
+    requireadmin: bool = True  # Whether certain commands require admin rights to perform
     usememory: bool = True  # Whether the bot will use the memory system for AI chatting
     memorysize: int = 24  # Maximum number of messages to record in memory for AI chatting (higher is probably more expensive)
     recordall: bool = False  # Whether the bot wil record ALL messages sent in chat to memory, or just messages directed towards it
@@ -37,7 +38,7 @@ class Config:
 
     def __post_init__(self):
         try:
-            with open(CONFIG_PATH, mode='r', encoding='utf-8') as f:
+            with open(CONFIG_PATH, encoding='utf-8') as f:
                 loaded = toml.load(f)
 
         except FileNotFoundError:
@@ -73,11 +74,11 @@ class Config:
 
         return group_name, setting_name, value
 
-def save_config(config: Config):
+def save_config(config: Config) -> None:
     with open(CONFIG_PATH, mode='w', encoding='utf-8') as f:
         toml.dump(asdict(config), f)
 
-def parse_value_input(value: str):
+def parse_value_input(value: str) -> int | float | bool | str:
     if value.lower() == "true":
         return True
     if value.lower() == "false":

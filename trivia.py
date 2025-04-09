@@ -1,8 +1,10 @@
 import math
-import requests
-from unidecode import unidecode
 from html import unescape
+
+import requests
 from loguru import logger
+from unidecode import unidecode
+
 import common
 
 TRIVIA_URL = "https://opentdb.com/api.php?amount="
@@ -26,7 +28,7 @@ def fix_string(string: str) -> str:
     return string.strip()
 
 class TriviaQuestion:
-    def __init__(self, question_dict):
+    def __init__(self, question_dict: dict):
         self.type: str = question_dict['type']
         self.difficulty: str = question_dict['difficulty']
         self.category: str = fix_string(question_dict['category'].split(':')[-1])
@@ -38,11 +40,11 @@ class TriviaQuestion:
             self.answer_list = ['True', 'False']
         else:
             self.answer_list: list[str] = [fix_string(q) for q in question_dict['incorrect_answers']]
-            self.answer_list = sorted(self.answer_list + [self.correct_answer])
+            self.answer_list = sorted([*self.answer_list, self.correct_answer])
 
         self.guesses_left = len(self.answer_list) - 1
 
-    def get_question_string(self):
+    def get_question_string(self) -> str:
         alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'  # Should never need more than 4 letters
         answer_string = '\n'.join(f'    {alphabet[index]}. {answer}' for index, answer in enumerate(self.answer_list))
 
@@ -55,7 +57,7 @@ Type /guess [your answer] to answer!
 
         return question_string
 
-    def score_question(self, chat_command, *, was_correct: bool, ) -> int:
+    def score_question(self, chat_command: common.ChatCommand, *, was_correct: bool) -> int:
         global current_question
 
         points_gained = 0
@@ -72,7 +74,7 @@ Type /guess [your answer] to answer!
             current_question = None
 
         if points_gained > 0:
-            points_dict = common.try_read_json(TRIVIA_POINTS_PATH, dict())
+            points_dict = common.try_read_json(TRIVIA_POINTS_PATH, {})
             player_name = chat_command.get_sender()
 
             try:
@@ -111,13 +113,13 @@ def get_trivia_question() -> TriviaQuestion:
     if current_question is not None:
         return current_question
 
-    response = requests.post(f"{TRIVIA_URL}{TRIVIA_NUM_QUESTIONS}").json()['results']
+    response = requests.post(f"{TRIVIA_URL}{TRIVIA_NUM_QUESTIONS}", timeout=10).json()['results']
 
     # Check the list of the most recently asked trivia questions and attempt to pick a
     # question that isn't on the list
     try:
-        with open(TRIVIA_MEMORY_PATH, mode='r', encoding='utf-8') as f:
-            previous_questions = [x.strip() for x in f.readlines()]
+        with open(TRIVIA_MEMORY_PATH, encoding='utf-8') as f:
+            previous_questions = [x.strip() for x in f]
     except FileNotFoundError:
         previous_questions = []
 
@@ -127,8 +129,7 @@ def get_trivia_question() -> TriviaQuestion:
         if item["question"] not in previous_questions:
             chosen = item
             break
-        else:
-            logger.info(f"skipped duplicate question: {item['question']}")
+        logger.info(f"skipped duplicate question: {item['question']}")
     else:
         chosen = response[0]
 

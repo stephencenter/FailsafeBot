@@ -1,10 +1,13 @@
-import os
 import random
+from collections.abc import Generator
+from pathlib import Path
+
 import discord
 import yt_dlp
-import settings
-import common
 from strsimpy import Damerau
+
+import common
+import settings
 
 SOUNDS_PATH = "Sounds"
 ALIAS_PATH = "Data/sound_aliases.json"
@@ -55,30 +58,30 @@ class YTDLStream(discord.PCMVolumeTransformer):
 
 def get_sound_dict() -> dict[str, str]:
     # If any .mp3 files are in the main directory, move them to the Sounds directory
-    for file in os.listdir():
-        if file.endswith(".mp3"):
-            os.rename(file, f"{SOUNDS_PATH}/{file}")
+    for file in Path().iterdir():
+        if file.suffix == ".mp3":
+            Path.replace(file, f"{SOUNDS_PATH}/{file}")
 
     # Create the sound dictionary. The keys will be the names of each sound, and the values will be the
     # path to that sound's file
     sound_dict = {}
-    for file in os.listdir(SOUNDS_PATH):
-        if file.endswith(".mp3"):
-            sound_dict[file[:-4].lower()] = os.path.join(SOUNDS_PATH, file)
+    for file in Path(SOUNDS_PATH).iterdir():
+        if file.suffix == ".mp3":
+            sound_dict[file.stem] = file
 
     return sound_dict
 
 def get_alias_dict() -> dict[str, str]:
     # Load a dictionary where the keys are aliases, and the values are the
     # sounds those aliases correspond to
-    return common.try_read_json(ALIAS_PATH, dict())
+    return common.try_read_json(ALIAS_PATH, {})
 
 def get_playcount_dict() -> dict[str, int]:
     # Retrieve the sound and alias dictionaries
     sound_list = get_sound_list()
     alias_dict = get_alias_dict()
 
-    playcount_dict = common.try_read_json(PLAYCOUNTS_PATH, {x: 0 for x in sound_list})
+    playcount_dict = common.try_read_json(PLAYCOUNTS_PATH, dict.fromkeys(sound_list, 0))
 
     # This variable makes note of whether a correction was made to the playcounts dictionary
     changed = False
@@ -125,10 +128,7 @@ def sound_exists(sound_name: str) -> bool:
     if sound_name in get_sound_dict():
         return True
 
-    if sound_name in get_alias_dict():
-        return True
-
-    return False
+    return sound_name in get_alias_dict()
 
 def get_sound(sound_name: str) -> str | None | list[str]:
     # Get the dictionary of all sounds and the paths they're located at
@@ -193,7 +193,7 @@ def get_aliases(sound_name: str) -> list[str]:
 
     return sorted(alias_list)
 
-def add_sound_alias(new_alias, sound_name) -> str:
+def add_sound_alias(new_alias: str, sound_name:str) -> str:
     # Get the list of all sounds
     sound_dict = get_sound_dict()
 
@@ -237,7 +237,7 @@ def search_sounds(search_string: str) -> list[str]:
 
     search_results: list[str] = []
     for sound_name in get_sound_list():
-        for alias in [sound_name] + get_aliases(sound_name):
+        for alias in [sound_name, *get_aliases(sound_name)]:
             if search_string in alias:
                 search_results.append(alias)
                 break
@@ -257,7 +257,7 @@ def search_sounds(search_string: str) -> list[str]:
 
     return sorted(search_results)
 
-def verify_aliases():
+def verify_aliases() -> Generator[str]:
     alias_dict = get_alias_dict()
     sound_list = get_sound_list()
 

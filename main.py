@@ -50,8 +50,8 @@ def init_logging() -> None:
     logging.getLogger("discord").setLevel(logging.WARNING)
 
     # Hook unhandled exceptions
-    def log_exceptions(exc_type, exc_value, exc_traceback) -> None: # noqa: ANN001, ARG001
-        logger.error("Unhandled exception")
+    def log_exceptions(exc_type, exc_value, exc_traceback) -> None: # noqa: ANN001
+        logger.opt(exception=(exc_type, exc_value, exc_traceback)).error("Unhandled exception")
 
     sys.excepthook = log_exceptions
 
