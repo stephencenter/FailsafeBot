@@ -3,7 +3,7 @@ import random
 import discord
 import yt_dlp
 import settings
-import helpers
+import common
 from strsimpy import Damerau
 
 SOUNDS_PATH = "Sounds"
@@ -71,14 +71,14 @@ def get_sound_dict() -> dict[str, str]:
 def get_alias_dict() -> dict[str, str]:
     # Load a dictionary where the keys are aliases, and the values are the
     # sounds those aliases correspond to
-    return helpers.try_read_json(ALIAS_PATH, dict())
+    return common.try_read_json(ALIAS_PATH, dict())
 
 def get_playcount_dict() -> dict[str, int]:
     # Retrieve the sound and alias dictionaries
     sound_list = get_sound_list()
     alias_dict = get_alias_dict()
 
-    playcount_dict = helpers.try_read_json(PLAYCOUNTS_PATH, {x: 0 for x in sound_list})
+    playcount_dict = common.try_read_json(PLAYCOUNTS_PATH, {x: 0 for x in sound_list})
 
     # This variable makes note of whether a correction was made to the playcounts dictionary
     changed = False
@@ -107,7 +107,7 @@ def get_playcount_dict() -> dict[str, int]:
     # If the playcount dictionary had to be corrected, then we write the corrected
     # dictionary to a file
     if changed:
-        helpers.write_json_to_file(PLAYCOUNTS_PATH, playcount_dict)
+        common.write_json_to_file(PLAYCOUNTS_PATH, playcount_dict)
 
     return playcount_dict
 
@@ -119,7 +119,7 @@ async def increment_playcount(sound_name: str) -> None:
     except KeyError:
         play_counts[sound_name] = 1
 
-    helpers.write_json_to_file(PLAYCOUNTS_PATH, play_counts)
+    common.write_json_to_file(PLAYCOUNTS_PATH, play_counts)
 
 def sound_exists(sound_name: str) -> bool:
     if sound_name in get_sound_dict():
@@ -170,7 +170,7 @@ def get_sound_list_txt() -> tuple[str, int]:
     count = len(sound_list)
     temp_path = 'Data/soundlist.txt'
 
-    helpers.write_lines_to_file(temp_path, sound_list)
+    common.write_lines_to_file(temp_path, sound_list)
 
     return temp_path, count
 
@@ -214,7 +214,7 @@ def add_sound_alias(new_alias, sound_name) -> str:
             return f"'{sound_name}' is not an existing sound or alias"
 
     alias_dict[new_alias] = sound_name
-    helpers.write_json_to_file(ALIAS_PATH, alias_dict)
+    common.write_json_to_file(ALIAS_PATH, alias_dict)
 
     return f"'{new_alias}' has been added as an alias for '{sound_name}'"
 
@@ -228,7 +228,7 @@ async def del_sound_alias(alias_to_delete: str) -> str:
     except KeyError:
         return f"{alias_to_delete} isn't an alias for anything"
 
-    helpers.write_json_to_file(ALIAS_PATH, alias_dict)
+    common.write_json_to_file(ALIAS_PATH, alias_dict)
 
     return f"'{alias_to_delete}' is no longer an alias for '{prev_sound}'"
 

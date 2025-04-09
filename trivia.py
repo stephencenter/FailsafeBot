@@ -3,7 +3,7 @@ import requests
 from unidecode import unidecode
 from html import unescape
 from loguru import logger
-import helpers
+import common
 
 TRIVIA_URL = "https://opentdb.com/api.php?amount="
 TRIVIA_POINTS_PATH = "Data/trivia_points.json"
@@ -55,7 +55,7 @@ Type /guess [your answer] to answer!
 
         return question_string
 
-    def score_question(self, was_correct: bool, context, update=None) -> int:
+    def score_question(self, chat_command, *, was_correct: bool, ) -> int:
         global current_question
 
         points_gained = 0
@@ -72,15 +72,15 @@ Type /guess [your answer] to answer!
             current_question = None
 
         if points_gained > 0:
-            points_dict = helpers.try_read_json(TRIVIA_POINTS_PATH, dict())
-            player_name = helpers.get_sender(context, update)
+            points_dict = common.try_read_json(TRIVIA_POINTS_PATH, dict())
+            player_name = chat_command.get_sender()
 
             try:
                 points_dict[player_name] += points_gained
             except KeyError:
                 points_dict[player_name] = points_gained
 
-            helpers.write_json_to_file(TRIVIA_POINTS_PATH, points_dict)
+            common.write_json_to_file(TRIVIA_POINTS_PATH, points_dict)
 
         return points_gained
 
@@ -137,7 +137,7 @@ def get_trivia_question() -> TriviaQuestion:
         previous_questions = previous_questions[size - TRIVIA_MEMORY_SIZE:]
 
     # Keep track of which trivia questions have already been asked recently
-    helpers.write_lines_to_file(TRIVIA_MEMORY_PATH, previous_questions)
+    common.write_lines_to_file(TRIVIA_MEMORY_PATH, previous_questions)
 
     current_question = TriviaQuestion(chosen)
 

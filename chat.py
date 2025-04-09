@@ -1,8 +1,10 @@
-import numpy
+import numpy as np
 from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam
+
+import common
 import settings
-import helpers
+from common import ChatCommand
 
 OPENAI_KEY_PATH = "Data/openai_key.txt"
 ELEVENLABS_KEY_PATH = "Data/eleven_key.txt"
@@ -17,7 +19,7 @@ def generate_markov_text() -> str:
     if config.main.minmarkov > config.main.maxmarkov:
         raise ValueError("Markov minimum length cannot be greater than maximum length (config issue)")
 
-    markov_chain = helpers.try_read_json(MARKOV_PATH, dict())
+    markov_chain = common.try_read_json(MARKOV_PATH, {})
 
     if not markov_chain:
         return "No markov chain data was found!"
@@ -30,7 +32,7 @@ def generate_markov_text() -> str:
         else:
             prev_token = chosen_tokens[-1]
 
-        new_token = numpy.random.choice(list(markov_chain[prev_token].keys()), 1, p=list(markov_chain[prev_token].values()))[0]
+        new_token = np.random.choice(list(markov_chain[prev_token].keys()), 1, p=list(markov_chain[prev_token].values()))[0]
 
         if new_token == null_token:
             if len(chosen_tokens) < config.main.minmarkov:
@@ -46,7 +48,7 @@ def generate_markov_text() -> str:
     output_message = output_message[0].upper() + output_message[1:]
     return output_message
 
-def get_gpt_response(user_message: str) -> str:
+def get_gpt_response(chat_command: ChatCommand) -> str:
     config = settings.Config()
 
     # Load and set the OpenAI API key
@@ -60,8 +62,11 @@ def get_gpt_response(user_message: str) -> str:
         system_prompt = ''.join(f.readlines())
 
     prepend_message = ''
-    with open(PREPEND_PATH, encoding='utf-8') as f:
-        prepend_message = ''.join(f.readlines())
+    try:
+        with open(PREPEND_PATH, encoding='utf-8') as f:
+            prepend_message = ''.join(f.readlines())
+    except FileNotFoundError:
+        pass
 
     # Load the current conversation so far
     loaded_memory: list[ChatCompletionMessageParam] = load_memory()
@@ -75,7 +80,9 @@ def get_gpt_response(user_message: str) -> str:
         messages.append({"role": "assistant", "content": prepend_message})
 
     messages += loaded_memory
-    messages.append({"role": "user", "content": user_message})
+
+    user_prompt = chat_command.get_user_prompt()
+    messages.append({"role": "user", "content": user_prompt})
 
     gpt_completion= openai_client.chat.completions.create(
         messages=messages,
@@ -95,18 +102,12 @@ def get_gpt_response(user_message: str) -> str:
 
     return response
 
-def generate_user_prompt(user_message: str, context, update=None) -> str:
-    sender = helpers.get_sender(context, update, map_name=True)
-    user_prompt = f'{sender}: {user_message}'
-
-    return user_prompt
-
 def load_memory() -> list[ChatCompletionMessageParam]:
     # Load the AI's memory (if it exists)
     config = settings.Config()
 
     if config.main.usememory:
-        return helpers.try_read_json(MEMORY_PATH, [])
+        return common.try_read_json(MEMORY_PATH, [])
 
     return []
 
@@ -129,4 +130,4 @@ def append_to_memory(user_prompt: str = '', bot_prompt: str = '') -> None:
         memory = memory[size - config.main.memorysize:]
 
     # Write the AI's memory to a file so it can be retrieved later
-    helpers.write_json_to_file(MEMORY_PATH, memory)
+    common.write_json_to_file(MEMORY_PATH, memory)

@@ -1,3 +1,11 @@
+"""
+This file will create a markov chain from a telegram chat log (.json format)
+It works, but it is ugly and could be improved in a number of ways
+This is provided with the source because otherwise the markov text generator is essentially
+unusable, but if you want to incorporate this into your project it's recommended that you
+rewrite this file
+"""
+
 import os
 import json
 from tqdm import tqdm
@@ -53,9 +61,6 @@ def load_chat_logs() -> list[str]:
                 text = entity["text"].strip()
 
                 if not text:
-                    continue
-
-                if "in the middle of our goblin" in text.lower():
                     continue
 
                 if any(x in text.lower() for x in ["https", "www.", ".com"]):
