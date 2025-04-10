@@ -1,4 +1,5 @@
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
 
 import toml
@@ -43,7 +44,7 @@ class Config:
 
     def __post_init__(self):
         try:
-            with open(CONFIG_PATH, encoding='utf-8') as f:
+            with Path(CONFIG_PATH).open(encoding='utf-8') as f:
                 loaded = toml.load(f)
 
         except FileNotFoundError:
@@ -52,6 +53,7 @@ class Config:
         for key in loaded:
             for subkey in loaded[key]:
                 if key not in self.__dict__:
+                    # Remove settings that don't exist anymore
                     continue
                 self.__dict__[key].__dict__[subkey] = loaded[key][subkey]
 
@@ -82,7 +84,7 @@ class Config:
         return group_name, setting_name, value
 
 def save_config(config: Config) -> None:
-    with open(CONFIG_PATH, mode='w', encoding='utf-8') as f:
+    with Path(CONFIG_PATH).open(mode='w', encoding='utf-8') as f:
         toml.dump(asdict(config), f)
 
 def parse_value_input(value: str) -> int | float | bool | str:

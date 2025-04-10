@@ -39,7 +39,7 @@ class YTDLStream(discord.PCMVolumeTransformer):
         'quiet': True,
         'no_warnings': True,
         'default_search': 'auto',
-        'source_address': '0.0.0.0',
+        'source_address': '0.0.0.0'
     })
 
     def __init__(self, stream_url: str):

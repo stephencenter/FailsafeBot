@@ -1,3 +1,4 @@
+import asyncio
 import contextlib
 import io
 import os
@@ -5,7 +6,6 @@ import random
 import sys
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from subprocess import PIPE, STDOUT, Popen
 
 import discord
 import psutil
@@ -905,7 +905,7 @@ async def test_command(_: UserCommand) -> CommandResponse:
     # This command is for verifying that the bot is online and receiving commands.
     # You can also supply it with a list of responses and it will pick a random one
     # I think of this as similar to how RTS units say things when you click them
-    response_list = common.try_read_lines(common.RESPONSES_PATH, [])
+    response_list = common.try_read_lines_list(common.RESPONSES_PATH, [])
     response_list = [line for line in response_list if not line.isspace() and not line.startswith("#")]
 
     if not response_list:
@@ -960,13 +960,20 @@ async def terminal_command(user_command: UserCommand) -> CommandResponse:
     if not command_string:
         return CommandResponse("Can you run a command in your terminal?", "What command do you want me to run?")
 
-    with Popen(command_string, stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=True) as process:
-        # If asked a y/n question, automatically respond with y
-        config = settings.Config()
-        if config.main.cmdautoyes and process.stdin is not None:
-            process.stdin.write(b'y')
+    process = await asyncio.create_subprocess_shell(
+        command_string,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
 
-        stdout = process.communicate()[0]
+    config = settings.Config()
+    if config.main.cmdautoyes and process.stdin is not None:
+        # Write 'y' and optionally flush stdin
+        process.stdin.write(b'y\n')
+        await process.stdin.drain()
+
+    stdout, _ = await process.communicate()
 
     user_message = f"Can you run this command: {command_string}"
     if stdout:
@@ -997,7 +1004,7 @@ async def addadmin_command(user_command: UserCommand) -> CommandResponse:
     if user_id is None:
         return CommandResponse(user_message, "Who do you want me to make an admin?")
 
-    admin_list = common.try_read_lines(common.ADMINS_PATH, [])
+    admin_list = common.try_read_lines_list(common.ADMINS_PATH, [])
 
     if user_id in admin_list:
         return CommandResponse(user_message, f"That user ID '{user_id}' is already on the admin list.")
@@ -1017,7 +1024,7 @@ async def deladmin_command(user_command: UserCommand) -> CommandResponse:
     if user_id is None:
         return CommandResponse(user_message, "Who do you want me to remove from the admin list?")
 
-    admin_list = common.try_read_lines(common.ADMINS_PATH, [])
+    admin_list = common.try_read_lines_list(common.ADMINS_PATH, [])
 
     if user_id not in admin_list:
         return CommandResponse(user_message, f"That user ID '{user_id}' is not on the admin list.")
@@ -1037,7 +1044,7 @@ async def addwhitelist_command(user_command: UserCommand) -> CommandResponse:
     if chat_id is None:
         return CommandResponse(user_message, "What chat ID do you want me to add to the whitelist?")
 
-    whitelist = common.try_read_lines(common.TELEGRAM_WHITELIST_PATH, [])
+    whitelist = common.try_read_lines_list(common.TELEGRAM_WHITELIST_PATH, [])
 
     if chat_id in whitelist:
         return CommandResponse(user_message, f"The chat ID '{chat_id}' is already on the whitelist.")
@@ -1057,7 +1064,7 @@ async def delwhitelist_command(user_command: UserCommand) -> CommandResponse:
     if chat_id is None:
         return CommandResponse(user_message, "What chat ID do you want me to remove from the whitelist?")
 
-    whitelist = common.try_read_lines(common.TELEGRAM_WHITELIST_PATH, [])
+    whitelist = common.try_read_lines_list(common.TELEGRAM_WHITELIST_PATH, [])
 
     if chat_id not in whitelist:
         return CommandResponse(user_message, f"The chat ID '{chat_id}' is not on the whitelist.")

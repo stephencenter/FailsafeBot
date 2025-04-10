@@ -164,9 +164,9 @@ class UserCommand:
 
     def get_user_prompt(self) -> str:
         sender = self.get_author(map_name=True)
-        user_prompt = f'{sender}: {self.get_user_message()}'
+        user_message = self.get_user_message()
 
-        return user_prompt
+        return f'{sender}: {user_message}'
 
     def is_admin(self) -> bool:
         # Returns whether the message sender is on the bot's admin list
@@ -174,7 +174,7 @@ class UserCommand:
             return True
 
         user_id = self.get_author_id()
-        admin_list = try_read_lines(ADMINS_PATH, [])
+        admin_list = try_read_lines_list(ADMINS_PATH, [])
 
         return user_id in admin_list
 
@@ -188,7 +188,7 @@ class UserCommand:
                 return False
 
             chat_id = str(self.update.message.chat.id)
-            whitelist = try_read_lines(TELEGRAM_WHITELIST_PATH, [])
+            whitelist = try_read_lines_list(TELEGRAM_WHITELIST_PATH, [])
 
             return chat_id in whitelist
 
@@ -275,31 +275,38 @@ class UserCommand:
 
 def try_read_json(path: str | Path, default: T) -> T:
     try:
-        with open(path, encoding='utf-8') as f:
+        with Path(path).open(encoding='utf-8') as f:
             return json.load(f)
     except (OSError, json.JSONDecodeError):
         return default
 
-def try_read_lines(path: str | Path, default: T) -> list | T:
+def try_read_lines_list(path: str | Path, default: T) -> list | T:
     try:
-        with open(path, encoding='utf-8') as f:
+        with Path(path).open(encoding='utf-8') as f:
             return [x.strip() for x in f]
+    except OSError:
+        return default
+
+def try_read_lines_str(path: str | Path, default: T) -> str | T:
+    try:
+        with Path(path).open(encoding='utf-8') as f:
+            return ''.join(f.readlines())
     except OSError:
         return default
 
 def try_read_single_line(path: str | Path, default: T) -> str | T:
     try:
-        with open(path, encoding='utf-8') as f:
+        with Path(path).open(encoding='utf-8') as f:
             return f.readline().strip()
     except OSError:
         return default
 
 def write_json_to_file(path: str | Path, data: Iterable) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as f:
+    with Path(path).open('w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
 
 def write_lines_to_file(path: str | Path, lines: list) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as f:
+    with Path(path).open('w', encoding='utf-8') as f:
         f.writelines(f"{x}\n" for x in lines)

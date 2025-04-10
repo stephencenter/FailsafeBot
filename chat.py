@@ -59,33 +59,21 @@ def get_gpt_response(user_command: UserCommand) -> str:
     config = settings.Config()
 
     # Load and set the OpenAI API key
-    with open(OPENAI_KEY_PATH, encoding='utf-8') as f:
-        openai_api_key = f.readline().strip()
-
+    openai_api_key = common.try_read_single_line(OPENAI_KEY_PATH, None)
     openai_client = OpenAI(api_key=openai_api_key)
 
-    # Load the system prompt
-    with open(GPT_PROMPT_PATH, encoding='utf-8') as f:
-        system_prompt = ''.join(f.readlines())
-
-    prepend_message = ''
-    try:
-        with open(PREPEND_PATH, encoding='utf-8') as f:
-            prepend_message = ''.join(f.readlines())
-    except FileNotFoundError:
-        pass
-
-    # Load the current conversation so far
-    loaded_memory: list[dict] = load_memory()
-
-    # Place the system prompt before the loaded memory to instruct the AI how to act
+    # Load and place the system prompt before the loaded memory to instruct the AI how to act
+    system_prompt = common.try_read_lines_str(GPT_PROMPT_PATH, None)
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
 
     # Place an assistant message after the system prompt but before the loaded memory
     # This is useful specifically with fine-tuned models to set the tone for the bot's responses
-    if prepend_message:
+    prepend_message = common.try_read_lines_str(PREPEND_PATH, None)
+    if prepend_message is not None:
         messages.append({"role": "assistant", "content": prepend_message})
 
+    # Load the current conversation so far and add it to the end of the message history
+    loaded_memory: list[dict] = load_memory()
     messages += loaded_memory
 
     user_prompt = user_command.get_user_prompt()

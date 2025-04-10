@@ -117,11 +117,7 @@ def get_trivia_question() -> TriviaQuestion:
 
     # Check the list of the most recently asked trivia questions and attempt to pick a
     # question that isn't on the list
-    try:
-        with open(TRIVIA_MEMORY_PATH, encoding='utf-8') as f:
-            previous_questions = [x.strip() for x in f]
-    except FileNotFoundError:
-        previous_questions = []
+    previous_questions = common.try_read_lines_list(TRIVIA_MEMORY_PATH, [])
 
     # We ask the trivia API for a few trivia questions and pick the first one that isn't
     # in the trivia memory
