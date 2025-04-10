@@ -51,6 +51,8 @@ class Config:
 
         for key in loaded:
             for subkey in loaded[key]:
+                if key not in self.__dict__:
+                    continue
                 self.__dict__[key].__dict__[subkey] = loaded[key][subkey]
 
     def find_setting(self, search_string: str) -> tuple[str | None, str | None, Any]:

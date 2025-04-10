@@ -1,21 +1,20 @@
 import contextlib
-import datetime
+import io
 import os
 import random
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from subprocess import PIPE, STDOUT, Popen
 
 import discord
-import elevenlabs
 import psutil
 from discord.errors import HTTPException
 from discord.ext import commands as discord_commands
 from discord.ext.commands import Bot as DiscordBot
 from discord.ext.commands import CommandInvokeError
 from discord.ext.commands import Context as DiscordContext
-from elevenlabs.client import ElevenLabs
+from elevenlabs.core.api_error import ApiError as ElevenLabsApiError
 from loguru import logger
 from telegram import Update as TelegramUpdate
 from telegram.error import BadRequest, NetworkError, TimedOut
@@ -30,12 +29,12 @@ import settings
 import sound_manager
 import trivia
 from common import (
-    UserCommand,
     CommandResponse,
     FileResponse,
     NoPermissionsResponse,
     NoResponse,
     SoundResponse,
+    UserCommand,
 )
 
 
@@ -395,47 +394,26 @@ async def say_command(user_command: UserCommand) -> CommandResponse:
     # Say whatever string the user provided. If the user didn't provide a string, say the
     # most recent thing the bot said in memory
     if not text_prompt:
-        try:
-            text_prompt = chat.load_memory()[-1]['content']
-        except (IndexError, KeyError):
-            return CommandResponse("Can you say that last thing you said out loud?", "My memory unit appears to be malfuncitoning.")
+        text_prompt = chat.get_most_recent_bot_message()
 
+    if text_prompt is None:
+        return CommandResponse("Can you say that last thing you said out loud?", "My memory unit appears to be malfuncitoning.")
 
-    config = settings.Config()
-
-    # Hard cap cuts off the text abruptly, to keep costs down (longer strings = more elevenlabs credits)
-    text_prompt = text_prompt[:min(len(text_prompt), config.main.sayhardcap)]
-
-    # Soft cap cuts off the text gently, only at certain punctuation marks
-    for index, char in enumerate(text_prompt):
-        if index >= config.main.saysoftcap and char in ('.', '?', '!'):
-            text_prompt = text_prompt[:index]
-            break
-
-    # Get elevenlabs key from file
-    elevenlabs_key = common.try_read_single_line(common.ELEVENLABS_KEY_PATH, None)
-    if elevenlabs_key is None:
-        raise ValueError("Couldn't retrieve elevenlabs key!")
-
-    elevenlabs_client = ElevenLabs(api_key=elevenlabs_key)
+    text_prompt = chat.cap_elevenlabs_prompt(text_prompt)
     user_message = f"Can you say this for me: {text_prompt}"
 
-    # Get text-to-speech response from elevenlabs
     try:
-        audio = elevenlabs_client.text_to_speech.convert(
-            text=text_prompt,
-            voice_id=config.main.sayvoiceid,
-            model_id=config.main.saymodelid
-        )
-    except elevenlabs.core.api_error.ApiError:
-        return CommandResponse(user_message, "Sorry, but someone was a cheap bastard and didn't renew their elevenlabs subscription.")
+        elevenlabs_response = chat.get_elevenlabs_response(text_prompt, save_to_file=True)
+    except ElevenLabsApiError as e:
+        error_response = chat.handle_elevenlabs_error(e)
+        return CommandResponse(user_message, error_response)
+    except ValueError:
+        return CommandResponse(user_message, "Failed to retrieve ElevenLabs key from file.")
 
-    # Save sound to temp file
-    temp_path = Path(common.TEMP_FOLDER_PATH) / f"{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.mp3"
-    Path(common.TEMP_FOLDER_PATH).mkdir(parents=True, exist_ok=True)
-    elevenlabs.save(audio, str(temp_path))
+    if not isinstance(elevenlabs_response, Path | str):
+        raise NotImplementedError
 
-    return SoundResponse(user_message, "Fine, I'll say your stupid phrase.", temp_path, temp=True)
+    return SoundResponse(user_message, "Fine, I'll say your stupid phrase.", elevenlabs_response, temp=True)
 #endregion
 
 # ==========================
@@ -602,7 +580,54 @@ async def vcleave_command(user_command: UserCommand) -> CommandResponse:
     return CommandResponse(user_message, "If you insist", send_to_chat=False)
 
 async def vcsay_command(user_command: UserCommand) -> CommandResponse:
-    pass
+    # AI text-to-speech powered by elevenlabs
+    user_message = "Hey, can you say that in the voice channel?"
+
+    if not user_command.is_discord():
+        return CommandResponse(user_message, "That's Discord only, sorry")
+
+    bot_voice_client = user_command.get_bot_voice_client()
+
+    if bot_voice_client is None:
+        return CommandResponse(user_message, "I'm not in a voice channel!")
+
+    text_prompt = user_command.get_user_message()
+
+    # Say whatever string the user provided. If the user didn't provide a string, say the
+    # most recent thing the bot said in memory
+    if not text_prompt:
+        text_prompt = chat.get_most_recent_bot_message()
+
+    if text_prompt is None:
+        return CommandResponse("Can you say that last thing you said out loud?", "My memory unit appears to be malfuncitoning.")
+
+    text_prompt = chat.cap_elevenlabs_prompt(text_prompt)
+    user_message = f"Can you say this for me in the voice channel: {text_prompt}"
+
+    try:
+        elevenlabs_response = chat.get_elevenlabs_response(text_prompt, save_to_file=True)
+    except ElevenLabsApiError as e:
+        error_response = chat.handle_elevenlabs_error(e)
+        return CommandResponse(user_message, error_response)
+    except ValueError:
+        return CommandResponse(user_message, "Failed to retrieve ElevenLabs key from file.")
+
+    if not isinstance(elevenlabs_response, Iterator):
+        raise NotImplementedError
+
+    audio_buffer = io.BytesIO()
+    for chunk in elevenlabs_response:
+        audio_buffer.write(chunk)
+    audio_buffer.seek(0)
+
+    # Stop the voice client if it's already playing a sound or stream
+    if bot_voice_client.is_playing():
+        bot_voice_client.stop()
+
+    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(audio_buffer, pipe=True))
+    bot_voice_client.play(source, after=lambda e: logger.error(e) if e else None)
+
+    return CommandResponse(user_message, "Fine, I'll say your stupid phrase.", send_to_chat=False)
 #endregion
 
 # ==========================

@@ -1,4 +1,12 @@
+import datetime
+from collections.abc import Iterator
+from pathlib import Path
+
+import elevenlabs
 import numpy as np
+from elevenlabs.client import ElevenLabs
+from elevenlabs.core.api_error import ApiError as ElevenLabsApiError
+from loguru import logger
 from openai import OpenAI
 
 import common
@@ -130,3 +138,71 @@ def append_to_memory(user_prompt: str = '', bot_prompt: str = '') -> None:
 
     # Write the AI's memory to a file so it can be retrieved later
     common.write_json_to_file(MEMORY_PATH, memory)
+
+def get_most_recent_bot_message() -> str | None:
+    memory_list: list[dict] = load_memory()
+
+    for memory in memory_list[::-1]:
+        if memory["role"] == "assistant":
+            return memory["content"]
+
+    return None
+
+def get_elevenlabs_response(input_text: str, *, save_to_file: bool = False) -> Path | Iterator[bytes]:
+    # Get elevenlabs key from file
+    elevenlabs_key = common.try_read_single_line(common.ELEVENLABS_KEY_PATH, None)
+    if elevenlabs_key is None:
+        raise ValueError("Couldn't retrieve elevenlabs key!")
+
+    config = settings.Config()
+    elevenlabs_client = ElevenLabs(api_key=elevenlabs_key)
+
+    # Get text-to-speech response from elevenlabs
+    audio = elevenlabs_client.text_to_speech.convert(
+        text=input_text,
+        voice_id=config.main.sayvoiceid,
+        model_id=config.main.saymodelid
+    )
+
+    # Save sound to temp file
+    if save_to_file:
+        temp_path = Path(common.TEMP_FOLDER_PATH) / f"{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.mp3"
+        Path(common.TEMP_FOLDER_PATH).mkdir(parents=True, exist_ok=True)
+        elevenlabs.save(audio, str(temp_path))
+        return temp_path
+
+    return audio
+
+def cap_elevenlabs_prompt(text_prompt: str) -> str:
+    config = settings.Config()
+
+    # Hard cap cuts off the text abruptly, to keep costs down (longer strings = more elevenlabs credits)
+    text_prompt = text_prompt[:min(len(text_prompt), config.main.sayhardcap)]
+
+    # Soft cap cuts off the text gently, only at certain punctuation marks
+    for index, char in enumerate(text_prompt):
+        if index >= config.main.saysoftcap and char in ('.', '?', '!'):
+            text_prompt = text_prompt[:index]
+            break
+
+    return text_prompt
+
+def handle_elevenlabs_error(error: ElevenLabsApiError) -> str:
+    status = error.body['detail']['status']
+    config = settings.Config()
+
+    error_map = {
+        'max_character_limit_exceeded': "Text input has too many characters for ElevenLabs text-to-speech (max is ~10k)",
+        'invalid_api_key': f"ElevenLabs API Key in '{common.ELEVENLABS_KEY_PATH}' is invalid!",
+        'voice_not_found': f"ElevenLabs Voice ID '{config.main.sayvoiceid}' is invalid!",
+        'model_not_found': f"ElevenLabs Model ID '{config.main.saymodelid}' is invalid!",
+        'quota_exceeded': "ElevenLabs account is out of credits!",
+        'free_users_not_allowed': f"Voice with ID '{config.main.sayvoiceid}' needs an active ElevenLabs subscription to use."
+    }
+
+    try:
+        return error_map[status]
+
+    except KeyError:
+        logger.error(error)
+        return "There was an issue with the ElevenLabs API, try again later."

@@ -1,7 +1,7 @@
 import asyncio
+import contextlib
 import logging
 import sys
-import contextlib
 
 import discord
 from discord.errors import LoginFailure
