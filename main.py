@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+import contextlib
 
 import discord
 from discord.errors import LoginFailure
@@ -130,14 +131,12 @@ async def main() -> None:
     finally:
         if isinstance(discord_bot, DiscordBot):
             # Disconnect from discord voice channels if necessary
-            try:
+            with contextlib.suppress(IndexError):
                 bot_channel = discord_bot.voice_clients[0].channel
-            except IndexError:
-                return
 
-            if isinstance(bot_channel, discord.VoiceChannel):
-                logger.info('Disconnecting from voice channel...')
-                await discord_bot.voice_clients[0].disconnect(force=False)
+                if isinstance(bot_channel, discord.VoiceChannel):
+                    logger.info('Disconnecting from voice channel...')
+                    await discord_bot.voice_clients[0].disconnect(force=False)
 
         logger.info('Exiting...')
 

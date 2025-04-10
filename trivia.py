@@ -57,7 +57,7 @@ Type /guess [your answer] to answer!
 
         return question_string
 
-    def score_question(self, chat_command: common.ChatCommand, *, was_correct: bool) -> int:
+    def score_question(self, user_command: common.UserCommand, *, was_correct: bool) -> int:
         global current_question
 
         points_gained = 0
@@ -75,7 +75,7 @@ Type /guess [your answer] to answer!
 
         if points_gained > 0:
             points_dict = common.try_read_json(TRIVIA_POINTS_PATH, {})
-            player_name = chat_command.get_sender()
+            player_name = user_command.get_author()
 
             try:
                 points_dict[player_name] += points_gained
@@ -90,7 +90,7 @@ Type /guess [your answer] to answer!
         alphabet = 'abcdefghijklmnopqrstuvwxyz'  # Shouldn't need more than 4 letters
         for index, answer in enumerate(self.answer_list):
             if guess.lower() == answer.lower():
-               return alphabet[index]
+                return alphabet[index]
 
         return None
 

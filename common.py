@@ -11,7 +11,6 @@ from telegram import Update as TelegramUpdate
 from telegram.ext import Application as TelegramBot
 from telegram.ext import CallbackContext as TelegramContext
 
-import common
 import settings
 
 APPLICATION_NAME = 'FailsafeBot'
@@ -35,13 +34,13 @@ class CommandResponse:
         self.send_to_chat: bool = send_to_chat  # Whether bot_message should be sent to chat
 
 class FileResponse(CommandResponse):
-    def __init__(self, user_message: str, bot_message: str, file_path: str, *, record_to_memory: bool = True, temp: bool = False):
+    def __init__(self, user_message: str, bot_message: str, file_path: str | Path, *, record_to_memory: bool = True, temp: bool = False):
         super().__init__(user_message, bot_message, record_to_memory=record_to_memory, send_to_chat=False)
-        self.file_path: str = file_path  # The path of the file to send
+        self.file_path: str | Path = file_path  # The path of the file to send
         self.temp: bool = temp  # Whether the file should be deleted after being sent
 
 class SoundResponse(FileResponse):
-    def __init__(self, user_message: str, bot_message: str, file_path: str, *, record_to_memory: bool = True, temp: bool = False):
+    def __init__(self, user_message: str, bot_message: str, file_path: str | Path, *, record_to_memory: bool = True, temp: bool = False):
         super().__init__(user_message, bot_message, file_path, record_to_memory=record_to_memory, temp=temp)
 
 class NoPermissionsResponse(CommandResponse):
@@ -56,7 +55,7 @@ class NoResponse(CommandResponse):
     def __init__(self):
         super().__init__('', '', record_to_memory=False, send_to_chat=False)
 
-class ChatCommand:
+class UserCommand:
     def __init__(self, target_bot: TelegramBot | DiscordBot, context: TelegramContext | DiscordContext, update: TelegramUpdate | None = None):
         if isinstance(target_bot, TelegramBot) and update is None:
             raise ValueError("Update cannot be None when sending message to telegram bot")
@@ -175,7 +174,7 @@ class ChatCommand:
             return True
 
         user_id = self.get_author_id()
-        admin_list = common.try_read_lines(ADMINS_PATH, [])
+        admin_list = try_read_lines(ADMINS_PATH, [])
 
         return user_id in admin_list
 
@@ -185,8 +184,11 @@ class ChatCommand:
             return True
 
         if isinstance(self.update, TelegramUpdate):
+            if self.update.message is None:
+                return False
+
             chat_id = str(self.update.message.chat.id)
-            whitelist = common.try_read_lines(TELEGRAM_WHITELIST_PATH, [])
+            whitelist = try_read_lines(TELEGRAM_WHITELIST_PATH, [])
 
             return chat_id in whitelist
 
@@ -262,7 +264,7 @@ class ChatCommand:
         return self.context.voice_client
 
     def map_username(self, username: str) -> str:
-        username_map = common.try_read_json(USERNAME_MAP_PATH, {})
+        username_map = try_read_json(USERNAME_MAP_PATH, {})
 
         try:
             corrected_name = username_map[username.lower()]
@@ -271,33 +273,33 @@ class ChatCommand:
 
         return corrected_name
 
-def try_read_json(path: str, default: T) -> T:
+def try_read_json(path: str | Path, default: T) -> T:
     try:
         with open(path, encoding='utf-8') as f:
             return json.load(f)
     except (OSError, json.JSONDecodeError):
         return default
 
-def try_read_lines(path: str, default: T) -> list | T:
+def try_read_lines(path: str | Path, default: T) -> list | T:
     try:
         with open(path, encoding='utf-8') as f:
             return [x.strip() for x in f]
     except OSError:
         return default
 
-def try_read_single_line(path: str, default: T) -> str | T:
+def try_read_single_line(path: str | Path, default: T) -> str | T:
     try:
         with open(path, encoding='utf-8') as f:
             return f.readline().strip()
     except OSError:
         return default
 
-def write_json_to_file(path: str, data: Iterable) -> None:
+def write_json_to_file(path: str | Path, data: Iterable) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
 
-def write_lines_to_file(path: str, lines: list) -> None:
+def write_lines_to_file(path: str | Path, lines: list) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, 'w', encoding='utf-8') as f:
         f.writelines(f"{x}\n" for x in lines)

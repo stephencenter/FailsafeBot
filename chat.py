@@ -1,10 +1,9 @@
 import numpy as np
 from openai import OpenAI
-from openai.types.chat import ChatCompletionMessageParam
 
 import common
 import settings
-from common import ChatCommand
+from common import UserCommand
 
 OPENAI_KEY_PATH = "Data/openai_key.txt"
 ELEVENLABS_KEY_PATH = "Data/eleven_key.txt"
@@ -48,7 +47,7 @@ def generate_markov_text() -> str:
     output_message = output_message[0].upper() + output_message[1:]
     return output_message
 
-def get_gpt_response(chat_command: ChatCommand) -> str:
+def get_gpt_response(user_command: UserCommand) -> str:
     config = settings.Config()
 
     # Load and set the OpenAI API key
@@ -69,10 +68,10 @@ def get_gpt_response(chat_command: ChatCommand) -> str:
         pass
 
     # Load the current conversation so far
-    loaded_memory: list[ChatCompletionMessageParam] = load_memory()
+    loaded_memory: list[dict] = load_memory()
 
     # Place the system prompt before the loaded memory to instruct the AI how to act
-    messages: list[ChatCompletionMessageParam] = [{"role": "system", "content": system_prompt}]
+    messages: list[dict] = [{"role": "system", "content": system_prompt}]
 
     # Place an assistant message after the system prompt but before the loaded memory
     # This is useful specifically with fine-tuned models to set the tone for the bot's responses
@@ -81,11 +80,11 @@ def get_gpt_response(chat_command: ChatCommand) -> str:
 
     messages += loaded_memory
 
-    user_prompt = chat_command.get_user_prompt()
+    user_prompt = user_command.get_user_prompt()
     messages.append({"role": "user", "content": user_prompt})
 
     gpt_completion= openai_client.chat.completions.create(
-        messages=messages,
+        messages=messages, # type: ignore
         model=config.main.gptmodel,
         temperature=config.main.gpttemp,
         max_completion_tokens=config.main.gptmaxtokens
@@ -102,7 +101,7 @@ def get_gpt_response(chat_command: ChatCommand) -> str:
 
     return response
 
-def load_memory() -> list[ChatCompletionMessageParam]:
+def load_memory() -> list[dict]:
     # Load the AI's memory (if it exists)
     config = settings.Config()
 
