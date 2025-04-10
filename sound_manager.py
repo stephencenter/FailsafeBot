@@ -165,10 +165,10 @@ def get_random_sound() -> tuple[str, str]:
 def get_sound_list() -> list[str]:
     return sorted(get_sound_dict().keys())
 
-def get_sound_list_txt() -> tuple[str, int]:
+def get_sound_list_txt() -> tuple[Path, int]:
     sound_list = get_sound_list()
     count = len(sound_list)
-    temp_path = 'Data/soundlist.txt'
+    temp_path = Path(common.TEMP_FOLDER_PATH) / 'soundlist.txt'
 
     common.write_lines_to_file(temp_path, sound_list)
 
