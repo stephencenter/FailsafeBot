@@ -2,7 +2,6 @@ import random
 from collections.abc import Generator
 from pathlib import Path
 
-import discord
 import yt_dlp
 from strsimpy import Damerau
 
@@ -27,34 +26,78 @@ TXT_SOUND_NOT_FOUND = (
     "No dice. Someone probably forgot to upload it, what a fool."
 )
 
-class YTDLStream(discord.PCMVolumeTransformer):
-    ytdl = yt_dlp.YoutubeDL({
+class SilenceYTDL:
+    # This is disgusting but I don't know how else to stop YTDL from printing stuff to console
+    # when provided with bad URLs
+    def debug(self) -> None: pass
+    def info(self) -> None: pass
+    def warning(self) -> None: pass
+    def error(self) -> None: pass
+
+def stream_audio_from_url(url: str) -> dict | None:
+    ytdl_parameters = {
         'format': 'bestaudio/best',
-        'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
-        'restrictfilenames': True,
-        'noplaylist': True,
-        'nocheckcertificate': True,
-        'ignoreerrors': False,
-        'logtostderr': False,
+        'prefer_ffmpeg': True,
+        'ffmpeg_location': './ffmpeg.exe',
         'quiet': True,
         'no_warnings': True,
         'default_search': 'auto',
-        'source_address': '0.0.0.0'
-    })
+        'logger': SilenceYTDL
+    }
 
-    def __init__(self, stream_url: str):
-        data = self.ytdl.extract_info(stream_url, download=settings.Config().main.ytdldownload)
+    with yt_dlp.YoutubeDL(ytdl_parameters) as ytdl:
+        data = ytdl.extract_info(url, download=False)
 
         if data is None:
-            return
+            return None
 
         # If a playlist was provided, take the first entry
         if 'entries' in data:
-            data = data['entries'][0]
+            if data['entries']:
+                data = data['entries'][0]
+            else:
+                return None
 
-        self.title = data['title']
+        return data
 
-        super().__init__(discord.FFmpegPCMAudio(data['url'], before_options="-vn"), 0.5)
+def download_audio_from_url(url: str) -> Path | None:
+    config = settings.Config()
+    ytdl_parameters = {
+        'format': 'bestaudio/best',
+        'outtmpl': str(Path(common.TEMP_FOLDER_PATH) / '%(title)s.%(ext)s'),
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }],
+        'postprocessor_args': [
+            '-ss', '0',
+            '-t', str(config.main.maxstreamtime)
+        ],
+        'prefer_ffmpeg': True,
+        'ffmpeg_location': './ffmpeg.exe',
+        'quiet': True,
+        'no_warnings': True,
+        'default_search': 'auto',
+        'logger': SilenceYTDL
+    }
+
+    with yt_dlp.YoutubeDL(ytdl_parameters) as ytdl:
+        data = ytdl.extract_info(url, download=True)
+
+        if data is None:
+            return None
+
+        # If a playlist was provided, take the first entry
+        if 'entries' in data:
+            if data['entries']:
+                data = data['entries'][0]
+            else:
+                return None
+
+        original_filename = Path(ytdl.prepare_filename(data))
+        final_filename = original_filename.with_suffix('.mp3')
+        return final_filename
 
 def get_sound_dict() -> dict[str, str]:
     # If any .mp3 files are in the main directory, move them to the Sounds directory

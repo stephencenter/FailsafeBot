@@ -17,18 +17,17 @@ class ConfigMain:
     replytomonkey: bool = False  # Whether the bot should play a monkey sound when the word monkey is said (Discworld adventure game reference)
     randreplychance: float = 0.05  # The chance for the bot to randomly reply to any message in a chat they're in (0 = no chance 1 = every message)
     vcautodc: bool = True  # Whether the bot will automatically disconnect if they're the only ones in a voice call
-    ytdldownload: bool = False  # Whether the vcstream command will download the video before playing it
     requireadmin: bool = True  # Whether certain commands require admin rights to perform
     usememory: bool = True  # Whether the bot will use the memory system for AI chatting
     memorysize: int = 24  # Maximum number of messages to record in memory for AI chatting (higher is probably more expensive)
     recordall: bool = False  # Whether the bot wil record ALL messages sent in chat to memory, or just messages directed towards it
     gptmodel: str = "gpt-4o-mini"  # What GPT model to use for AI chatting
     gpttemp: float = 1.0  # Temperature for GPT chat completions (0 to 2, values outside this will break)
-    gptmaxtokens: int = 1024  # Value to be passed for parameter max_completion_tokens for gpt chat completion
+    gptmaxtokens: int = 512  # Value to be passed for parameter max_completion_tokens for gpt chat completion
     maxmessagelength: int = 1024  # Maximum amount of characters to allow in a CommandResponse object's bot_message property
     usewhitelist: bool = False  # Whether a chat needs to be on the whitelist for commands to function
     minmarkov: int = 2  # Minimum number of tokens for the markov chain command /wisdom (higher takes longer exponentially)
-    maxmarkov: int = 255  # Maximum number of tokens for the markov chain command /wisdom
+    maxmarkov: int = 256  # Maximum number of tokens for the markov chain command /wisdom
     usemegabytes: bool = True  # Whether the /system command should use megabytes (will use gigabytes if false)
     cmdautoyes: bool = False  # Whether the /terminal command should automatically say 'y' to y/n questions (prevents hanging)
     minsimilarity: float = 0.75  # The minimum similarity threshold when searching for sound names (1.0 = exact matches only)
@@ -36,6 +35,7 @@ class ConfigMain:
     sayhardcap: int = 256  # The "hard cap" for elevenlabs text-to-speech input length (hard cap breaks no matter what)
     sayvoiceid: str = "XB0fDUnXU5powFXDhCwa"  # The voice to use for elevenlabs (defaults to Charlotte)
     saymodelid: str = "eleven_multilingual_v2"  # The base model to use for elevenlabs
+    maxstreamtime: int = 60  # How much of a video the /stream command will download (does not apply to /vcstream)
 
 
 @dataclass

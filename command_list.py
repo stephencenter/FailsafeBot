@@ -15,12 +15,14 @@ from discord.ext.commands import Bot as DiscordBot
 from discord.ext.commands import CommandInvokeError
 from discord.ext.commands import Context as DiscordContext
 from elevenlabs.core.api_error import ApiError as ElevenLabsApiError
+from httpx import TransportError
 from loguru import logger
 from telegram import Update as TelegramUpdate
 from telegram.error import BadRequest, NetworkError, TimedOut
 from telegram.ext import Application as TelegramBot
 from telegram.ext import CallbackContext as TelegramContext
 from telegram.ext import CommandHandler, MessageHandler, filters
+from yt_dlp.utils import DownloadError as YtdlDownloadError
 
 import chat
 import common
@@ -120,6 +122,7 @@ def register_commands(bot: TelegramBot | DiscordBot) -> None:
         ("getalias", getalias_command),
         ("search", search_command),
         ("say", say_command),
+        ("stream", stream_command),
         ("pressf", pressf_command),
         ("wisdom", wisdom_command),
         ("help", help_command),
@@ -414,6 +417,23 @@ async def say_command(user_command: UserCommand) -> CommandResponse:
         raise NotImplementedError
 
     return SoundResponse(user_message, "Fine, I'll say your stupid phrase.", elevenlabs_response, temp=True)
+
+async def stream_command(user_command: UserCommand) -> CommandResponse:
+    user_message = "Can you play this video for me?"
+    yt_url = user_command.get_user_message()
+
+    if not yt_url:
+        return CommandResponse(user_message, "You didn't give me a video URL.")
+
+    error_message = "Couldn't find a video with that URL or search string!"
+    try:
+        ytdl_response = sound_manager.download_audio_from_url(yt_url)
+    except (YtdlDownloadError, TransportError):
+        return CommandResponse(user_message, error_message)
+    if ytdl_response is None:
+        return CommandResponse(user_message, error_message)
+
+    return SoundResponse(user_message, "Fine, here's your video.", ytdl_response, temp=True)
 #endregion
 
 # ==========================
@@ -497,7 +517,7 @@ async def vcstop_command(user_command: UserCommand) -> CommandResponse:
     return CommandResponse(user_message, "If you insist.", send_to_chat=False)
 
 async def vcstream_command(user_command: UserCommand) -> CommandResponse:
-    user_message = "Stream this for me please."
+    user_message = "Can you play this video for me in the voice chat?"
     if not user_command.is_discord():
         return CommandResponse(user_message, "That's Discord only, sorry!")
 
@@ -505,25 +525,29 @@ async def vcstream_command(user_command: UserCommand) -> CommandResponse:
     if bot_voice_client is None:
         return CommandResponse(user_message, "I'm not in a voice channel!")
 
+    yt_url = user_command.get_user_message()
+    if not yt_url:
+        return CommandResponse(user_message, "You didn't give me a video URL.")
+
+    # Create a stream player from the provided URL
+    error_message = "Couldn't find a video with that URL or search string!"
     try:
-        stream_url = user_command.get_user_message()
-    except IndexError:
-        return CommandResponse(user_message, "Provide a streamable URL please!")
+        stream_data = sound_manager.stream_audio_from_url(yt_url)
+    except YtdlDownloadError:
+        return CommandResponse(user_message, error_message)
+    if stream_data is None:
+        return CommandResponse(user_message, error_message)
 
     # Stop the voice client if it's already playing a sound or stream
     if bot_voice_client.is_playing():
         bot_voice_client.stop()
 
-    # Create a stream player from the provided URL
-    stream_player = sound_manager.YTDLStream(stream_url)
-
-    if stream_player is None:
-        return CommandResponse(user_message, "There was an error streaming from that URL.")
+    stream_player = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(stream_data['url']))
 
     # Play the stream through the voice client
     bot_voice_client.play(stream_player, after=lambda e: logger.error(e) if e else None)
 
-    return CommandResponse(user_message, f"Now playing: {stream_player.title}")
+    return CommandResponse(user_message, f"Now playing: {stream_data['title']}")
 
 async def vcpause_command(user_command: UserCommand) -> CommandResponse:
     user_message = "Please toggle pause on the voice stream."
@@ -881,6 +905,7 @@ Look upon my works, ye mighty, and despair:
 /say and /vcsay (AI voice)
 /sound and /vcsound (play a sound effect)
 /random and /vcrandom (play a random sound effect)
+/stream and /vcstream (stream audio from a URL)
 /soundlist and /search (find sounds to play)
 /trivia (play trivia against your friends)
 /chat (talk to me)
