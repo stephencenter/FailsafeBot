@@ -38,7 +38,6 @@ def stream_audio_from_url(url: str) -> dict | None:
     ytdl_parameters = {
         'format': 'bestaudio/best',
         'prefer_ffmpeg': True,
-        'ffmpeg_location': './ffmpeg.exe',
         'quiet': True,
         'no_warnings': True,
         'default_search': 'auto',
@@ -75,7 +74,6 @@ def download_audio_from_url(url: str) -> Path | None:
             '-t', str(config.main.maxstreamtime)
         ],
         'prefer_ffmpeg': True,
-        'ffmpeg_location': './ffmpeg.exe',
         'quiet': True,
         'no_warnings': True,
         'default_search': 'auto',

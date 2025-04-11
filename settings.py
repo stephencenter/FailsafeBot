@@ -35,7 +35,7 @@ class ConfigMain:
     sayhardcap: int = 256  # The "hard cap" for elevenlabs text-to-speech input length (hard cap breaks no matter what)
     sayvoiceid: str = "XB0fDUnXU5powFXDhCwa"  # The voice to use for elevenlabs (defaults to Charlotte)
     saymodelid: str = "eleven_multilingual_v2"  # The base model to use for elevenlabs
-    maxstreamtime: int = 60  # How much of a video the /stream command will download (does not apply to /vcstream)
+    maxstreamtime: int = 30  # How much of a video the /stream command will download (does not apply to /vcstream)
 
 
 @dataclass
