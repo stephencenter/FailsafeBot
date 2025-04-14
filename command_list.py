@@ -629,7 +629,7 @@ async def vcsay_command(user_command: UserCommand) -> CommandResponse:
     user_message = f"Can you say this for me in the voice channel: {text_prompt}"
 
     try:
-        elevenlabs_response = chat.get_elevenlabs_response(text_prompt, save_to_file=True)
+        elevenlabs_response = chat.get_elevenlabs_response(text_prompt, save_to_file=False)
     except ElevenLabsApiError as e:
         error_response = chat.handle_elevenlabs_error(e)
         return CommandResponse(user_message, error_response)
