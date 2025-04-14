@@ -2,7 +2,7 @@
 name = "failsafe-bot"
 version = "v1.0.7"
 description = "Telegram and Discord chat bot"
-requires-python = "==3.12.9"
+requires-python = ">=3.12"
 dependencies = [
     "discord-py>=2.4.0",
     "numpy>=2.1.1",

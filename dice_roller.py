@@ -87,23 +87,22 @@ def get_mythras_roll() -> str:
     return roll_string
 
 def get_d10000_roll(username: str) -> str:
-    try:
-        with open(D10000_LIST_PATH, encoding='utf-8') as f:
-            effects = f.readlines()
-    except FileNotFoundError:
+    effects = common.try_read_lines_list(D10000_LIST_PATH, None)
+    if effects is None:
         return "The d10000 file couldn't be found!"
 
-    chosen_effect = random.choice(effects).strip()
-
-    effects_dict = common.try_read_json(ACTIVE_EFFECTS_PATH, {})
+    active_effects = common.try_read_json(ACTIVE_EFFECTS_PATH, {})
 
     try:
-        effects_dict[username].append(chosen_effect)
-        effects_dict[username] = sorted(set(effects_dict[username]))
-    except KeyError:
-        effects_dict[username] = [chosen_effect]
+        effects = [x for x in effects if x not in active_effects[username]]
+    except IndexError:
+        active_effects[username] = []
 
-    common.write_json_to_file(ACTIVE_EFFECTS_PATH, effects_dict)
+    chosen_effect = random.choice(effects).strip()
+    active_effects[username].append(chosen_effect)
+    active_effects[username] = sorted(set(active_effects[username]))
+
+    common.write_json_to_file(ACTIVE_EFFECTS_PATH, active_effects)
 
     return chosen_effect
 
