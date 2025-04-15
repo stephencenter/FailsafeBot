@@ -320,7 +320,7 @@ async def search_command(user_command: UserCommand) -> CommandResponse:
     search_results = sound_manager.search_sounds(search_string)
 
     num_matches = len(search_results)
-    list_string = f"\n\n{', '.join(search_results)}"
+    results_string = ', '.join(search_results)
 
     user_prompt = f"Can you search for sounds containing '{search_string}'?"
 
@@ -328,12 +328,12 @@ async def search_command(user_command: UserCommand) -> CommandResponse:
         return CommandResponse(user_prompt, f"There are no sounds matching '{search_string}'")
 
     if num_matches == 1:
-        return CommandResponse(user_prompt, f"There is one sound matching '{search_string}': {list_string}")
+        return CommandResponse(user_prompt, f"There is one sound matching '{search_string}': {results_string}")
 
     if num_matches > 100:
         return CommandResponse(user_prompt, f"There are more than 100 sounds matching '{search_string}', try a more specific search")
 
-    return CommandResponse(user_prompt, f"There are {num_matches} sounds matching '{search_string}': {list_string}")
+    return CommandResponse(user_prompt, f"There are {num_matches} sounds matching '{search_string}': \n\n{results_string}")
 
 
 async def playcount_command(user_command: UserCommand) -> CommandResponse:
@@ -676,11 +676,11 @@ async def roll_command(user_command: UserCommand) -> CommandResponse:
     user_prompt = f"Can you roll a {roll_text} for me?"
 
     config = settings.Config()
-    if num_dice > config.main.maxdice:
-        return CommandResponse(user_prompt, f"Keep it to {config.main.maxdice:,} dice or fewer please, I'm not a god.")
+    if num_dice > config.misc.maxdice:
+        return CommandResponse(user_prompt, f"Keep it to {config.misc.maxdice:,} dice or fewer please, I'm not a god.")
 
-    if num_faces > config.main.maxfaces:
-        return CommandResponse(user_prompt, f"Keep it to {config.main.maxfaces:,} sides or fewer please, I'm not a god.")
+    if num_faces > config.misc.maxfaces:
+        return CommandResponse(user_prompt, f"Keep it to {config.misc.maxfaces:,} sides or fewer please, I'm not a god.")
 
     rolls = []
     for _ in range(num_dice):
@@ -960,7 +960,7 @@ async def system_command(user_command: UserCommand) -> CommandResponse:
     mem_usage = psutil.virtual_memory()
     disk_usage = psutil.disk_usage('/')
 
-    if config.main.usemegabytes:
+    if config.misc.usemegabytes:
         divisor = 1024**2
         label = "MB"
     else:
@@ -993,7 +993,7 @@ async def terminal_command(user_command: UserCommand) -> CommandResponse:
     )
 
     config = settings.Config()
-    if config.main.cmdautoyes and process.stdin is not None:
+    if config.misc.cmdautoyes and process.stdin is not None:
         # Write 'y' and optionally flush stdin
         process.stdin.write(b'y\n')
         await process.stdin.drain()
@@ -1113,7 +1113,7 @@ def discord_register_events(discord_bot: DiscordBot) -> None:
         # member remaining in a voice channel
         config = settings.Config()
 
-        if not config.main.vcautodc:
+        if not config.chat.vcautodc:
             return
 
         try:
@@ -1147,16 +1147,16 @@ async def handle_message_event(user_command: UserCommand) -> CommandResponse:
     message = user_command.get_user_message()
     response = NoResponse()
 
-    if config.main.replytomonkey and "monkey" in message:
+    if config.chat.replytomonkey and "monkey" in message:
         response = await monkey_event(message)
 
-    elif config.main.replytoname and (bot_name in message or ''.join(bot_name.split()) in message):
+    elif config.chat.replytoname and (bot_name in message or ''.join(bot_name.split()) in message):
         response = await reply_event(user_command)  # Could have responding to name have a different functionality
 
-    elif random.random() < config.main.randreplychance:
+    elif random.random() < config.chat.randreplychance:
         response = await reply_event(user_command)
 
-    elif config.main.recordall:
+    elif config.chat.recordall:
         user_prompt = user_command.get_user_prompt()
         chat.append_to_memory(user_prompt=user_prompt)
 

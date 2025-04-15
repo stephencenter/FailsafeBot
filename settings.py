@@ -8,39 +8,52 @@ CONFIG_PATH = "Data/settings.toml"
 
 @dataclass
 class ConfigMain:
+    """Config dataclass for core application functionality."""
+
     botname: str = "Failsafe"  #  Name of the bot, if replytoname is True then the bot will respond to this string
     runtelegram: bool = True  # Whether to run the telegram bot or skip it
     rundiscord: bool = True  # Whether to run the discord bot or skip it
-    maxdice: int = 100  # Maximum number of dice in one command for dice roller (bigger numbers might make messages too large for telegram)
-    maxfaces: int = 10000  # Maximum number of faces for the dice for dice roller
+    requireadmin: bool = True  # Whether certain commands require admin rights to perform
+    maxmessagelength: int = 1024  # Maximum amount of characters to allow in a CommandResponse object's bot_message property
+    usewhitelist: bool = False  # Whether a Telegram chat needs to be on the whitelist for commands to function
+
+@dataclass
+class ConfigChat:
+    """Config dataclass for chatting functionality (text, voice, and general memory)."""
+
     replytoname: bool = True  # Whether the bot should respond when their name is said
     replytomonkey: bool = False  # Whether the bot should play a monkey sound when the word monkey is said (Discworld adventure game reference)
     randreplychance: float = 0.05  # The chance for the bot to randomly reply to any message in a chat they're in (0 = no chance 1 = every message)
-    vcautodc: bool = True  # Whether the bot will automatically disconnect if they're the only ones in a voice call
-    requireadmin: bool = True  # Whether certain commands require admin rights to perform
-    usememory: bool = True  # Whether the bot will use the memory system for AI chatting
-    memorysize: int = 24  # Maximum number of messages to record in memory for AI chatting (higher is probably more expensive)
-    recordall: bool = False  # Whether the bot wil record ALL messages sent in chat to memory, or just messages directed towards it
     gptmodel: str = "gpt-4o-mini"  # What GPT model to use for AI chatting
     gpttemp: float = 1.0  # Temperature for GPT chat completions (0 to 2, values outside this will break)
     gptmaxtokens: int = 512  # Value to be passed for parameter max_completion_tokens for gpt chat completion
-    maxmessagelength: int = 1024  # Maximum amount of characters to allow in a CommandResponse object's bot_message property
-    usewhitelist: bool = False  # Whether a chat needs to be on the whitelist for commands to function
+    usememory: bool = True  # Whether the bot will use the memory system for AI chatting
+    memorysize: int = 24  # Maximum number of messages to record in memory for AI chatting (higher is probably more expensive)
+    recordall: bool = False  # Whether the bot wil record ALL messages sent in chat to memory, or just messages directed towards it
     minmarkov: int = 2  # Minimum number of tokens for the markov chain command /wisdom (higher takes longer exponentially)
-    maxmarkov: int = 256  # Maximum number of tokens for the markov chain command /wisdom
-    usemegabytes: bool = True  # Whether the /system command should use megabytes (will use gigabytes if false)
-    cmdautoyes: bool = False  # Whether the /terminal command should automatically say 'y' to y/n questions (prevents hanging)
-    minsimilarity: float = 0.75  # The minimum similarity threshold when searching for sound names (1.0 = exact matches only)
+    maxmarkov: int = 256  # Maximum number of tokens for the markov chain command /wisdomly)
     saysoftcap: int = 224  # The "soft cap" for elevenlabs text-to-speech input length (soft cap only breaks on punctuation)
     sayhardcap: int = 256  # The "hard cap" for elevenlabs text-to-speech input length (hard cap breaks no matter what)
     sayvoiceid: str = "XB0fDUnXU5powFXDhCwa"  # The voice to use for elevenlabs (defaults to Charlotte)
     saymodelid: str = "eleven_multilingual_v2"  # The base model to use for elevenlabs
-    maxstreamtime: int = 30  # How much of a video the /stream command will download (does not apply to /vcstream)
+    vcautodc: bool = True  # Whether the bot will automatically disconnect if they're the only ones in a voice call
 
+@dataclass
+class ConfigMisc:
+    """Config dataclass for command functionality that isn't covered by other dataclasses."""
+
+    usemegabytes: bool = True  # Whether the /system command should use megabytes (will use gigabytes if false)
+    minsimilarity: float = 0.75  # The minimum similarity threshold when searching for sound names (1.0 = exact matches on
+    maxstreamtime: int = 30  # How much of a video the /stream command will download (does not apply to /vcstream)
+    maxdice: int = 100  # Maximum number of dice in one command for dice roller (bigger numbers might make messages too large for telegram)
+    maxfaces: int = 10000  # Maximum number of faces for the dice for dice roller
+    cmdautoyes: bool = False  # Whether the /terminal command should automatically say 'y' to y/n questions (prevents hanging)
 
 @dataclass
 class Config:
     main: ConfigMain = field(default_factory=ConfigMain)
+    chat: ConfigChat = field(default_factory=ConfigChat)
+    misc: ConfigMisc = field(default_factory=ConfigMisc)
 
     def __post_init__(self):
         try:

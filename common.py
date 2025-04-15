@@ -128,6 +128,7 @@ class UserCommand:
         raise NotImplementedError
 
     def get_first_arg(self, *, lowercase: bool = False) -> str | None:
+        # Returns the first element from the argument list, all lowercase if lowercase=True
         args_list = []
 
         if isinstance(self.context, TelegramContext) and self.context.args is not None:
@@ -148,6 +149,8 @@ class UserCommand:
             return None
 
     def get_user_message(self) -> str:
+        # Returns the message that this user sent with this UserCommand
+        # If the bot has responded to this message and provided its own user message, return that instead
         if self.response is not None:
             return self.response.user_message
 
@@ -233,12 +236,15 @@ class UserCommand:
             Path(response.file_path).unlink()
 
     def is_telegram(self) -> bool:
+        # Returns whether this UserCommand object was sent to a Telegram bot or not
         return isinstance(self.target_bot, TelegramBot)
 
     def is_discord(self) -> bool:
+        # Returns whether this UserCommand object was sent to a Discord bot or not
         return isinstance(self.target_bot, DiscordBot)
 
     def get_user_voice_channel(self) -> discord.VoiceChannel | None:
+        # Returns the voice channel that the user who sent this UserCommand is currently in
         if not isinstance(self.context, DiscordContext):
             return None
 
@@ -255,6 +261,7 @@ class UserCommand:
         return author.voice.channel
 
     def get_bot_voice_client(self) -> discord.VoiceClient | None:
+        # Returns the voice channel that the bot this UserCommand was sent to is currently in
         if not isinstance(self.context, DiscordContext):
             return None
 
@@ -274,6 +281,8 @@ class UserCommand:
         return corrected_name
 
 def try_read_json(path: str | Path, default: T) -> T:
+    # Attempt to load a json object from the provided path and return it
+    # If this fails, return the provided default object instead
     try:
         with Path(path).open(encoding='utf-8') as f:
             return json.load(f)
@@ -281,6 +290,8 @@ def try_read_json(path: str | Path, default: T) -> T:
         return default
 
 def try_read_lines_list(path: str | Path, default: T) -> list | T:
+    # Attempt to load the text data from the provided path, treating each line as a separate element in a list, and return it
+    # If this fails, return the provided default object instead
     try:
         with Path(path).open(encoding='utf-8') as f:
             return [x.strip() for x in f]
@@ -288,6 +299,8 @@ def try_read_lines_list(path: str | Path, default: T) -> list | T:
         return default
 
 def try_read_lines_str(path: str | Path, default: T) -> str | T:
+    # Attempt to load the text data from the provided path, treating the entire text file as a single string, and return it
+    # If this fails, return the provided default object instead
     try:
         with Path(path).open(encoding='utf-8') as f:
             return ''.join(f.readlines())
@@ -295,6 +308,8 @@ def try_read_lines_str(path: str | Path, default: T) -> str | T:
         return default
 
 def try_read_single_line(path: str | Path, default: T) -> str | T:
+    # Attempt to read only the first line of text data from the provided path and return it
+    # If this fails, return the provided default object instead
     try:
         with Path(path).open(encoding='utf-8') as f:
             return f.readline().strip()

@@ -23,7 +23,7 @@ PREPEND_PATH = "Data/prepend_message.txt"
 def generate_markov_text() -> str:
     # Markov-powered Text Generation Command
     config = settings.Config()
-    if config.main.minmarkov > config.main.maxmarkov:
+    if config.chat.minmarkov > config.chat.maxmarkov:
         raise ValueError("Markov minimum length cannot be greater than maximum length (config issue)")
 
     markov_chain = common.try_read_json(MARKOV_PATH, {})
@@ -42,13 +42,13 @@ def generate_markov_text() -> str:
         new_token = np.random.choice(list(markov_chain[prev_token].keys()), 1, p=list(markov_chain[prev_token].values()))[0]
 
         if new_token == null_token:
-            if len(chosen_tokens) < config.main.minmarkov:
+            if len(chosen_tokens) < config.chat.minmarkov:
                 chosen_tokens = []
                 continue
             break
 
         chosen_tokens.append(new_token)
-        if len(chosen_tokens) >= config.main.maxmarkov:
+        if len(chosen_tokens) >= config.chat.maxmarkov:
             break
 
     output_message = ' '.join(chosen_tokens)
@@ -81,9 +81,9 @@ def get_gpt_response(user_command: UserCommand) -> str:
 
     gpt_completion= openai_client.chat.completions.create(
         messages=messages, # type: ignore
-        model=config.main.gptmodel,
-        temperature=config.main.gpttemp,
-        max_completion_tokens=config.main.gptmaxtokens
+        model=config.chat.gptmodel,
+        temperature=config.chat.gpttemp,
+        max_completion_tokens=config.chat.gptmaxtokens
     )
 
     response = gpt_completion.choices[0].message.content
@@ -101,7 +101,7 @@ def load_memory() -> list[dict]:
     # Load the AI's memory (if it exists)
     config = settings.Config()
 
-    if config.main.usememory:
+    if config.chat.usememory:
         return common.try_read_json(MEMORY_PATH, [])
 
     return []
@@ -109,7 +109,7 @@ def load_memory() -> list[dict]:
 def append_to_memory(user_prompt: str = '', bot_prompt: str = '') -> None:
     config = settings.Config()
 
-    if not config.main.usememory:
+    if not config.chat.usememory:
         return
 
     memory = load_memory()
@@ -121,8 +121,8 @@ def append_to_memory(user_prompt: str = '', bot_prompt: str = '') -> None:
         memory.append({"role": "assistant", "content": bot_prompt})
 
     # The AI's memory has a size limit to keep API usage low, and to keep it from veering off track too much
-    if (size := len(memory)) > config.main.memorysize:
-        memory = memory[size - config.main.memorysize:]
+    if (size := len(memory)) > config.chat.memorysize:
+        memory = memory[size - config.chat.memorysize:]
 
     # Write the AI's memory to a file so it can be retrieved later
     common.write_json_to_file(MEMORY_PATH, memory)
@@ -148,8 +148,8 @@ def get_elevenlabs_response(input_text: str, *, save_to_file: bool = False) -> P
     # Get text-to-speech response from elevenlabs
     audio = elevenlabs_client.text_to_speech.convert(
         text=input_text,
-        voice_id=config.main.sayvoiceid,
-        model_id=config.main.saymodelid
+        voice_id=config.chat.sayvoiceid,
+        model_id=config.chat.saymodelid
     )
 
     # Save sound to temp file
@@ -165,11 +165,11 @@ def cap_elevenlabs_prompt(text_prompt: str) -> str:
     config = settings.Config()
 
     # Hard cap cuts off the text abruptly, to keep costs down (longer strings = more elevenlabs credits)
-    text_prompt = text_prompt[:min(len(text_prompt), config.main.sayhardcap)]
+    text_prompt = text_prompt[:min(len(text_prompt), config.chat.sayhardcap)]
 
     # Soft cap cuts off the text gently, only at certain punctuation marks
     for index, char in enumerate(text_prompt):
-        if index >= config.main.saysoftcap and char in ('.', '?', '!'):
+        if index >= config.chat.saysoftcap and char in ('.', '?', '!'):
             text_prompt = text_prompt[:index]
             break
 
@@ -182,10 +182,10 @@ def handle_elevenlabs_error(error: ElevenLabsApiError) -> str:
     error_map = {
         'max_character_limit_exceeded': "Text input has too many characters for ElevenLabs text-to-speech (max is ~10k)",
         'invalid_api_key': f"ElevenLabs API Key in '{common.ELEVENLABS_KEY_PATH}' is invalid!",
-        'voice_not_found': f"ElevenLabs Voice ID '{config.main.sayvoiceid}' is invalid!",
-        'model_not_found': f"ElevenLabs Model ID '{config.main.saymodelid}' is invalid!",
+        'voice_not_found': f"ElevenLabs Voice ID '{config.chat.sayvoiceid}' is invalid!",
+        'model_not_found': f"ElevenLabs Model ID '{config.chat.saymodelid}' is invalid!",
         'quota_exceeded': "ElevenLabs account is out of credits!",
-        'free_users_not_allowed': f"Voice with ID '{config.main.sayvoiceid}' needs an active ElevenLabs subscription to use."
+        'free_users_not_allowed': f"Voice with ID '{config.chat.sayvoiceid}' needs an active ElevenLabs subscription to use."
     }
 
     try:

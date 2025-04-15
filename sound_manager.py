@@ -71,7 +71,7 @@ def download_audio_from_url(url: str) -> Path | None:
         }],
         'postprocessor_args': [
             '-ss', '0',
-            '-t', str(config.main.maxstreamtime)
+            '-t', str(config.misc.maxstreamtime)
         ],
         'prefer_ffmpeg': True,
         'quiet': True,
@@ -292,7 +292,7 @@ def search_sounds(search_string: str) -> list[str]:
             larger_length = max(len(search_string), len(alias))
             similarity = (larger_length - distance)/larger_length
 
-            if similarity >= config.main.minsimilarity:
+            if similarity >= config.misc.minsimilarity:
                 search_results.append(alias)
                 break
 
