@@ -1,8 +1,6 @@
 import asyncio
 import contextlib
-import logging
 import sys
-from collections.abc import Generator
 
 import discord
 from discord.errors import LoginFailure
@@ -11,50 +9,40 @@ from loguru import logger
 from telegram.error import InvalidToken
 from telegram.ext import ApplicationBuilder
 
-import bootstrap
 import command_list
 import common
+import runway
 import sound_manager
 
 discord_bot = None
 
 
-class InterceptHandler(logging.Handler):
-    def emit(self, record: logging.LogRecord) -> None:
-        # Convert LogRecord to Loguru format
-        try:
-            level = logger.level(record.levelname).name
-        except ValueError:
-            level = record.levelno
+def prepare_runway() -> None:
+    # Initialize logging
+    runway.init_logging()
+    logger.info(f"Initialized logging to {common.LOGGING_FILE_PATH}")
 
-        logger.bind(request_id="app").opt(depth=6, exception=record.exc_info).log(level, record.getMessage())
+    # Make sure all files and folders exist that this script needs
+    for info in runway.create_project_structure():
+        logger.info(info)
 
+    # Clear temp folder if it wasn't already
+    for info in runway.clear_temp_folder():
+        logger.info(info)
 
-def init_logging() -> None:
-    # Clear default logger
-    logger.remove()
+    # Check for any paths defined in common.py that weren't included in the above check
+    # (for debug purposes, this should never happen)
+    for warning in runway.check_for_missing_paths():
+        logger.warning(warning)
 
-    # Add console output
-    info_format = "{message} <level>[{level}]</level> <green>{time:YYYY-MM-DD HH:mm:ss}</green> <cyan>{name}:{function}:{line}</cyan>"
-    logger.add(sys.stderr, level="INFO", backtrace=False, diagnose=False, format=info_format)
+    # Check for common issues with sound aliases
+    for warning in sound_manager.verify_aliases():
+        logger.warning(warning)
 
-    # Add file output with error logging
-    logger.add(common.LOGGING_FILE_PATH, level="WARNING", backtrace=False, diagnose=False)
-
-    logging.root.handlers = [InterceptHandler()]
-    logging.root.setLevel(logging.INFO)
-
-    # Override logging levels for individual modules
-    logging.getLogger("telegram").setLevel(logging.WARNING)
-    logging.getLogger("httpcore").setLevel(logging.WARNING)
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("discord").setLevel(logging.WARNING)
-
-    # Hook unhandled exceptions
-    def log_exceptions(exc_type, exc_value, exc_traceback) -> None:  # noqa: ANN001
-        logger.opt(exception=(exc_type, exc_value, exc_traceback)).error("Unhandled exception")
-
-    sys.excepthook = log_exceptions
+    # Check for common issues with settings dataclasses
+    # (for debug purposes, this should never happen)
+    for warning in common.verify_settings():
+        logger.warning(warning)
 
 
 async def create_run_telegram_bot(telegram_token: str) -> None:
@@ -87,20 +75,9 @@ async def create_run_discord_bot(discord_token: str) -> None:
     await discord_bot.start(discord_token)
 
 
-def check_for_problems() -> Generator[str]:
-    yield from sound_manager.verify_aliases()
-    yield from common.verify_settings()
-
-
 async def initialize_and_run() -> None:
     logger.info(f"Starting {common.APPLICATION_NAME} {common.VERSION_NUMBER}")
     config = common.Config()
-
-    for message in bootstrap.create_project_structure():
-        logger.info(message)
-
-    for problem in check_for_problems():
-        logger.warning(problem)
 
     if config.main.runtelegram:
         # Retrieve telegram bot token from file
@@ -154,7 +131,7 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    init_logging()
+    prepare_runway()
 
     try:
         asyncio.run(main())
