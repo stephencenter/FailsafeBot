@@ -1,3 +1,4 @@
+from collections.abc import Generator
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -60,15 +61,20 @@ class Config:
             with Path(CONFIG_PATH).open(encoding='utf-8') as f:
                 loaded = toml.load(f)
 
-        except FileNotFoundError:
+        except (FileNotFoundError, toml.TomlDecodeError):
             return
 
-        for key in loaded:
-            for subkey in loaded[key]:
-                if key not in self.__dict__:
-                    # Remove settings that don't exist anymore
-                    continue
-                self.__dict__[key].__dict__[subkey] = loaded[key][subkey]
+        for key in self.__dict__:
+            for subkey in self.__dict__[key].__dict__:
+                if key in loaded and subkey in loaded[key]:
+                    # Try to find subkey in the 'correct' location
+                    self.__dict__[key].__dict__[subkey] = loaded[key][subkey]
+                else:
+                    # Try to find subkey in 'incorrect' locations, in case the dataclasses had their settings moved around
+                    for other_key in loaded:
+                        if other_key != key and subkey in loaded[other_key]:
+                            self.__dict__[key].__dict__[subkey] = loaded[other_key][subkey]
+                            break
 
     def find_setting(self, search_string: str) -> tuple[str | None, str | None, Any]:
         # Provide a search string (either the setting name or [group name].[setting name]) and
@@ -117,3 +123,14 @@ def parse_value_input(value: str) -> int | float | bool | str:
         pass
 
     return value
+
+def verify_settings() -> Generator[str]:
+    seen = {}
+    config = Config()
+
+    for outer_key, subdict in config.__dict__.items():
+        for subkey in subdict.__dict__:
+            if subkey in seen:
+                yield f"Config setting {subkey} is a duplicate between '{seen[subkey]}' and '{outer_key}'"
+            else:
+                seen[subkey] = outer_key

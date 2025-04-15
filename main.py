@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import logging
 import sys
+from collections.abc import Generator
 
 import discord
 from discord.errors import LoginFailure
@@ -84,11 +85,15 @@ async def create_run_discord_bot(discord_token: str) -> None:
 
     await discord_bot.start(discord_token)
 
+def check_for_problems() -> Generator[str]:
+    yield from sound_manager.verify_aliases()
+    yield from settings.verify_settings()
+
 async def initialize_and_run() -> None:
     logger.info(f"Starting {common.APPLICATION_NAME} {common.VERSION_NUMBER}")
     config = settings.Config()
 
-    for problem in sound_manager.verify_aliases():
+    for problem in check_for_problems():
         logger.warning(problem)
 
     if config.main.runtelegram:

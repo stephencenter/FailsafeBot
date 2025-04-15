@@ -14,7 +14,7 @@ from telegram.ext import CallbackContext as TelegramContext
 import settings
 
 APPLICATION_NAME = 'FailsafeBot'
-VERSION_NUMBER = 'v1.1.2'
+VERSION_NUMBER = 'v1.1.3'
 
 ELEVENLABS_KEY_PATH = "Data/eleven_key.txt"
 LOGGING_FILE_PATH = "Data/logging/log.txt"
