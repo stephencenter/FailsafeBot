@@ -1,4 +1,5 @@
 import math
+import string
 from html import unescape
 
 import requests
@@ -6,10 +7,6 @@ from loguru import logger
 from unidecode import unidecode
 
 import common
-
-TRIVIA_URL = "https://opentdb.com/api.php?amount="
-TRIVIA_POINTS_PATH = "Data/trivia_points.json"
-TRIVIA_MEMORY_PATH = "Data/trivia_memory.txt"
 
 TRIVIA_MEMORY_SIZE = 100
 TRIVIA_NUM_QUESTIONS = 3
@@ -22,10 +19,12 @@ TRIVIA_DIFFICULTY_POINTS = {
 
 current_question = None
 
+
 def fix_string(string: str) -> str:
     string = unescape(string)
     string = unidecode(string)
     return string.strip()
+
 
 class TriviaQuestion:
     def __init__(self, question_dict: dict):
@@ -45,7 +44,7 @@ class TriviaQuestion:
         self.guesses_left = len(self.answer_list) - 1
 
     def get_question_string(self) -> str:
-        alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'  # Should never need more than 4 letters
+        alphabet = string.ascii_uppercase  # Should never need more than 4 letters
         answer_string = '\n'.join(f'    {alphabet[index]}. {answer}' for index, answer in enumerate(self.answer_list))
 
         question_string = f"""\
@@ -74,7 +73,7 @@ Type /guess [your answer] to answer!
             current_question = None
 
         if points_gained > 0:
-            points_dict = common.try_read_json(TRIVIA_POINTS_PATH, {})
+            points_dict = common.try_read_json(common.TRIVIA_POINTS_PATH, {})
             player_name = user_command.get_author()
 
             try:
@@ -82,12 +81,12 @@ Type /guess [your answer] to answer!
             except KeyError:
                 points_dict[player_name] = points_gained
 
-            common.write_json_to_file(TRIVIA_POINTS_PATH, points_dict)
+            common.write_json_to_file(common.TRIVIA_POINTS_PATH, points_dict)
 
         return points_gained
 
     def get_letter(self, guess: str) -> str | None:
-        alphabet = 'abcdefghijklmnopqrstuvwxyz'  # Shouldn't need more than 4 letters
+        alphabet = string.ascii_lowercase  # Shouldn't need more than 4 letters
         for index, answer in enumerate(self.answer_list):
             if guess.lower() == answer.lower():
                 return alphabet[index]
@@ -101,11 +100,12 @@ Type /guess [your answer] to answer!
         return guess.lower() == self.correct_answer.lower()
 
     def is_guess_on_list(self, guess: str) -> bool:
-        alphabet = 'abcdefghijklmnopqrstuvwxyz'[:len(self.answer_list)]
+        alphabet = string.ascii_lowercase[:len(self.answer_list)]
         if len(guess) == 1 and guess.lower() in alphabet:
             return True
 
         return guess.lower() in (x.lower() for x in self.answer_list)
+
 
 def get_trivia_question() -> TriviaQuestion:
     global current_question
@@ -113,11 +113,11 @@ def get_trivia_question() -> TriviaQuestion:
     if current_question is not None:
         return current_question
 
-    response = requests.post(f"{TRIVIA_URL}{TRIVIA_NUM_QUESTIONS}", timeout=10).json()['results']
+    response = requests.post(f"{common.TRIVIA_URL}{TRIVIA_NUM_QUESTIONS}", timeout=10).json()['results']
 
     # Check the list of the most recently asked trivia questions and attempt to pick a
     # question that isn't on the list
-    previous_questions = common.try_read_lines_list(TRIVIA_MEMORY_PATH, [])
+    previous_questions = common.try_read_lines_list(common.TRIVIA_MEMORY_PATH, [])
 
     # We ask the trivia API for a few trivia questions and pick the first one that isn't
     # in the trivia memory
@@ -134,11 +134,12 @@ def get_trivia_question() -> TriviaQuestion:
         previous_questions = previous_questions[size - TRIVIA_MEMORY_SIZE:]
 
     # Keep track of which trivia questions have already been asked recently
-    common.write_lines_to_file(TRIVIA_MEMORY_PATH, previous_questions)
+    common.write_lines_to_file(common.TRIVIA_MEMORY_PATH, previous_questions)
 
     current_question = TriviaQuestion(chosen)
 
     return current_question
+
 
 def get_current_question() -> TriviaQuestion | None:
     return current_question

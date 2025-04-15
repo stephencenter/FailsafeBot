@@ -11,15 +11,13 @@ from loguru import logger
 from telegram.error import InvalidToken
 from telegram.ext import ApplicationBuilder
 
+import bootstrap
 import command_list
 import common
-import settings
 import sound_manager
 
-TELEGRAM_TOKEN_PATH = "Data/telegram_token.txt"
-DISCORD_TOKEN_PATH = "Data/discord_token.txt"
-
 discord_bot = None
+
 
 class InterceptHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
@@ -31,6 +29,7 @@ class InterceptHandler(logging.Handler):
 
         logger.bind(request_id="app").opt(depth=6, exception=record.exc_info).log(level, record.getMessage())
 
+
 def init_logging() -> None:
     # Clear default logger
     logger.remove()
@@ -40,7 +39,7 @@ def init_logging() -> None:
     logger.add(sys.stderr, level="INFO", backtrace=False, diagnose=False, format=info_format)
 
     # Add file output with error logging
-    logger.add("Data/logging/log.txt", level="WARNING", backtrace=False, diagnose=False)
+    logger.add(common.LOGGING_FILE_PATH, level="WARNING", backtrace=False, diagnose=False)
 
     logging.root.handlers = [InterceptHandler()]
     logging.root.setLevel(logging.INFO)
@@ -52,10 +51,11 @@ def init_logging() -> None:
     logging.getLogger("discord").setLevel(logging.WARNING)
 
     # Hook unhandled exceptions
-    def log_exceptions(exc_type, exc_value, exc_traceback) -> None: # noqa: ANN001
+    def log_exceptions(exc_type, exc_value, exc_traceback) -> None:  # noqa: ANN001
         logger.opt(exception=(exc_type, exc_value, exc_traceback)).error("Unhandled exception")
 
     sys.excepthook = log_exceptions
+
 
 async def create_run_telegram_bot(telegram_token: str) -> None:
     # Create telegram bot object
@@ -68,6 +68,7 @@ async def create_run_telegram_bot(telegram_token: str) -> None:
 
     if telegram_bot.updater is not None:
         await telegram_bot.updater.start_polling(drop_pending_updates=True)
+
 
 async def create_run_discord_bot(discord_token: str) -> None:
     global discord_bot
@@ -85,20 +86,25 @@ async def create_run_discord_bot(discord_token: str) -> None:
 
     await discord_bot.start(discord_token)
 
+
 def check_for_problems() -> Generator[str]:
     yield from sound_manager.verify_aliases()
-    yield from settings.verify_settings()
+    yield from common.verify_settings()
+
 
 async def initialize_and_run() -> None:
     logger.info(f"Starting {common.APPLICATION_NAME} {common.VERSION_NUMBER}")
-    config = settings.Config()
+    config = common.Config()
+
+    for message in bootstrap.create_project_structure():
+        logger.info(message)
 
     for problem in check_for_problems():
         logger.warning(problem)
 
     if config.main.runtelegram:
         # Retrieve telegram bot token from file
-        telegram_token = common.try_read_single_line(TELEGRAM_TOKEN_PATH, None)
+        telegram_token = common.try_read_single_line(common.TELEGRAM_TOKEN_PATH, None)
 
         # Attempt to run Telgram bot
         if telegram_token is not None:
@@ -106,15 +112,15 @@ async def initialize_and_run() -> None:
             try:
                 await create_run_telegram_bot(telegram_token)
             except InvalidToken:
-                logger.error(f"Telegram token at {TELEGRAM_TOKEN_PATH} is invalid, couldn't start bot")
+                logger.error(f"Telegram token at {common.TELEGRAM_TOKEN_PATH} is invalid, couldn't start bot")
         else:
-            logger.error(f"Telegram token not found at {TELEGRAM_TOKEN_PATH}, couldn't start bot")
+            logger.error(f"Telegram bot is enabled but token not found at {common.TELEGRAM_TOKEN_PATH}, couldn't start bot")
     else:
-        logger.info(f"Telegram bot disabled in {settings.CONFIG_PATH}, skipping")
+        logger.info(f"Telegram bot disabled in {common.CONFIG_PATH}, skipping")
 
     if config.main.rundiscord:
         # Retrieve discord bot token from file
-        discord_token = common.try_read_single_line(DISCORD_TOKEN_PATH, None)
+        discord_token = common.try_read_single_line(common.DISCORD_TOKEN_PATH, None)
 
         # Attempt to run Discord bot
         if discord_token is not None:
@@ -122,13 +128,14 @@ async def initialize_and_run() -> None:
             try:
                 await create_run_discord_bot(discord_token)
             except LoginFailure:
-                logger.error(f"Discord token at {DISCORD_TOKEN_PATH} is invalid, couldn't start bot")
+                logger.error(f"Discord token at {common.DISCORD_TOKEN_PATH} is invalid, couldn't start bot")
         else:
-            logger.error(f"Discord token not found at {DISCORD_TOKEN_PATH}, couldn't start bot")
+            logger.error(f"Discord bot is enabled but token not found at {common.DISCORD_TOKEN_PATH}, couldn't start bot")
     else:
-        logger.info(f"Discord bot disabled in {settings.CONFIG_PATH}, skipping")
+        logger.info(f"Discord bot disabled in {common.CONFIG_PATH}, skipping")
 
     await asyncio.Event().wait()
+
 
 async def main() -> None:
     try:
@@ -144,6 +151,7 @@ async def main() -> None:
                     await discord_bot.voice_clients[0].disconnect(force=False)
 
         logger.info('Exiting...')
+
 
 if __name__ == "__main__":
     init_logging()
