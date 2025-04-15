@@ -29,26 +29,30 @@ DISCORD_TOKEN_PATH = DATA_FOLDER_PATH / "discord_token.txt"
 ADMINS_PATH = DATA_FOLDER_PATH / "admins.txt"
 TELEGRAM_WHITELIST_PATH = DATA_FOLDER_PATH / "tg_whitelist.txt"
 CONFIG_PATH = DATA_FOLDER_PATH / "settings.toml"
+LOGGING_FILE_PATH = LOGGING_FOLDER_PATH / "log.txt"
+USERNAME_MAP_PATH = DATA_FOLDER_PATH / "username_map.json"
 
-# OPTIONAL FILES
+# CHATTING
 OPENAI_KEY_PATH = DATA_FOLDER_PATH / "openai_key.txt"
 ELEVENLABS_KEY_PATH = DATA_FOLDER_PATH / "eleven_key.txt"
-USERNAME_MAP_PATH = DATA_FOLDER_PATH / "username_map.json"
-ALIAS_PATH = DATA_FOLDER_PATH / "sound_aliases.json"
-PLAYCOUNTS_PATH = DATA_FOLDER_PATH / "playcounts.json"
+PREPEND_PATH = DATA_FOLDER_PATH / "prepend_message.txt"
 GPT_PROMPT_PATH = DATA_FOLDER_PATH / "gpt_prompt.txt"
 MARKOV_PATH = DATA_FOLDER_PATH / "markov_chain.json"
 MEMORY_PATH = DATA_FOLDER_PATH / "openai_memory.json"
-PREPEND_PATH = DATA_FOLDER_PATH / "prepend_message.txt"
 RESPONSES_PATH = DATA_FOLDER_PATH / "response_list.txt"
-LOGGING_FILE_PATH = LOGGING_FOLDER_PATH / "log.txt"
+
+# SOUNDS
+ALIAS_PATH = DATA_FOLDER_PATH / "sound_aliases.json"
+PLAYCOUNTS_PATH = DATA_FOLDER_PATH / "playcounts.json"
+
+# TRIVIA
 TRIVIA_POINTS_PATH = DATA_FOLDER_PATH / "trivia_points.json"
 TRIVIA_MEMORY_PATH = DATA_FOLDER_PATH / "trivia_memory.txt"
+TRIVIA_URL = "https://opentdb.com/api.php?amount="
+
+# D10000
 D10000_LIST_PATH = DATA_FOLDER_PATH / "d10000_list.txt"
 ACTIVE_EFFECTS_PATH = DATA_FOLDER_PATH / "active_effects.json"
-
-# URLS
-TRIVIA_URL = "https://opentdb.com/api.php?amount="
 
 
 # ==========================
@@ -109,7 +113,7 @@ class Config:
 
     def __post_init__(self):
         try:
-            with Path(CONFIG_PATH).open(encoding='utf-8') as f:
+            with CONFIG_PATH.open(encoding='utf-8') as f:
                 loaded = toml.load(f)
 
         except (FileNotFoundError, toml.TomlDecodeError):
@@ -155,7 +159,7 @@ class Config:
 
 
 def save_config(config: Config) -> None:
-    with Path(CONFIG_PATH).open(mode='w', encoding='utf-8') as f:
+    with CONFIG_PATH.open(mode='w', encoding='utf-8') as f:
         toml.dump(asdict(config), f)
 
 

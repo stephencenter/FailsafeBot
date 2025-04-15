@@ -844,7 +844,7 @@ async def triviarank_command(_: UserCommand) -> CommandResponse:
 async def lobotomize_command(_: UserCommand) -> CommandResponse:
     # Clear the bot's AI memory by deleting the memory file
     with contextlib.suppress(FileNotFoundError):
-        Path(common.MEMORY_PATH).unlink()
+        common.MEMORY_PATH.unlink()
 
     msg_options = [
         "My mind has never been clearer.",
@@ -859,7 +859,7 @@ async def memory_command(user_command: UserCommand) -> CommandResponse:
     if not user_command.is_admin():
         return NoPermissionsResponse(user_message)
 
-    if not Path(common.MEMORY_PATH).exists():
+    if not common.MEMORY_PATH.exists():
         return CommandResponse(user_message, "My mind is a blank slate.")
 
     return FileResponse(user_message, "Sure, here's my memory file.", common.MEMORY_PATH)
@@ -877,7 +877,7 @@ async def memorylist_command(user_command: UserCommand) -> CommandResponse:
 
     memory_list = [f"{item['role']}: {item['content']}" for item in memory_list if 'content' in item]
 
-    temp_path = Path(common.TEMP_FOLDER_PATH) / 'mem_list.txt'
+    temp_path = common.TEMP_FOLDER_PATH / 'mem_list.txt'
     common.write_lines_to_file(temp_path, memory_list)
 
     return FileResponse(user_message, "Sure, here's my memory list.", temp_path, temp=True)
@@ -979,7 +979,7 @@ async def logs_command(user_command: UserCommand) -> CommandResponse:
     if not user_command.is_admin():
         return NoPermissionsResponse(user_message)
 
-    if not Path(common.LOGGING_FILE_PATH).exists():
+    if not common.LOGGING_FILE_PATH.exists():
         return CommandResponse(user_message, "There are no logs recorded.")
 
     return FileResponse("Can you send me your error log?", "Sure, here you go.", common.LOGGING_FILE_PATH)

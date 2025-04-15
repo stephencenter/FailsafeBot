@@ -152,8 +152,8 @@ def get_elevenlabs_response(input_text: str, *, save_to_file: bool = False) -> P
 
     # Save sound to temp file
     if save_to_file:
-        temp_path = Path(common.TEMP_FOLDER_PATH) / f"{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.mp3"
-        Path(common.TEMP_FOLDER_PATH).mkdir(parents=True, exist_ok=True)
+        temp_path = common.TEMP_FOLDER_PATH / f"{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.mp3"
+        common.TEMP_FOLDER_PATH.mkdir(parents=True, exist_ok=True)
         elevenlabs.save(audio, str(temp_path))
         return temp_path
 
