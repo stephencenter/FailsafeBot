@@ -796,8 +796,8 @@ async def reset_effects_command(user_command: UserCommand) -> CommandResponse:
 # TRIVIA COMMANDS
 # ==========================
 # region
-async def trivia_command(_: UserCommand) -> CommandResponse:
-    trivia_question = trivia.get_trivia_question()
+async def trivia_command(user_command: UserCommand) -> CommandResponse:
+    trivia_question = trivia.get_trivia_question(user_command)
 
     return CommandResponse("Can you give me a trivia question?", trivia_question.get_question_string())
 
@@ -806,7 +806,8 @@ async def guess_command(user_command: UserCommand) -> CommandResponse:
     guess = user_command.get_user_message()
     user_message = f"Is the trivia answer {guess}?"
 
-    if (current_question := trivia.get_current_question()) is None:
+    current_question = trivia.get_current_question(user_command)
+    if current_question is None:
         return CommandResponse(user_message, "Trivia is not active!")
 
     if not guess:

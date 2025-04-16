@@ -47,6 +47,7 @@ PLAYCOUNTS_PATH = DATA_FOLDER_PATH / "playcounts.json"
 
 # TRIVIA
 TRIVIA_POINTS_PATH = DATA_FOLDER_PATH / "trivia_points.json"
+TRIVIA_CURRENT_PATH = DATA_FOLDER_PATH / "current_trivia.json"
 TRIVIA_MEMORY_PATH = DATA_FOLDER_PATH / "trivia_memory.txt"
 TRIVIA_URL = "https://opentdb.com/api.php?amount="
 
@@ -362,6 +363,15 @@ class UserCommand:
         admin_list = try_read_lines_list(ADMINS_PATH, [])
 
         return user_id in admin_list
+
+    def get_chat_id(self) -> str | None:
+        if isinstance(self.update, TelegramUpdate) and self.update.message is not None:
+            return str(self.update.message.chat.id)
+
+        if isinstance(self.context, DiscordContext):
+            return str(self.context.channel.id)
+
+        return None
 
     def is_whitelisted(self) -> bool:
         # Returns whether the chat is on the bot's whitelist (telegram only)

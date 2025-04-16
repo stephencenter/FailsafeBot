@@ -17,8 +17,6 @@ TRIVIA_DIFFICULTY_POINTS = {
     "hard": 30
 }
 
-current_question = None
-
 
 def fix_string(text: str) -> str:
     text = unescape(text)
@@ -33,15 +31,28 @@ class TriviaQuestion:
         self.category: str = fix_string(question_dict['category'].split(':')[-1])
         self.question: str = fix_string(question_dict['question'])
         self.correct_answer: str = fix_string(question_dict['correct_answer'])
+        self.incorrect_answers = [fix_string(q) for q in question_dict['incorrect_answers']]
 
         # Sort answers alphabetically, unless it's a true/false question
         if self.type == 'boolean':
             self.answer_list = ['True', 'False']
         else:
-            self.answer_list: list[str] = [fix_string(q) for q in question_dict['incorrect_answers']]
-            self.answer_list = sorted([*self.answer_list, self.correct_answer])
+            self.answer_list: list[str] = sorted([*self.incorrect_answers, self.correct_answer])
 
         self.guesses_left = len(self.answer_list) - 1
+
+    def save_as_current_question(self, user_command: common.UserCommand) -> None:
+        trivia_data = common.try_read_json(common.TRIVIA_CURRENT_PATH, {})
+        trivia_data[user_command.get_chat_id()] = {
+            'type': self.type,
+            'difficulty': self.difficulty,
+            'category': self.category,
+            'question': self.question,
+            'correct_answer': self.correct_answer,
+            'incorrect_answers': self.incorrect_answers,
+            'guesses_left': self.guesses_left
+        }
+        common.write_json_to_file(common.TRIVIA_CURRENT_PATH, trivia_data)
 
     def get_question_string(self) -> str:
         alphabet = string.ascii_uppercase  # Should never need more than 4 letters
@@ -57,22 +68,11 @@ Type /guess [your answer] to answer!
         return question_string
 
     def score_question(self, user_command: common.UserCommand, *, was_correct: bool) -> int:
-        global current_question
-
-        points_gained = 0
         if was_correct:
             potential_points = TRIVIA_DIFFICULTY_POINTS[self.difficulty]
             points_multiplier = self.guesses_left/(len(self.answer_list) - 1)
             points_gained = math.floor(potential_points*points_multiplier)
-            current_question = None
 
-        else:
-            self.guesses_left -= 1
-
-        if self.guesses_left == 0:
-            current_question = None
-
-        if points_gained > 0:
             points_dict = common.try_read_json(common.TRIVIA_POINTS_PATH, {})
             player_name = user_command.get_author()
 
@@ -82,8 +82,18 @@ Type /guess [your answer] to answer!
                 points_dict[player_name] = points_gained
 
             common.write_json_to_file(common.TRIVIA_POINTS_PATH, points_dict)
+            clear_current_question(user_command)
 
-        return points_gained
+            return points_gained
+
+        self.guesses_left -= 1
+
+        if self.guesses_left > 0:
+            self.save_as_current_question(user_command)
+        else:
+            clear_current_question(user_command)
+
+        return 0
 
     def get_letter(self, guess: str) -> str | None:
         alphabet = string.ascii_lowercase  # Shouldn't need more than 4 letters
@@ -107,9 +117,8 @@ Type /guess [your answer] to answer!
         return guess.lower() in (x.lower() for x in self.answer_list)
 
 
-def get_trivia_question() -> TriviaQuestion:
-    global current_question
-
+def get_trivia_question(user_command: common.UserCommand) -> TriviaQuestion:
+    current_question = get_current_question(user_command)
     if current_question is not None:
         return current_question
 
@@ -137,9 +146,33 @@ def get_trivia_question() -> TriviaQuestion:
     common.write_lines_to_file(common.TRIVIA_MEMORY_PATH, previous_questions)
 
     current_question = TriviaQuestion(chosen)
+    current_question.save_as_current_question(user_command)
 
     return current_question
 
 
-def get_current_question() -> TriviaQuestion | None:
+def get_current_question(user_command: common.UserCommand) -> TriviaQuestion | None:
+    trivia_data = common.try_read_json(common.TRIVIA_CURRENT_PATH, None)
+    if trivia_data is None:
+        return None
+
+    chat_id = user_command.get_chat_id()
+    if chat_id is None or chat_id not in trivia_data or trivia_data[chat_id] is None:
+        return None
+
+    current_question = TriviaQuestion(trivia_data[chat_id])
+    current_question.guesses_left = trivia_data[chat_id]['guesses_left']
+
     return current_question
+
+
+def clear_current_question(user_command: common.UserCommand) -> None:
+    chat_id = user_command.get_chat_id()
+
+    if chat_id is None:
+        return
+
+    trivia_data = common.try_read_json(common.TRIVIA_CURRENT_PATH, {})
+    trivia_data[chat_id] = None
+
+    common.write_json_to_file(common.TRIVIA_CURRENT_PATH, trivia_data)
