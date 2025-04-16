@@ -20,10 +20,10 @@ TRIVIA_DIFFICULTY_POINTS = {
 current_question = None
 
 
-def fix_string(string: str) -> str:
-    string = unescape(string)
-    string = unidecode(string)
-    return string.strip()
+def fix_string(text: str) -> str:
+    text = unescape(text)
+    text = unidecode(text)
+    return text.strip()
 
 
 class TriviaQuestion:

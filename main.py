@@ -81,6 +81,7 @@ async def initialize_and_run() -> tuple[TelegramBot | None, DiscordBot | None, a
     logger.info(f"Starting {common.APPLICATION_NAME} {common.VERSION_NUMBER}")
     config = common.Config()
 
+    # Telegram Bot
     telegram_bot = None
     if config.main.runtelegram:
         # Retrieve telegram bot token from file
@@ -98,6 +99,7 @@ async def initialize_and_run() -> tuple[TelegramBot | None, DiscordBot | None, a
     else:
         logger.info(f"Telegram bot disabled in {common.CONFIG_PATH}, skipping")
 
+    # Discord Bot
     discord_bot = None
     discord_task = None
     if config.main.rundiscord:
@@ -120,21 +122,38 @@ async def initialize_and_run() -> tuple[TelegramBot | None, DiscordBot | None, a
 
 
 async def main() -> None:
+    telegram_bot = None
+    discord_bot = None
+    discord_task = None
     try:
-        _, discord_bot, discord_task = await initialize_and_run()
-        await asyncio.Event().wait()  # Continue with tasks until they are completed or user exits
+        telegram_bot, discord_bot, discord_task = await initialize_and_run()
+        logger.info("Setup complete, polling for user commands...")
+
+        if telegram_bot or discord_bot:
+            await asyncio.Event().wait()  # Continue with tasks until they are completed or user exits
+        else:
+            logger.info("No bots were started, script will exit now...")
 
     finally:
+        if telegram_bot is not None:
+            logger.info("Shutting down telegram bot...")
+            await telegram_bot.updater.stop()
+            await telegram_bot.stop()
+            await telegram_bot.shutdown()
+
         if discord_bot is not None:
+            logger.info("Shutting down discord bot...")
             with contextlib.suppress(IndexError):
                 # Disconnect from discord voice channels if necessary
                 bot_channel = discord_bot.voice_clients[0].channel
 
                 if isinstance(bot_channel, discord.VoiceChannel):
-                    logger.info('Disconnecting from voice channel...')
+                    logger.info('Disconnecting discord bot from voice channel...')
                     await discord_bot.voice_clients[0].disconnect(force=False)
 
-        if discord_task:
+            await discord_bot.close()
+
+        if discord_task is not None:
             discord_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await discord_task

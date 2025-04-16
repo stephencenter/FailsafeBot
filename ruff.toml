@@ -1,0 +1,29 @@
+extend-exclude = ["Test", "build_markov.py"]
+line-length = 150
+
+[lint]
+preview = true
+select = ["ALL"]
+ignore = [  # Remove these at your own peril
+    "ANN204",
+    "B903",
+    "C901",
+    "COM812",
+    "CPY001",
+    "D100", "D101", "D102", "D103", "D105", "D107",
+    "DTZ005",
+    "E226",
+    "EM101",
+    "NPY002",
+    "PERF401",
+    "PGH003",
+    "PLR0912", "PLR0913", "PLR2004", "PLR6301",
+    "PT019",
+    "Q000",
+    "RET504",
+    "RUF029",
+    "S104", "S105", "S311", "S307", "S602", "S606",
+    "SIM108",
+    "TRY003",
+    "W291", "W293" # These ones are trailing whitespace, I have them disabled because vscode removes trailing whitespace when I save files
+]

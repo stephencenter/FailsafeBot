@@ -54,6 +54,9 @@ def stream_audio_from_url(url: str) -> dict | None:
             else:
                 return None
 
+        if not isinstance(data, dict):
+            return None
+
         return data
 
 
@@ -90,6 +93,9 @@ def download_audio_from_url(url: str) -> Path | None:
                 data = data['entries'][0]
             else:
                 return None
+
+        if not isinstance(data, dict):
+            return None
 
         original_filename = Path(ytdl.prepare_filename(data))
         final_filename = original_filename.with_suffix('.mp3')
