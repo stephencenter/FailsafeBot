@@ -7,6 +7,7 @@ from loguru import logger
 
 import common
 
+# Directories to check for and create if they don't exist
 directories = {
     common.DATA_FOLDER_PATH,
     common.TEMP_FOLDER_PATH,
@@ -14,6 +15,7 @@ directories = {
     common.LOGGING_FOLDER_PATH,
 }
 
+# Text files (.txt, .json, etc) to check for and create if they don't exist
 text_files = {
     common.TELEGRAM_TOKEN_PATH,
     common.DISCORD_TOKEN_PATH,
@@ -36,6 +38,9 @@ text_files = {
     common.D10000_LIST_PATH,
     common.ACTIVE_EFFECTS_PATH,
 }
+
+# Paths that we will not create, this is exclusions for the globals checking from common.py
+do_not_create = set()
 
 
 class InterceptHandler(logging.Handler):
@@ -78,7 +83,7 @@ def init_logging() -> None:
 
 def check_for_missing_paths() -> Generator[str]:
     for obj in common.__dict__.values():
-        if isinstance(obj, Path) and obj not in directories | text_files:
+        if isinstance(obj, Path) and obj not in directories | text_files | do_not_create:
             yield f"Path '{obj}' is expected but was not checked for"
 
 
