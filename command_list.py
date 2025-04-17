@@ -829,12 +829,15 @@ async def guess_command(user_command: UserCommand) -> CommandResponse:
     return CommandResponse(user_message, "That isn't an option for this question!")
 
 
-async def triviarank_command(_: UserCommand) -> CommandResponse:
-    points_dict = common.try_read_json(common.TRIVIA_POINTS_PATH, {})
-    ranking = sorted(points_dict, key=lambda x: points_dict[x], reverse=True)
+async def triviarank_command(user_command: UserCommand) -> CommandResponse:
+    user_message = "What are the current trivia rankings for this chat?"
 
-    message = '\n'.join(f'    {index + 1}. {player} @ {points_dict[player]:,} points' for index, player in enumerate(ranking))
-    return CommandResponse("What are the current trivia rankings?", f"The trivia rankings are:\n{message}")
+    rankings = trivia.get_trivia_rankings(user_command)
+    if rankings is None:
+        return CommandResponse(user_message, "There are no trivia rankings for this chat.")
+
+    message = '\n'.join(f'    {index + 1}. {player[0]} @ {player[1]:,} points' for index, player in enumerate(rankings))
+    return CommandResponse(user_message, f"The current trivia rankings for this chat are:\n{message}")
 # endregion
 
 

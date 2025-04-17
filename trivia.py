@@ -75,11 +75,26 @@ Type /guess [your answer] to answer!
 
             points_dict = common.try_read_json(common.TRIVIA_POINTS_PATH, {})
             player_name = user_command.get_author()
+            player_id = user_command.get_author_id()
+            chat_id = user_command.get_chat_id()
 
-            try:
-                points_dict[player_name] += points_gained
-            except KeyError:
-                points_dict[player_name] = points_gained
+            if chat_id not in points_dict:
+                points_dict[chat_id] = {
+                    player_id: {
+                        'name': player_name,
+                        'score': points_gained
+                    }
+                }
+
+            elif player_id not in points_dict[chat_id]:
+                points_dict[chat_id][player_id] = {
+                    'name': player_name,
+                    'score': points_gained
+                }
+
+            else:
+                points_dict[chat_id][player_id]['name'] = player_name  # Update player name in case it's changed
+                points_dict[chat_id][player_id]['score'] += points_gained
 
             common.write_json_to_file(common.TRIVIA_POINTS_PATH, points_dict)
             clear_current_question(user_command)
@@ -176,3 +191,17 @@ def clear_current_question(user_command: common.UserCommand) -> None:
     trivia_data[chat_id] = None
 
     common.write_json_to_file(common.TRIVIA_CURRENT_PATH, trivia_data)
+
+
+def get_trivia_rankings(user_command: common.UserCommand) -> list[tuple[str, int]] | None:
+    points_dict = common.try_read_json(common.TRIVIA_POINTS_PATH, {})
+    if not points_dict:
+        return None
+
+    chat_id = user_command.get_chat_id()
+    if chat_id not in points_dict:
+        return None
+
+    points_list = [(player['name'], player['score']) for player in points_dict[chat_id].values()]
+
+    return sorted(points_list, key=lambda x: x[1], reverse=True)
