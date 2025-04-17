@@ -6,11 +6,6 @@ import yt_dlp
 from strsimpy import Damerau
 
 import common
-import settings
-
-SOUNDS_PATH = "Sounds"
-ALIAS_PATH = "Data/sound_aliases.json"
-PLAYCOUNTS_PATH = "Data/playcounts.json"
 
 # This message is sent if the user doesn't provide a sound name
 TXT_SOUND_NOT_PROVIDED = (
@@ -26,6 +21,7 @@ TXT_SOUND_NOT_FOUND = (
     "No dice. Someone probably forgot to upload it, what a fool."
 )
 
+
 class SilenceYTDL:
     # This is disgusting but I don't know how else to stop YTDL from printing stuff to console
     # when provided with bad URLs
@@ -33,6 +29,7 @@ class SilenceYTDL:
     def info(self) -> None: pass
     def warning(self) -> None: pass
     def error(self) -> None: pass
+
 
 def stream_audio_from_url(url: str) -> dict | None:
     ytdl_parameters = {
@@ -57,13 +54,17 @@ def stream_audio_from_url(url: str) -> dict | None:
             else:
                 return None
 
+        if not isinstance(data, dict):
+            return None
+
         return data
 
+
 def download_audio_from_url(url: str) -> Path | None:
-    config = settings.Config()
+    config = common.Config()
     ytdl_parameters = {
         'format': 'bestaudio/best',
-        'outtmpl': str(Path(common.TEMP_FOLDER_PATH) / '%(title)s.%(ext)s'),
+        'outtmpl': str(common.TEMP_FOLDER_PATH / '%(title)s.%(ext)s'),
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -93,36 +94,42 @@ def download_audio_from_url(url: str) -> Path | None:
             else:
                 return None
 
+        if not isinstance(data, dict):
+            return None
+
         original_filename = Path(ytdl.prepare_filename(data))
         final_filename = original_filename.with_suffix('.mp3')
         return final_filename
+
 
 def get_sound_dict() -> dict[str, str]:
     # If any .mp3 files are in the main directory, move them to the Sounds directory
     for file in Path().iterdir():
         if file.suffix == ".mp3":
-            Path.replace(file, f"{SOUNDS_PATH}/{file}")
+            Path.replace(file, f"{common.SOUNDS_FOLDER_PATH}/{file}")
 
     # Create the sound dictionary. The keys will be the names of each sound, and the values will be the
     # path to that sound's file
     sound_dict = {}
-    for file in Path(SOUNDS_PATH).iterdir():
+    for file in common.SOUNDS_FOLDER_PATH.iterdir():
         if file.suffix == ".mp3":
             sound_dict[file.stem] = file
 
     return sound_dict
 
+
 def get_alias_dict() -> dict[str, str]:
     # Load a dictionary where the keys are aliases, and the values are the
     # sounds those aliases correspond to
-    return common.try_read_json(ALIAS_PATH, {})
+    return common.try_read_json(common.ALIAS_PATH, {})
+
 
 def get_playcount_dict() -> dict[str, int]:
     # Retrieve the sound and alias dictionaries
     sound_list = get_sound_list()
     alias_dict = get_alias_dict()
 
-    playcount_dict = common.try_read_json(PLAYCOUNTS_PATH, dict.fromkeys(sound_list, 0))
+    playcount_dict = common.try_read_json(common.PLAYCOUNTS_PATH, dict.fromkeys(sound_list, 0))
 
     # This variable makes note of whether a correction was made to the playcounts dictionary
     changed = False
@@ -151,9 +158,10 @@ def get_playcount_dict() -> dict[str, int]:
     # If the playcount dictionary had to be corrected, then we write the corrected
     # dictionary to a file
     if changed:
-        common.write_json_to_file(PLAYCOUNTS_PATH, playcount_dict)
+        common.write_json_to_file(common.PLAYCOUNTS_PATH, playcount_dict)
 
     return playcount_dict
+
 
 async def increment_playcount(sound_name: str) -> None:
     play_counts = get_playcount_dict()
@@ -163,7 +171,8 @@ async def increment_playcount(sound_name: str) -> None:
     except KeyError:
         play_counts[sound_name] = 1
 
-    common.write_json_to_file(PLAYCOUNTS_PATH, play_counts)
+    common.write_json_to_file(common.PLAYCOUNTS_PATH, play_counts)
+
 
 def sound_exists(sound_name: str) -> bool:
     if sound_name in get_sound_dict():
@@ -171,7 +180,8 @@ def sound_exists(sound_name: str) -> bool:
 
     return sound_name in get_alias_dict()
 
-def get_sound(sound_name: str) -> str | None | list[str]:
+
+def get_sound(sound_name: str) -> str | list[str] | None:
     # Get the dictionary of all sounds and the paths they're located at
     sound_dict = get_sound_dict()
 
@@ -196,6 +206,7 @@ def get_sound(sound_name: str) -> str | None | list[str]:
 
     return candidates
 
+
 def get_random_sound() -> tuple[str, str]:
     # Get the dictionary of all sounds and the paths they're located at
     sound_dict = get_sound_dict()
@@ -203,17 +214,10 @@ def get_random_sound() -> tuple[str, str]:
 
     return sound_name, sound_dict[sound_name]
 
+
 def get_sound_list() -> list[str]:
     return sorted(get_sound_dict().keys())
 
-def get_sound_list_txt() -> tuple[Path, int]:
-    sound_list = get_sound_list()
-    count = len(sound_list)
-    temp_path = Path(common.TEMP_FOLDER_PATH) / 'soundlist.txt'
-
-    common.write_lines_to_file(temp_path, sound_list)
-
-    return temp_path, count
 
 def get_aliases(sound_name: str) -> list[str]:
     # Get a list of every alias for the provided sound
@@ -234,7 +238,8 @@ def get_aliases(sound_name: str) -> list[str]:
 
     return sorted(alias_list)
 
-def add_sound_alias(new_alias: str, sound_name:str) -> str:
+
+def add_sound_alias(new_alias: str, sound_name: str) -> str:
     # Get the list of all sounds
     sound_dict = get_sound_dict()
 
@@ -255,9 +260,10 @@ def add_sound_alias(new_alias: str, sound_name:str) -> str:
             return f"'{sound_name}' is not an existing sound or alias"
 
     alias_dict[new_alias] = sound_name
-    common.write_json_to_file(ALIAS_PATH, alias_dict)
+    common.write_json_to_file(common.ALIAS_PATH, alias_dict)
 
     return f"'{new_alias}' has been added as an alias for '{sound_name}'"
+
 
 async def del_sound_alias(alias_to_delete: str) -> str:
     alias_dict = get_alias_dict()
@@ -269,12 +275,13 @@ async def del_sound_alias(alias_to_delete: str) -> str:
     except KeyError:
         return f"{alias_to_delete} isn't an alias for anything"
 
-    common.write_json_to_file(ALIAS_PATH, alias_dict)
+    common.write_json_to_file(common.ALIAS_PATH, alias_dict)
 
     return f"'{alias_to_delete}' is no longer an alias for '{prev_sound}'"
 
+
 def search_sounds(search_string: str) -> list[str]:
-    config = settings.Config()
+    config = common.Config()
 
     search_results: list[str] = []
     for sound_name in get_sound_list():
@@ -297,6 +304,7 @@ def search_sounds(search_string: str) -> list[str]:
                 break
 
     return sorted(search_results)
+
 
 def verify_aliases() -> Generator[str]:
     alias_dict = get_alias_dict()

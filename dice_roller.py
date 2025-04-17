@@ -3,8 +3,6 @@ import re
 
 import common
 
-D10000_LIST_PATH = "Data/d10000_list.txt"
-ACTIVE_EFFECTS_PATH = "Data/active_effects.json"
 
 def parse_diceroll(dice_roll: list) -> tuple[int, int, int] | None:
     try:
@@ -42,6 +40,7 @@ def parse_diceroll(dice_roll: list) -> tuple[int, int, int] | None:
 
     return num_dice, num_faces, modifier
 
+
 def get_coc_roll() -> str:
     roll_string = ""
     for stat in ["STR", "CON", "DEX", "APP", "POW"]:
@@ -60,6 +59,7 @@ def get_coc_roll() -> str:
     roll_string = "\n".join([roll_string, f"Bonus: {random.randint(1, 10)}"])
     return roll_string
 
+
 def get_dnd_roll() -> str:
     roll_string = ""
     for stat in ["STR", "DEX", "CON", "INT", "WIS", "CHA"]:
@@ -68,6 +68,7 @@ def get_dnd_roll() -> str:
         roll_string = "\n".join([roll_string, f"{stat}: {sum(four_rolls)}"])
 
     return roll_string
+
 
 def get_mythras_roll() -> str:
     roll_string = ""
@@ -86,12 +87,13 @@ def get_mythras_roll() -> str:
 
     return roll_string
 
+
 def get_d10000_roll(username: str) -> str:
-    effects = common.try_read_lines_list(D10000_LIST_PATH, None)
+    effects = common.try_read_lines_list(common.D10000_LIST_PATH, None)
     if effects is None:
         return "The d10000 file couldn't be found!"
 
-    active_effects = common.try_read_json(ACTIVE_EFFECTS_PATH, {})
+    active_effects = common.try_read_json(common.ACTIVE_EFFECTS_PATH, {})
 
     try:
         effects = [x for x in effects if x not in active_effects[username]]
@@ -102,12 +104,13 @@ def get_d10000_roll(username: str) -> str:
     active_effects[username].append(chosen_effect)
     active_effects[username] = sorted(set(active_effects[username]))
 
-    common.write_json_to_file(ACTIVE_EFFECTS_PATH, active_effects)
+    common.write_json_to_file(common.ACTIVE_EFFECTS_PATH, active_effects)
 
     return chosen_effect
 
+
 def get_active_effects(username: str) -> list:
-    effects_dict = common.try_read_json(ACTIVE_EFFECTS_PATH, {})
+    effects_dict = common.try_read_json(common.ACTIVE_EFFECTS_PATH, {})
 
     try:
         active_effects = effects_dict[username]
@@ -116,8 +119,9 @@ def get_active_effects(username: str) -> list:
 
     return active_effects
 
+
 def reset_active_effects(username: str) -> None:
-    effects_dict = common.try_read_json(ACTIVE_EFFECTS_PATH, {})
+    effects_dict = common.try_read_json(common.ACTIVE_EFFECTS_PATH, {})
     effects_dict[username] = []
 
-    common.write_json_to_file(ACTIVE_EFFECTS_PATH, effects_dict)
+    common.write_json_to_file(common.ACTIVE_EFFECTS_PATH, effects_dict)
