@@ -1,4 +1,4 @@
-extend-exclude = ["Test", "build_markov.py"]
+extend-exclude = ["Test", "build_markov.py", "verify.py"]
 line-length = 150
 
 [lint]

@@ -15,7 +15,7 @@ from telegram.ext import CallbackContext as TelegramContext
 
 # PROJECT VARIABLES
 APPLICATION_NAME = "FailsafeBot"
-VERSION_NUMBER = "v1.1.3"
+VERSION_NUMBER = "v1.1.4"
 
 # DIRECTORIES
 DATA_FOLDER_PATH = Path('Data')
