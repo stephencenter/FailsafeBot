@@ -369,6 +369,9 @@ class UserCommand:
             return str(self.update.message.chat.id)
 
         if isinstance(self.context, DiscordContext):
+            if self.context.guild is not None:
+                return str(self.context.guild.id)
+
             return str(self.context.channel.id)
 
         return None
