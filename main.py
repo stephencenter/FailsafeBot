@@ -127,9 +127,8 @@ async def main() -> None:
     discord_task = None
     try:
         telegram_bot, discord_bot, discord_task = await initialize_and_run()
-        logger.info("Setup complete, polling for user commands...")
-
         if telegram_bot or discord_bot:
+            logger.info("Setup complete, polling for user commands...")
             await asyncio.Event().wait()  # Continue with tasks until they are completed or user exits
         else:
             logger.info("No bots were started, script will exit now...")
