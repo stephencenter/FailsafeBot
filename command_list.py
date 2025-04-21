@@ -1219,7 +1219,7 @@ async def handle_message_event(user_command: UserCommand) -> CommandResponse:
     if isinstance(user_command.context, discord_commands.Context) and user_command.context.author.bot:
         return NoResponse()
 
-    message = user_command.get_user_message()
+    message = user_command.get_user_message().lower()
     response = NoResponse()
 
     if config.chat.replytomonkey and "monkey" in message:
@@ -1240,7 +1240,7 @@ async def handle_message_event(user_command: UserCommand) -> CommandResponse:
 
 async def monkey_event(message: str) -> CommandResponse:
     # Discworld adventure game reference
-    return SoundResponse(message, bot_message="AAAAAHHHHH-EEEEE-AAAAAHHHHH!", file_path="Sounds/monkey.mp3")
+    return SoundResponse(message, bot_message="AAAAAHHHHH-EEEEE-AAAAAHHHHH!", file_path=common.SOUNDS_FOLDER_PATH / "monkey.mp3")
 
 
 async def reply_event(user_command: UserCommand) -> CommandResponse:
