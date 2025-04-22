@@ -19,7 +19,7 @@ import sound_manager
 def prepare_runway() -> None:
     # Initialize logging
     runway.init_logging()
-    logger.info(f"Initialized logging to {common.LOGGING_FILE_PATH}")
+    logger.info(f"Loaded {common.APPLICATION_NAME} {common.VERSION_NUMBER}, logging to {common.LOGGING_FILE_PATH}")
 
     # Make sure all files and folders exist that this script needs
     for info in runway.create_project_structure():
@@ -30,7 +30,7 @@ def prepare_runway() -> None:
         logger.info(info)
 
     # Check for any paths defined in common.py that weren't included in the above check
-    # (for debug purposes, this should never happen)
+    # (for debug purposes, this should never happen in production)
     for warning in runway.check_for_missing_paths():
         logger.warning(warning)
 
@@ -39,7 +39,7 @@ def prepare_runway() -> None:
         logger.warning(warning)
 
     # Check for common issues with settings dataclasses
-    # (for debug purposes, this should never happen)
+    # (for debug purposes, this should never happen in production)
     for warning in common.verify_settings():
         logger.warning(warning)
 
@@ -78,7 +78,6 @@ async def create_run_discord_bot(discord_token: str) -> tuple[DiscordBot, asynci
 
 
 async def initialize_and_run() -> tuple[TelegramBot | None, DiscordBot | None, asyncio.Task | None]:
-    logger.info(f"Starting {common.APPLICATION_NAME} {common.VERSION_NUMBER}")
     config = common.Config()
 
     # Telegram Bot
@@ -131,7 +130,7 @@ async def main() -> None:
             logger.info("Setup complete, polling for user commands...")
             await asyncio.Event().wait()  # Continue with tasks until they are completed or user exits
         else:
-            logger.info("No bots were started, script will exit now...")
+            logger.info("No bots were started, script will exit now")
 
     finally:
         if telegram_bot is not None:

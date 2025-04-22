@@ -1,91 +1,30 @@
 import random
 import re
+from collections.abc import Callable
+from dataclasses import dataclass
 
 import common
 
 
-def parse_diceroll(dice_roll: list) -> tuple[int, int, int] | None:
-    try:
-        if dice_roll[0].startswith("d"):
-            dice_roll[0] = f"1{dice_roll[0]}"
+def parse_diceroll(roll_string: str) -> tuple[int, int, int] | None:
+    # Regex pattern that catches most diceroll formats, including "d6", "1d4", "2d8-2", and "3d2 + 3"
+    dice_pattern = r'^\s*(\d*)d(\d+)\s*([+-]\s*\d+)?\s*$'
+    roll_args = re.match(dice_pattern, roll_string.strip().lower())
 
-    except IndexError:
+    if not roll_args:
         return None
 
-    roll_data = re.split(r"d|(\+)|(-)", "".join(dice_roll), flags=re.IGNORECASE)
-    roll_data = [x for x in roll_data if x is not None]
+    # Parse out the number of dice and faces and cast to int
+    num_dice = int(roll_args.group(1)) if roll_args.group(1) else 1
+    num_faces = int(roll_args.group(2))
 
-    try:
-        num_dice = int(roll_data[0])
-        num_faces = int(roll_data[1])
+    # Parse out the modifier. We split and re-join to remove any spaces, e.g. "- 2" -> "-2"
+    modifier = int(''.join(roll_args.group(3).split())) if roll_args.group(3) else 0
 
-    except (IndexError, ValueError):
+    if num_dice < 1 or num_faces < 1:
         return None
-
-    if num_faces < 1 or num_dice < 1:
-        return None
-
-    modifier = 0
-
-    try:
-        if roll_data[2] == '+':
-            modifier = int(roll_data[3])
-
-        if roll_data[2] == '-':
-            modifier = -int(roll_data[3])
-
-    except (IndexError, ValueError) as e:
-        if len(roll_data) != 2 or e is ValueError:
-            return None
 
     return num_dice, num_faces, modifier
-
-
-def get_coc_roll() -> str:
-    roll_string = ""
-    for stat in ["STR", "CON", "DEX", "APP", "POW"]:
-        d1 = random.randint(1, 6)
-        d2 = random.randint(1, 6)
-        d3 = random.randint(1, 6)
-
-        roll_string = "\n".join([roll_string, f"{stat}: {5*(d1 + d2 + d3)}"])
-
-    for stat in ["SIZ", "INT", "EDU", "LUC"]:
-        d1 = random.randint(1, 6)
-        d2 = random.randint(1, 6)
-
-        roll_string = "\n".join([roll_string, f"{stat}: {5*(d1 + d2 + 6)}"])
-
-    roll_string = "\n".join([roll_string, f"Bonus: {random.randint(1, 10)}"])
-    return roll_string
-
-
-def get_dnd_roll() -> str:
-    roll_string = ""
-    for stat in ["STR", "DEX", "CON", "INT", "WIS", "CHA"]:
-        four_rolls = [random.randint(1, 6) for _ in range(4)]
-        del four_rolls[four_rolls.index(min(four_rolls))]
-        roll_string = "\n".join([roll_string, f"{stat}: {sum(four_rolls)}"])
-
-    return roll_string
-
-
-def get_mythras_roll() -> str:
-    roll_string = ""
-    for stat in ["STR", "CON", "DEX", "POW", "CHA"]:
-        d1 = random.randint(1, 6)
-        d2 = random.randint(1, 6)
-        d3 = random.randint(1, 6)
-
-        roll_string = "\n".join([roll_string, f"{stat}: {d1 + d2 + d3}"])
-
-    for stat in ["INT", "SIZ"]:
-        d1 = random.randint(1, 6)
-        d2 = random.randint(1, 6)
-
-        roll_string = "\n".join([roll_string, f"{stat}: {d1 + d2 + 6}"])
-
-    return roll_string
 
 
 def get_d10000_roll(username: str) -> str:
@@ -125,3 +64,95 @@ def reset_active_effects(username: str) -> None:
     effects_dict[username] = []
 
     common.write_json_to_file(common.ACTIVE_EFFECTS_PATH, effects_dict)
+
+
+@dataclass
+class StatrollGame:
+    game_name: str
+    game_aliases: list[str]
+    game_function: Callable[[], dict[str, int]]
+
+
+def roll_dice(num_dice: int, num_sides: int, modifier: int) -> int:
+    return sum(random.randint(1, num_dice) for _ in range(num_sides)) + modifier
+
+
+def get_dnd_statroll() -> dict[str, int]:
+    # Based on D&D 5e
+    statroll = {
+        "STR": 0,
+        "DEX": 0,
+        "CON": 0,
+        "INT": 0,
+        "WIS": 0,
+        "CHA": 0
+    }
+
+    # All ability scores use 4d6 drop lowest
+    for stat in statroll:
+        dice_rolls = [random.randint(1, 6) for _ in range(4)]
+        statroll[stat] = sum(dice_rolls) - min(dice_rolls)
+
+    return statroll
+
+
+def get_coc_statroll() -> dict[str, int]:
+    # Based on CoC 7e
+    statroll = {
+        # These characteristics use the formula 5*3d6
+        "STR": 5*roll_dice(3, 6, 0),
+        "CON": 5*roll_dice(3, 6, 0),
+        "DEX": 5*roll_dice(3, 6, 0),
+        "APP": 5*roll_dice(3, 6, 0),
+        "POW": 5*roll_dice(3, 6, 0),
+
+        # These characteristics use the formula 5*(2d6 + 6)
+        "SIZ": 5*(roll_dice(2, 6, 6)),
+        "INT": 5*(roll_dice(2, 6, 6)),
+        "EDU": 5*(roll_dice(2, 6, 6)),
+        "LUC": 5*(roll_dice(2, 6, 6)),
+
+        # This stat uses a single d10
+        "Bonus": random.randint(1, 10)
+    }
+
+    return statroll
+
+
+def get_pf_statroll() -> dict[str, int]:
+    # Based on Pathfinder 2e
+    statroll = {
+        "STR": 0,
+        "DEX": 0,
+        "CON": 0,
+        "INT": 0,
+        "WIS": 0,
+        "CHA": 0
+    }
+
+    # All ability scores use 4d6 drop lowest
+    for stat in statroll:
+        dice_rolls = [random.randint(1, 6) for _ in range(4)]
+        statroll[stat] = sum(dice_rolls) - min(dice_rolls)
+
+    return statroll
+
+
+# List of game options & associated functions for stat rolls
+STATROLL_GAME_OPTIONS = [
+    StatrollGame(
+        "Dungeons & Dragons",
+        ["dnd", "d&d", "dungeons and dragons", "dungeons & dragons", "dungeons n dragons"],
+        get_dnd_statroll
+    ),
+    StatrollGame(
+        "Call of Cthulhu",
+        ["coc", "call of cthulhu"],
+        get_coc_statroll
+    ),
+    StatrollGame(
+        "Pathfinder",
+        ["pf", "pathfinder", "path finder"],
+        get_pf_statroll
+    )
+]

@@ -4,7 +4,7 @@ import io
 import os
 import random
 import sys
-from collections.abc import Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from pathlib import Path
 
 import discord
@@ -43,7 +43,7 @@ from common import (
 # RESPONSE HANDLERS
 # ==========================
 # region
-async def send_response(command_function: Callable, user_command: UserCommand) -> None:
+async def send_response(command_function: Callable[[UserCommand], Awaitable[CommandResponse]], user_command: UserCommand) -> None:
     config = common.Config()
     user_command.response = await command_function(user_command)
 
@@ -84,7 +84,7 @@ async def send_response(command_function: Callable, user_command: UserCommand) -
         chat.append_to_memory(user_prompt=user_prompt, bot_prompt=user_command.response.bot_message)
 
 
-def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable) -> Callable:
+def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable[[UserCommand], Awaitable[CommandResponse]]) -> Callable:
     if isinstance(bot, TelegramBot):
         async def wrapper_function(update: TelegramUpdate, context: TelegramContext) -> None:  # type: ignore
             user_command = UserCommand(bot, context, update=update)
@@ -702,11 +702,12 @@ async def vcsay_command(user_command: UserCommand) -> CommandResponse:
 # ==========================
 # region
 async def roll_command(user_command: UserCommand) -> CommandResponse:
-    parsed_roll = dice_roller.parse_diceroll(user_command.get_args_list())
+    parsed_roll = dice_roller.parse_diceroll(user_command.get_user_message())
 
     if parsed_roll is None:
         return CommandResponse("Can you roll some dice for me?", "Please use dice notation like a civilized humanoid, e.g. '3d6 + 2'")
 
+    # Extract the 3-tuple returned from the parser into three variables
     num_dice, num_faces, modifier = parsed_roll
 
     if modifier > 0:
@@ -725,44 +726,40 @@ async def roll_command(user_command: UserCommand) -> CommandResponse:
     if num_faces > config.misc.maxfaces:
         return CommandResponse(user_prompt, f"Keep it to {config.misc.maxfaces:,} sides or fewer please, I'm not a god.")
 
-    rolls = []
-    for _ in range(num_dice):
-        this_roll = random.randint(1, num_faces)
-        rolls.append(this_roll)
+    # Roll `num_dice` number of dice, each with `num_faces` sides and store each roll in a list
+    rolls = [random.randint(1, num_faces) for _ in range(num_dice)]
+    total_roll = sum(rolls) + modifier
 
+    dice_text = ""
     if modifier != 0 or num_dice > 1:
-        dice_text = ', '.join(str(x) for x in rolls)
+        dice_text = ', '.join(f"{x:,}" for x in rolls)
         dice_text = f"({dice_text})"
-
-    else:
-        dice_text = ""
 
     sender = user_command.get_author()
 
-    return CommandResponse(user_prompt, f"{sender} rolled a {sum(rolls) + modifier:,} {dice_text}")
+    return CommandResponse(user_prompt, f"{sender} rolled a {total_roll:,} {dice_text}")
 
 
 async def statroll_command(user_command: UserCommand) -> CommandResponse:
-    game_functions = {
-        "dnd": dice_roller.get_dnd_roll,
-        "coc": dice_roller.get_coc_roll,
-        "mythras": dice_roller.get_mythras_roll
-    }
+    error_response = f"Please provide a valid game name ({', '.join(game.game_aliases[0] for game in dice_roller.STATROLL_GAME_OPTIONS)})"
 
-    error_response = f"Please supply a valid game name. Options are {', '.join(game_functions.keys())}"
-
-    game = user_command.get_first_arg(lowercase=True)
-    if game is None:
+    user_string = ' '.join(user_command.get_args_list()).lower()
+    if user_string is None:
         return CommandResponse("Can you roll me a tabletop character?", error_response)
 
-    user_prompt = f"Can you roll me a character for {game}?"
+    for game in dice_roller.STATROLL_GAME_OPTIONS:
+        if user_string in game.game_aliases:
+            break
 
-    try:
-        roll_string = game_functions[game]()
-    except KeyError:
-        return CommandResponse(user_prompt, error_response)
+    else:
+        return CommandResponse(f"Can you roll me a character for {user_string}?", error_response)
 
-    return CommandResponse(user_prompt, roll_string)
+    stat_dict = game.game_function()
+
+    roll_string = '\n'.join(f"- {stat}: {stat_dict[stat]}" for stat in stat_dict)
+    roll_string = f"Stat roll for {game.game_name}:\n{roll_string}"
+
+    return CommandResponse(f"Can you roll me a character for {game.game_name}?", roll_string)
 
 
 async def d10000_command(user_command: UserCommand) -> CommandResponse:
