@@ -67,10 +67,13 @@ async def send_response(command_function: Callable[[UserCommand], Awaitable[Comm
         elif text_response:
             await user_command.send_text_response(text_response)
 
-    except (BadRequest, TimedOut, NetworkError, HTTPException):
+    except (BadRequest, TimedOut, NetworkError, HTTPException) as e:
         error_response = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
         await user_command.send_text_response(error_response)
-        raise
+
+        # Re-raise BadRequests, as these indicate a bug with the script that will need to be fixed
+        if e is BadRequest:
+            raise
 
     # Add the command and its response to memory if necessary
     if user_command.response.record_to_memory:
@@ -739,7 +742,7 @@ async def roll_command(user_command: UserCommand) -> CommandResponse:
         dice_text = ', '.join(f"{x:,}" for x in rolls)
         dice_text = f"({dice_text})"
 
-    sender = user_command.get_author()
+    sender = user_command.get_user_name()
 
     return CommandResponse(user_prompt, f"{sender} rolled a {total_roll:,} {dice_text}")
 
@@ -767,13 +770,13 @@ async def statroll_command(user_command: UserCommand) -> CommandResponse:
 
 
 async def d10000_command(user_command: UserCommand) -> CommandResponse:
-    username = user_command.get_author()
+    username = user_command.get_user_name()
     effect = dice_roller.get_d10000_roll(username)
     return CommandResponse("Can you roll an effect on the d10000 table?", effect)
 
 
 async def effects_command(user_command: UserCommand) -> CommandResponse:
-    username = user_command.get_author()
+    username = user_command.get_user_name()
     active_effects = dice_roller.get_active_effects(username)
 
     if active_effects:
@@ -786,7 +789,7 @@ async def effects_command(user_command: UserCommand) -> CommandResponse:
 
 
 async def reset_effects_command(user_command: UserCommand) -> CommandResponse:
-    username = user_command.get_author()
+    username = user_command.get_user_name()
     dice_roller.reset_active_effects(username)
 
     return CommandResponse("Can you reset my active d10000 effects?", f"Active effects reset for {username}.")
@@ -816,7 +819,7 @@ async def guess_command(user_command: UserCommand) -> CommandResponse:
 
     if current_question.is_guess_correct(guess):
         points_gained = current_question.score_question(user_command, was_correct=True)
-        player_name = user_command.get_author()
+        player_name = user_command.get_user_name()
         send_str = f"That is correct, the answer was '{current_question.correct_answer}'. {player_name} earned {points_gained} points!"
         return CommandResponse(user_message, send_str)
 
@@ -1177,10 +1180,18 @@ async def delwhitelist_command(user_command: UserCommand) -> CommandResponse:
 
 async def getuserid_command(user_command: UserCommand) -> CommandResponse:
     # Tells the user what their user ID is
-    user_message = "Can you tell me what my user ID is?"
-    user_id = user_command.get_author_id()
+    username = user_command.get_first_arg()
+    if username is None:
+        user_id = user_command.get_user_id()
+        return CommandResponse("Can you tell me what my user ID is?", f"Your user ID is {user_id}.")
 
-    return CommandResponse(user_message, f"Your user ID is {user_id}")
+    user_id = user_command.get_id_by_username(username.lower())
+    user_message = f"What is {username}'s user ID?"
+
+    if user_id is None:
+        return CommandResponse(user_message, f"{username}'s user ID has not been tracked.")
+
+    return CommandResponse(user_message, f"{username}'s user ID is {user_id}.")
 
 
 async def getchatid_command(user_command: UserCommand) -> CommandResponse:

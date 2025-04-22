@@ -74,8 +74,8 @@ Type /guess [your answer] to answer!
             points_gained = math.floor(potential_points*points_multiplier)
 
             points_dict = common.try_read_json(common.TRIVIA_POINTS_PATH, {})
-            player_name = user_command.get_author()
-            player_id = user_command.get_author_id()
+            player_name = user_command.get_user_name()
+            player_id = user_command.get_user_id()
             chat_id = user_command.get_chat_id()
 
             if chat_id not in points_dict:

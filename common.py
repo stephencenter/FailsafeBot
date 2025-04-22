@@ -15,7 +15,7 @@ from telegram.ext import CallbackContext as TelegramContext
 
 # PROJECT VARIABLES
 APPLICATION_NAME = "FailsafeBot"
-VERSION_NUMBER = "v1.1.4"
+VERSION_NUMBER = "v1.1.5"
 
 # DIRECTORIES
 DATA_FOLDER_PATH = Path('Data')
@@ -31,8 +31,9 @@ TELEGRAM_WHITELIST_PATH = DATA_FOLDER_PATH / "tg_whitelist.txt"
 CONFIG_PATH = DATA_FOLDER_PATH / "settings.toml"
 LOGGING_FILE_PATH = LOGGING_FOLDER_PATH / "log.txt"
 USERNAME_MAP_PATH = DATA_FOLDER_PATH / "username_map.json"
+TRACK_USERID_PATH = DATA_FOLDER_PATH / "track_userid.json"
 
-# CHATTING
+# CHATTING FILES
 OPENAI_KEY_PATH = DATA_FOLDER_PATH / "openai_key.txt"
 ELEVENLABS_KEY_PATH = DATA_FOLDER_PATH / "eleven_key.txt"
 PREPEND_PATH = DATA_FOLDER_PATH / "prepend_message.txt"
@@ -41,17 +42,17 @@ MARKOV_PATH = DATA_FOLDER_PATH / "markov_chain.json"
 MEMORY_PATH = DATA_FOLDER_PATH / "openai_memory.json"
 RESPONSES_PATH = DATA_FOLDER_PATH / "response_list.txt"
 
-# SOUNDS
+# SOUNDS FILES
 ALIAS_PATH = DATA_FOLDER_PATH / "sound_aliases.json"
 PLAYCOUNTS_PATH = DATA_FOLDER_PATH / "playcounts.json"
 
-# TRIVIA
+# TRIVIA FILES
 TRIVIA_POINTS_PATH = DATA_FOLDER_PATH / "trivia_points.json"
 TRIVIA_CURRENT_PATH = DATA_FOLDER_PATH / "current_trivia.json"
 TRIVIA_MEMORY_PATH = DATA_FOLDER_PATH / "trivia_memory.txt"
 TRIVIA_URL = "https://opentdb.com/api.php?amount="
 
-# D10000
+# D10000 FILES
 D10000_LIST_PATH = DATA_FOLDER_PATH / "d10000_list.txt"
 ACTIVE_EFFECTS_PATH = DATA_FOLDER_PATH / "active_effects.json"
 
@@ -267,26 +268,48 @@ class UserCommand:
         self.update = update
         self.response: CommandResponse | None = None
 
-    def get_author(self, *, map_name: bool = False) -> str:
+        self.track_user_id()
+
+    def track_user_id(self) -> None:
+        id_dict = try_read_json(TRACK_USERID_PATH, {})
+        username = self.get_user_name().lower()
+        user_id = self.get_user_id()
+
+        if username in id_dict:
+            if isinstance(self.target_bot, TelegramBot):
+                id_dict[username]["telegram"] = user_id
+
+            if isinstance(self.target_bot, DiscordBot):
+                id_dict[username]["discord"] = user_id
+
+        else:
+            if isinstance(self.target_bot, TelegramBot):
+                id_dict[username] = {"telegram": user_id}
+            if isinstance(self.target_bot, DiscordBot):
+                id_dict[username] = {"discord": user_id}
+
+        write_json_to_file(TRACK_USERID_PATH, id_dict)
+
+    def get_user_name(self, *, map_name: bool = False) -> str:
         # Returns the username of the user that sent the command or message
         if isinstance(self.update, TelegramUpdate):
-            author_name = self.update.message.from_user.username
+            username = self.update.message.from_user.username
 
         elif isinstance(self.context, DiscordContext):
-            author_name = self.context.author.name
+            username = self.context.author.name
 
         else:
             raise InvalidBotTypeError
 
-        if author_name is None:
+        if username is None:
             return ''
 
         if map_name:
-            return self.map_username(author_name)
+            return self.map_username(username)
 
-        return author_name
+        return username
 
-    def get_author_id(self) -> str:
+    def get_user_id(self) -> str:
         # Returns the user ID of the user that sent the command or message
         if isinstance(self.update, TelegramUpdate):
             user_id = str(self.update.message.from_user.id)
@@ -298,6 +321,22 @@ class UserCommand:
             raise InvalidBotTypeError
 
         return user_id
+
+    def get_id_by_username(self, username: str) -> str | None:
+        # Attempt to retrieve the ID belonging to the provided username
+        # This ID is platform-specific (Discord, Telegram) and can only be retrieved if the user has interacted with this bot before
+        id_dict = try_read_json(TRACK_USERID_PATH, {})
+
+        if username not in id_dict:
+            return None
+
+        if isinstance(self.target_bot, TelegramBot) and "telegram" in id_dict[username]:
+            return id_dict[username]["telegram"]
+
+        if isinstance(self.target_bot, DiscordBot) and "discord" in id_dict[username]:
+            return id_dict[username]["discord"]
+
+        return None
 
     def is_private(self) -> bool:
         # Returns whether the command was called in a private chat or a group chat
@@ -361,7 +400,7 @@ class UserCommand:
         raise InvalidBotTypeError
 
     def get_user_prompt(self) -> str:
-        sender = self.get_author(map_name=True)
+        sender = self.get_user_name(map_name=True)
         user_message = self.get_user_message()
 
         return f'{sender}: {user_message}'
@@ -371,7 +410,7 @@ class UserCommand:
         if not Config().main.requireadmin:
             return True
 
-        user_id = self.get_author_id()
+        user_id = self.get_user_id()
         admin_list = try_read_lines_list(ADMINS_PATH, [])
 
         return user_id in admin_list
