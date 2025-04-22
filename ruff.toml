@@ -13,7 +13,6 @@ ignore = [  # Remove these at your own peril
     "D100", "D101", "D102", "D103", "D105", "D107",
     "DTZ005",
     "E226",
-    "EM101",
     "FURB118",
     "NPY002",
     "PERF401",

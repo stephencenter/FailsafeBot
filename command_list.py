@@ -29,14 +29,7 @@ import common
 import dice_roller
 import sound_manager
 import trivia
-from common import (
-    CommandResponse,
-    FileResponse,
-    NoPermissionsResponse,
-    NoResponse,
-    SoundResponse,
-    UserCommand,
-)
+from common import CommandResponse, FileResponse, InvalidBotTypeError, NoPermissionsResponse, NoResponse, SoundResponse, UserCommand
 
 
 # ==========================
@@ -48,7 +41,8 @@ async def send_response(command_function: Callable[[UserCommand], Awaitable[Comm
     user_command.response = await command_function(user_command)
 
     if user_command.response is None:
-        raise TypeError("Command did not return a CommandResponse object")
+        error_message = "Command did not return a CommandResponse object"
+        raise TypeError(error_message)
 
     if user_command.response.send_to_chat and user_command.response.bot_message:
         text_response = user_command.response.bot_message
@@ -86,9 +80,11 @@ async def send_response(command_function: Callable[[UserCommand], Awaitable[Comm
 
 def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable[[UserCommand], Awaitable[CommandResponse]]) -> Callable:
     if isinstance(bot, TelegramBot):
-        async def wrapper_function(update: TelegramUpdate, context: TelegramContext) -> None:  # type: ignore
-            user_command = UserCommand(bot, context, update=update)
+        async def telegram_wrapper(update: TelegramUpdate, context: TelegramContext) -> None:
+            if update.message is None:
+                return
 
+            user_command = UserCommand(bot, context, update=update)
             if not user_command.is_whitelisted():
                 # Telegram doesn't allow you to make "private" bots, meaning anyone can add your bot to their chat
                 # and use up your CPU time. This check prevents the bot from responding to commands unless it comes
@@ -98,12 +94,16 @@ def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable[[UserComman
 
             await send_response(command, user_command)
 
-    elif isinstance(bot, DiscordBot):
-        async def wrapper_function(context: DiscordContext) -> None:
+        return telegram_wrapper
+
+    if isinstance(bot, DiscordBot):
+        async def discord_wrapper(context: DiscordContext) -> None:
             user_command = UserCommand(bot, context)
             await send_response(command, user_command)
 
-    return wrapper_function
+        return discord_wrapper
+
+    raise InvalidBotTypeError
 
 
 def register_commands(bot: TelegramBot | DiscordBot) -> None:
@@ -160,7 +160,9 @@ def register_commands(bot: TelegramBot | DiscordBot) -> None:
         ("addadmin", addadmin_command),
         ("deladmin", deladmin_command),
         ("addwhitelist", addwhitelist_command),
-        ("delwhitelist", delwhitelist_command)
+        ("delwhitelist", delwhitelist_command),
+        ("getuserid", getuserid_command),
+        ("getchatid", getchatid_command)
     ]
 
     if isinstance(bot, TelegramBot):
@@ -178,7 +180,7 @@ def register_commands(bot: TelegramBot | DiscordBot) -> None:
         discord_register_events(bot)
 
     else:
-        raise NotImplementedError
+        raise InvalidBotTypeError
 # endregion
 
 
@@ -447,7 +449,8 @@ async def say_command(user_command: UserCommand) -> CommandResponse:
         return CommandResponse(user_message, "Failed to retrieve ElevenLabs key from file.")
 
     if not isinstance(elevenlabs_response, Path | str):
-        raise NotImplementedError
+        error_message = f"ElevenLabs response was {type(elevenlabs_response)}, expected str or Path"
+        raise TypeError(error_message)
 
     return SoundResponse(user_message, "Fine, I'll say your stupid phrase.", elevenlabs_response, temp=True)
 
@@ -679,7 +682,8 @@ async def vcsay_command(user_command: UserCommand) -> CommandResponse:
         return CommandResponse(user_message, "Failed to retrieve ElevenLabs key from file.")
 
     if not isinstance(elevenlabs_response, Iterator):
-        raise NotImplementedError
+        error_message = f"ElevenLabs response was {type(elevenlabs_response)}, expected Iterator"
+        raise TypeError(error_message)
 
     audio_buffer = io.BytesIO()
     for chunk in elevenlabs_response:
@@ -1083,7 +1087,8 @@ async def crash_command(user_command: UserCommand) -> CommandResponse:
     if not user_command.is_admin():
         return NoPermissionsResponse("This statement is false.")
 
-    raise ZeroDivisionError("/crash command used")
+    error_message = "/crash command used"
+    raise ZeroDivisionError(error_message)
 
 
 async def addadmin_command(user_command: UserCommand) -> CommandResponse:
@@ -1168,6 +1173,21 @@ async def delwhitelist_command(user_command: UserCommand) -> CommandResponse:
     common.write_lines_to_file(common.TELEGRAM_WHITELIST_PATH, whitelist)
 
     return CommandResponse(user_message, f"Removed chat ID '{chat_id}' from the whitelist.")
+
+
+async def getuserid_command(user_command: UserCommand) -> CommandResponse:
+    # Tells the user what their user ID is
+    user_message = "Can you tell me what my user ID is?"
+    user_id = user_command.get_author_id()
+
+    return CommandResponse(user_message, f"Your user ID is {user_id}")
+
+
+async def getchatid_command(user_command: UserCommand) -> CommandResponse:
+    user_message = "Can you tell me what this chat's ID is?"
+    chat_id = user_command.get_chat_id()
+
+    return CommandResponse(user_message, f"This chat's ID is {chat_id}")
 # endregion
 
 

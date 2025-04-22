@@ -55,6 +55,18 @@ TRIVIA_URL = "https://opentdb.com/api.php?amount="
 D10000_LIST_PATH = DATA_FOLDER_PATH / "d10000_list.txt"
 ACTIVE_EFFECTS_PATH = DATA_FOLDER_PATH / "active_effects.json"
 
+# ==========================
+# EXCEPTION TYPES
+# ==========================
+# region
+class InvalidBotTypeError(TypeError):
+    # This exception type should be raised if a function expects a TelegramBot or DiscordBot but gets something else instead
+    def __init__(self, message=None):
+        self.message = f"{APPLICATION_NAME} currently supports only Telegram and Discord bots"
+        if message is not None:
+            self.message = message
+        super().__init__(self.message)
+# endregion
 
 # ==========================
 # SETTINGS MANAGEMENT
@@ -248,7 +260,7 @@ class UserCommand:
             raise TypeError("Context type and bot type must match")
 
         if not isinstance(target_bot, TelegramBot) and not isinstance(target_bot, DiscordBot):
-            raise NotImplementedError("Currently only supporting Telegram and Discord bots")
+            raise InvalidBotTypeError
 
         self.target_bot = target_bot
         self.context = context
@@ -264,7 +276,7 @@ class UserCommand:
             author_name = self.context.author.name
 
         else:
-            raise NotImplementedError
+            raise InvalidBotTypeError
 
         if author_name is None:
             return ''
@@ -283,7 +295,7 @@ class UserCommand:
             user_id = str(self.context.author.id)
 
         else:
-            raise NotImplementedError
+            raise InvalidBotTypeError
 
         return user_id
 
@@ -295,7 +307,7 @@ class UserCommand:
         if isinstance(self.context, DiscordContext):
             return self.context.guild is None
 
-        raise NotImplementedError
+        raise InvalidBotTypeError
 
     def get_args_list(self) -> list[str]:
         # Returns the list of arguments provided with the command
@@ -306,7 +318,7 @@ class UserCommand:
         if isinstance(self.context, DiscordContext) and len(self.context.message.content) > 0:
             return self.context.message.content.split()[1:]
 
-        raise NotImplementedError
+        raise InvalidBotTypeError
 
     def get_first_arg(self, *, lowercase: bool = False) -> str | None:
         # Returns the first element from the argument list, all lowercase if lowercase=True
@@ -320,7 +332,7 @@ class UserCommand:
             args_list = self.context.message.content.split()[1:]
 
         else:
-            raise NotImplementedError
+            raise InvalidBotTypeError
 
         try:
             if lowercase:
@@ -346,7 +358,7 @@ class UserCommand:
         if isinstance(self.context, DiscordContext) and len(self.context.message.content) > 0:
             return ' '.join(self.context.message.content.split()[1:])
 
-        raise NotImplementedError
+        raise InvalidBotTypeError
 
     def get_user_prompt(self) -> str:
         sender = self.get_author(map_name=True)
@@ -400,7 +412,7 @@ class UserCommand:
             await self.context.send(response)
 
         else:
-            raise NotImplementedError
+            raise InvalidBotTypeError
 
     async def send_file_response(self, response: FileResponse, text: str | None) -> None:
         if isinstance(self.update, TelegramUpdate):
@@ -410,7 +422,7 @@ class UserCommand:
             await self.context.send(content=text, file=discord.File(response.file_path))
 
         else:
-            raise NotImplementedError
+            raise InvalidBotTypeError
 
         # Delete the file that was sent if it was a temporary file
         if response.temp:
@@ -424,7 +436,7 @@ class UserCommand:
             await self.context.send(content=text, file=discord.File(response.file_path))
 
         else:
-            raise NotImplementedError
+            raise InvalidBotTypeError
 
         # Delete the file that was sent if it was a temporary file
         if response.temp:

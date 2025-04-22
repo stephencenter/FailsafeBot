@@ -17,7 +17,8 @@ def generate_markov_text() -> str:
     # Markov-powered Text Generation Command
     config = common.Config()
     if config.chat.minmarkov > config.chat.maxmarkov:
-        raise ValueError("Markov minimum length cannot be greater than maximum length (config issue)")
+        error_message = "Markov minimum length cannot be greater than maximum length (config issue)"
+        raise ValueError(error_message)
 
     markov_chain = common.try_read_json(common.MARKOV_PATH, {})
 
@@ -138,7 +139,8 @@ def get_elevenlabs_response(input_text: str, *, save_to_file: bool = False) -> P
     # Get elevenlabs key from file
     elevenlabs_key = common.try_read_single_line(common.ELEVENLABS_KEY_PATH, None)
     if elevenlabs_key is None:
-        raise ValueError("Couldn't retrieve elevenlabs key!")
+        error_message = "Couldn't retrieve elevenlabs key!"
+        raise ValueError(error_message)
 
     config = common.Config()
     elevenlabs_client = ElevenLabs(api_key=elevenlabs_key)
