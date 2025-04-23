@@ -4,6 +4,7 @@ from collections.abc import Generator
 from pathlib import Path
 
 from loguru import logger
+from telegram.error import NetworkError
 
 import common
 
@@ -47,6 +48,12 @@ do_not_create = set()
 
 class InterceptHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
+        if record.exc_info is not None:
+            exc_type = record.exc_info[0]
+            if exc_type is NetworkError:
+                logger.warning("Suppressed transient NetworkError during polling")
+                return
+
         # Convert LogRecord to Loguru format
         try:
             level = logger.level(record.levelname).name
