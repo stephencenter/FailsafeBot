@@ -68,7 +68,7 @@ def get_gpt_response(user_command: UserCommand) -> str:
         messages.append({"role": "assistant", "content": prepend_message})
 
     # Load the current conversation so far and add it to the end of the message history
-    loaded_memory: list[dict] = load_memory()
+    loaded_memory: list[dict] = common.get_gpt_memory()
     messages += loaded_memory
 
     user_prompt = user_command.get_user_prompt()
@@ -93,40 +93,8 @@ def get_gpt_response(user_command: UserCommand) -> str:
     return response
 
 
-def load_memory() -> list[dict]:
-    # Load the AI's memory (if it exists)
-    config = common.Config()
-
-    if config.chat.usememory:
-        return common.try_read_json(common.MEMORY_PATH, [])
-
-    return []
-
-
-def append_to_memory(user_prompt: str = '', bot_prompt: str = '') -> None:
-    config = common.Config()
-
-    if not config.chat.usememory:
-        return
-
-    memory = load_memory()
-
-    if user_prompt:
-        memory.append({"role": "user", "content": user_prompt})
-
-    if bot_prompt:
-        memory.append({"role": "assistant", "content": bot_prompt})
-
-    # The AI's memory has a size limit to keep API usage low, and to keep it from veering off track too much
-    if (size := len(memory)) > config.chat.memorysize:
-        memory = memory[size - config.chat.memorysize:]
-
-    # Write the AI's memory to a file so it can be retrieved later
-    common.write_json_to_file(common.MEMORY_PATH, memory)
-
-
 def get_most_recent_bot_message() -> str | None:
-    memory_list: list[dict] = load_memory()
+    memory_list: list[dict] = common.get_gpt_memory()
 
     for memory in memory_list[::-1]:
         if memory["role"] == "assistant":

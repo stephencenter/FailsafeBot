@@ -12,10 +12,16 @@ from discord.ext.commands import Context as DiscordContext
 from telegram import Update as TelegramUpdate
 from telegram.ext import Application as TelegramBot
 from telegram.ext import CallbackContext as TelegramContext
+from collections.abc import Awaitable, Callable
+from discord.errors import HTTPException
+from telegram import Update as TelegramUpdate
+from telegram.error import BadRequest, NetworkError, TimedOut
+from telegram.ext import CallbackContext as TelegramContext
+from loguru import logger
 
 # PROJECT VARIABLES
 APPLICATION_NAME = "FailsafeBot"
-VERSION_NUMBER = "v1.1.5"
+VERSION_NUMBER = "v1.1.6"
 
 # DIRECTORIES
 DATA_FOLDER_PATH = Path('Data')
@@ -68,6 +74,7 @@ class InvalidBotTypeError(TypeError):
             self.message = message
         super().__init__(self.message)
 # endregion
+
 
 # ==========================
 # SETTINGS MANAGEMENT
@@ -236,12 +243,12 @@ class SoundResponse(FileResponse):
 
 
 class NoPermissionsResponse(CommandResponse):
-    def __init__(self, user_message: str):
+    def __init__(self):
         chosen_response = random.choice([
             "You don't have the right, O you don't have the right.",
-            "You think I'd let just anyone do this?"
+            "You think I'd let just anyone do this?",
         ])
-        super().__init__(user_message, chosen_response, record_to_memory=True, send_to_chat=True)
+        super().__init__("Can I do that sensitive thing that requires admin rights?", chosen_response, record_to_memory=True, send_to_chat=True)
 
 
 class NoResponse(CommandResponse):
@@ -526,6 +533,122 @@ class UserCommand:
             return username
 
         return corrected_name
+
+
+def requireadmin(function: Callable[[UserCommand], Awaitable[CommandResponse]]) -> Callable:
+    # Put this decorator on a function using @requireadmin to prevent its use without admin rights
+    async def admin_wrapper(user_command: UserCommand) -> CommandResponse:
+        if not user_command.is_admin():
+            return NoPermissionsResponse()
+
+        return await function(user_command)
+
+    return admin_wrapper
+
+async def send_response(command_function: Callable[[UserCommand], Awaitable[CommandResponse]], user_command: UserCommand) -> None:
+    config = Config()
+    user_command.response = await command_function(user_command)
+
+    if user_command.response is None:
+        error_message = "Command did not return a CommandResponse object"
+        raise TypeError(error_message)
+
+    if user_command.response.send_to_chat and user_command.response.bot_message:
+        text_response = user_command.response.bot_message
+
+        if len(text_response) > config.main.maxmessagelength:
+            text_response = text_response[:config.main.maxmessagelength]
+            logger.info(f"Cut off bot response at {config.main.maxmessagelength} characters")
+
+    else:
+        text_response = None
+
+    try:
+        # Respond with a sound effect
+        if isinstance(user_command.response, SoundResponse):
+            await user_command.send_sound_response(user_command.response, text_response)
+
+        # Respond with a file
+        elif isinstance(user_command.response, FileResponse):
+            await user_command.send_file_response(user_command.response, text_response)
+
+        # Respond with text
+        elif text_response:
+            await user_command.send_text_response(text_response)
+
+    except (BadRequest, TimedOut, NetworkError, HTTPException) as e:
+        error_response = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
+        await user_command.send_text_response(error_response)
+
+        # Re-raise BadRequests, as these indicate a bug with the script that will need to be fixed
+        if e is BadRequest:
+            raise
+
+    # Add the command and its response to memory if necessary
+    if user_command.response.record_to_memory:
+        user_prompt = user_command.get_user_prompt()
+        append_to_gpt_memory(user_prompt=user_prompt, bot_prompt=user_command.response.bot_message)
+
+
+def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable[[UserCommand], Awaitable[CommandResponse]]) -> Callable:
+    if isinstance(bot, TelegramBot):
+        async def telegram_wrapper(update: TelegramUpdate, context: TelegramContext) -> None:
+            if update.message is None:
+                return
+
+            user_command = UserCommand(bot, context, update=update)
+            if not user_command.is_whitelisted():
+                # Telegram doesn't allow you to make "private" bots, meaning anyone can add your bot to their chat
+                # and use up your CPU time. This check prevents the bot from responding to commands unless it comes
+                # from a whitelisted chat
+                logger.warning(f"whitelist rejected {update.message.chat.id}")
+                return
+
+            await send_response(command, user_command)
+
+        return telegram_wrapper
+
+    if isinstance(bot, DiscordBot):
+        async def discord_wrapper(context: DiscordContext) -> None:
+            user_command = UserCommand(bot, context)
+            await send_response(command, user_command)
+
+        return discord_wrapper
+
+    raise InvalidBotTypeError
+# endregion
+
+# region
+def append_to_gpt_memory(user_prompt: str = '', bot_prompt: str = '') -> None:
+    config = Config()
+
+    if not config.chat.usememory:
+        return
+
+    memory = get_gpt_memory()
+
+    if user_prompt:
+        memory.append({"role": "user", "content": user_prompt})
+
+    if bot_prompt:
+        memory.append({"role": "assistant", "content": bot_prompt})
+
+    # The AI's memory has a size limit to keep API usage low, and to keep it from veering off track too much
+    if (size := len(memory)) > config.chat.memorysize:
+        memory = memory[size - config.chat.memorysize:]
+
+    # Write the AI's memory to a file so it can be retrieved later
+    write_json_to_file(MEMORY_PATH, memory)
+
+
+def get_gpt_memory() -> list[dict]:
+    # Load the AI's memory (if it exists)
+    config = Config()
+
+    if config.chat.usememory:
+        return try_read_json(MEMORY_PATH, [])
+
+    return []
 
 
 def try_read_json[T](path: str | Path, default: T) -> T:

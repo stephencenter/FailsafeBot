@@ -4,22 +4,17 @@ import io
 import os
 import random
 import sys
-from collections.abc import Awaitable, Callable, Iterator
+from collections.abc import Iterator
 from pathlib import Path
 
 import discord
 import psutil
-from discord.errors import HTTPException
 from discord.ext import commands as discord_commands
 from discord.ext.commands import Bot as DiscordBot
-from discord.ext.commands import Context as DiscordContext
 from elevenlabs.core.api_error import ApiError as ElevenLabsApiError
 from httpx import TransportError
 from loguru import logger
-from telegram import Update as TelegramUpdate
-from telegram.error import BadRequest, NetworkError, TimedOut
 from telegram.ext import Application as TelegramBot
-from telegram.ext import CallbackContext as TelegramContext
 from telegram.ext import CommandHandler, MessageHandler, filters
 from yt_dlp.utils import DownloadError as YtdlDownloadError
 
@@ -28,89 +23,12 @@ import common
 import dice_roller
 import sound_manager
 import trivia
-from common import CommandResponse, FileResponse, InvalidBotTypeError, NoPermissionsResponse, NoResponse, SoundResponse, UserCommand
-
-
-# ==========================
-# RESPONSE HANDLERS
-# ==========================
-# region
-async def send_response(command_function: Callable[[UserCommand], Awaitable[CommandResponse]], user_command: UserCommand) -> None:
-    config = common.Config()
-    user_command.response = await command_function(user_command)
-
-    if user_command.response is None:
-        error_message = "Command did not return a CommandResponse object"
-        raise TypeError(error_message)
-
-    if user_command.response.send_to_chat and user_command.response.bot_message:
-        text_response = user_command.response.bot_message
-
-        if len(text_response) > config.main.maxmessagelength:
-            text_response = text_response[:config.main.maxmessagelength]
-            logger.info(f"Cut off bot response at {config.main.maxmessagelength} characters")
-
-    else:
-        text_response = None
-
-    try:
-        # Respond with a sound effect
-        if isinstance(user_command.response, SoundResponse):
-            await user_command.send_sound_response(user_command.response, text_response)
-
-        # Respond with a file
-        elif isinstance(user_command.response, FileResponse):
-            await user_command.send_file_response(user_command.response, text_response)
-
-        # Respond with text
-        elif text_response:
-            await user_command.send_text_response(text_response)
-
-    except (BadRequest, TimedOut, NetworkError, HTTPException) as e:
-        error_response = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
-        await user_command.send_text_response(error_response)
-
-        # Re-raise BadRequests, as these indicate a bug with the script that will need to be fixed
-        if e is BadRequest:
-            raise
-
-    # Add the command and its response to memory if necessary
-    if user_command.response.record_to_memory:
-        user_prompt = user_command.get_user_prompt()
-        chat.append_to_memory(user_prompt=user_prompt, bot_prompt=user_command.response.bot_message)
-
-
-def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable[[UserCommand], Awaitable[CommandResponse]]) -> Callable:
-    if isinstance(bot, TelegramBot):
-        async def telegram_wrapper(update: TelegramUpdate, context: TelegramContext) -> None:
-            if update.message is None:
-                return
-
-            user_command = UserCommand(bot, context, update=update)
-            if not user_command.is_whitelisted():
-                # Telegram doesn't allow you to make "private" bots, meaning anyone can add your bot to their chat
-                # and use up your CPU time. This check prevents the bot from responding to commands unless it comes
-                # from a whitelisted chat
-                logger.warning(f"whitelist rejected {update.message.chat.id}")
-                return
-
-            await send_response(command, user_command)
-
-        return telegram_wrapper
-
-    if isinstance(bot, DiscordBot):
-        async def discord_wrapper(context: DiscordContext) -> None:
-            user_command = UserCommand(bot, context)
-            await send_response(command, user_command)
-
-        return discord_wrapper
-
-    raise InvalidBotTypeError
+from common import CommandResponse, FileResponse, InvalidBotTypeError, NoResponse, SoundResponse, UserCommand, requireadmin
 
 
 def register_commands(bot: TelegramBot | DiscordBot) -> None:
     # List of all commands, add commands here to register them.
-    # The first item in each tuple is the name of the command, and the second is
+    # The first item in each tuple is the name of the command (/name), and the second is
     # the function that will be assigned to that name
     command_list = [
         ("sound", sound_command),
@@ -170,13 +88,13 @@ def register_commands(bot: TelegramBot | DiscordBot) -> None:
 
     if isinstance(bot, TelegramBot):
         for command in command_list:
-            bot.add_handler(CommandHandler(command[0], command_wrapper(bot, command[1])))
+            bot.add_handler(CommandHandler(command[0], common.command_wrapper(bot, command[1])))
 
-        bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), command_wrapper(bot, handle_message_event)))
+        bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), common.command_wrapper(bot, handle_message_event)))
 
     elif isinstance(bot, DiscordBot):
         for command in command_list:
-            new_command = discord_commands.Command(command_wrapper(bot, command[1]))
+            new_command = discord_commands.Command(common.command_wrapper(bot, command[1]))
             new_command.name = command[0]
             bot.add_command(new_command)
 
@@ -283,11 +201,8 @@ async def newsounds_command(_: UserCommand) -> CommandResponse:
     return CommandResponse(user_message, f"There are {new_count} new sounds available:\n\n{list_string}")
 
 
+@requireadmin
 async def addalias_command(user_command: UserCommand) -> CommandResponse:
-    # Verify that the user is on the admin list
-    if not user_command.is_admin():
-        return NoPermissionsResponse("Can you add a new sound alias?")
-
     args_list = user_command.get_args_list()
 
     # Attempt to parse the new alias and target sound from the arguments provided
@@ -302,11 +217,8 @@ async def addalias_command(user_command: UserCommand) -> CommandResponse:
     return CommandResponse(f"Can you make '{new_alias}' an alias for the sound '{sound_name}'?", response)
 
 
+@requireadmin
 async def delalias_command(user_command: UserCommand) -> CommandResponse:
-    # Verify that the user is on the admin list
-    if not user_command.is_admin():
-        return NoPermissionsResponse("Can you delete a sound alias for me?")
-
     alias_to_delete = user_command.get_first_arg(lowercase=True)
     if alias_to_delete is None:
         return CommandResponse("Can you delete a sound alias for me?", random.choice(sound_manager.TXT_SOUND_NOT_PROVIDED))
@@ -859,10 +771,9 @@ async def lobotomize_command(_: UserCommand) -> CommandResponse:
     return CommandResponse('', random.choice(msg_options), record_to_memory=False)
 
 
-async def memory_command(user_command: UserCommand) -> CommandResponse:
+@requireadmin
+async def memory_command(_: UserCommand) -> CommandResponse:
     user_message = "Can you send me your memory file?"
-    if not user_command.is_admin():
-        return NoPermissionsResponse(user_message)
 
     if not common.MEMORY_PATH.exists():
         return CommandResponse(user_message, "My mind is a blank slate.")
@@ -870,12 +781,11 @@ async def memory_command(user_command: UserCommand) -> CommandResponse:
     return FileResponse(user_message, "Sure, here's my memory file.", common.MEMORY_PATH)
 
 
-async def memorylist_command(user_command: UserCommand) -> CommandResponse:
+@requireadmin
+async def memorylist_command(_: UserCommand) -> CommandResponse:
     user_message = "Can you send me your memory as a list?"
-    if not user_command.is_admin():
-        return NoPermissionsResponse(user_message)
 
-    memory_list = chat.load_memory()
+    memory_list = common.get_gpt_memory()
 
     if not memory_list:
         return CommandResponse(user_message, "My mind is a blank slate.")
@@ -893,10 +803,9 @@ async def memorylist_command(user_command: UserCommand) -> CommandResponse:
 # SETTINGS/CONFIG COMMANDS
 # ==========================
 # region
+@requireadmin
 async def getconfig_command(user_command: UserCommand) -> CommandResponse:
     user_message = "Can you tell me the value of that setting?"
-    if not user_command.is_admin():
-        return NoPermissionsResponse(user_message)
 
     search_string = user_command.get_first_arg(lowercase=True)
     if search_string is None:
@@ -912,10 +821,9 @@ async def getconfig_command(user_command: UserCommand) -> CommandResponse:
     return CommandResponse(user_message, f"Setting '{group_name}.{setting_name}' is currently set to '{value}'.")
 
 
+@requireadmin
 async def setconfig_command(user_command: UserCommand) -> CommandResponse:
     user_message = "Can you change the value of that setting?"
-    if not user_command.is_admin():
-        return NoPermissionsResponse(user_message)
 
     args_list = user_command.get_args_list()
 
@@ -979,10 +887,9 @@ Look upon my works, ye mighty, and despair:
     return CommandResponse("What chat commands are available?", help_string)
 
 
-async def logs_command(user_command: UserCommand) -> CommandResponse:
-    user_message = "Can you send me your error log?"
-    if not user_command.is_admin():
-        return NoPermissionsResponse(user_message)
+@requireadmin
+async def logs_command(_: UserCommand) -> CommandResponse:
+    user_message = "Can you send me your log file?"
 
     if not common.LOGGING_FILE_PATH.exists():
         return CommandResponse(user_message, "There are no logs recorded.")
@@ -1007,10 +914,8 @@ async def test_command(_: UserCommand) -> CommandResponse:
     return CommandResponse("Hey, are you working?", chosen_response)
 
 
+@requireadmin
 async def restart_command(user_command: UserCommand) -> CommandResponse:
-    if not user_command.is_admin():
-        return NoPermissionsResponse("Can you restart your script for me?")
-
     logger.info("Restarting...")
     await user_command.send_text_response("Restarting...")
 
@@ -1018,11 +923,8 @@ async def restart_command(user_command: UserCommand) -> CommandResponse:
     os.execv(sys.executable, ['python', *sys.argv])
 
 
-async def system_command(user_command: UserCommand) -> CommandResponse:
-    user_message = "Can you show me your resource usage?"
-    if not user_command.is_admin():
-        return NoPermissionsResponse(user_message)
-
+@requireadmin
+async def system_command(_: UserCommand) -> CommandResponse:
     config = common.Config()
     mem_usage = psutil.virtual_memory()
     disk_usage = psutil.disk_usage('/')
@@ -1041,7 +943,7 @@ CPU: {psutil.cpu_percent(interval=0.5)}%
 Memory: {mem_percent}% - {round(mem_usage.used/divisor, 2)} / {round(mem_usage.total/divisor, 2):,} {label}
 Disk: {disk_usage.percent}% - {round(disk_usage.used/divisor, 2):,} / {round(disk_usage.total/divisor, 2):,} {label}
 """
-    return CommandResponse("What's your resource usage at?", system_string)
+    return CommandResponse("Can you show me your resource usage?", system_string)
 
 
 async def terminal_command(user_command: UserCommand) -> CommandResponse:
@@ -1075,27 +977,21 @@ async def terminal_command(user_command: UserCommand) -> CommandResponse:
     return CommandResponse(user_message, "Done.")
 
 
-async def version_command(user_command: UserCommand) -> CommandResponse:
+@requireadmin
+async def version_command(_: UserCommand) -> CommandResponse:
     user_message = "What script version are you running?"
-    if not user_command.is_admin():
-        return NoPermissionsResponse(user_message)
-
     return CommandResponse(user_message, f"Running {common.APPLICATION_NAME} {common.VERSION_NUMBER}")
 
 
-async def crash_command(user_command: UserCommand) -> CommandResponse:
-    if not user_command.is_admin():
-        return NoPermissionsResponse("This statement is false.")
-
+@requireadmin
+async def crash_command(_: UserCommand) -> CommandResponse:
     error_message = "/crash command used"
     raise ZeroDivisionError(error_message)
 
 
+@requireadmin
 async def addadmin_command(user_command: UserCommand) -> CommandResponse:
     user_message = "Can you make this person an admin?"
-
-    if not user_command.is_admin():
-        return NoPermissionsResponse(user_message)
 
     user_id = user_command.get_first_arg(lowercase=True)
     if user_id is None:
@@ -1112,11 +1008,9 @@ async def addadmin_command(user_command: UserCommand) -> CommandResponse:
     return CommandResponse(user_message, f"Added new user ID '{user_id}' to admin list.")
 
 
+@requireadmin
 async def deladmin_command(user_command: UserCommand) -> CommandResponse:
     user_message = "Can you remove this person from the admin list?"
-
-    if not user_command.is_admin():
-        return NoPermissionsResponse(user_message)
 
     user_id = user_command.get_first_arg(lowercase=True)
     if user_id is None:
@@ -1133,11 +1027,9 @@ async def deladmin_command(user_command: UserCommand) -> CommandResponse:
     return CommandResponse(user_message, f"Removed user ID '{user_id}' from the admin list.")
 
 
+@requireadmin
 async def addwhitelist_command(user_command: UserCommand) -> CommandResponse:
     user_message = "Can you add this chat ID to the whitelist?"
-
-    if not user_command.is_admin():
-        return NoPermissionsResponse(user_message)
 
     chat_id = user_command.get_first_arg(lowercase=True)
     if chat_id is None:
@@ -1154,11 +1046,9 @@ async def addwhitelist_command(user_command: UserCommand) -> CommandResponse:
     return CommandResponse(user_message, f"Added new chat ID '{chat_id}' to the whitelist.")
 
 
+@requireadmin
 async def delwhitelist_command(user_command: UserCommand) -> CommandResponse:
     user_message = "Can you remove this chat ID from the whitelist?"
-
-    if not user_command.is_admin():
-        return NoPermissionsResponse(user_message)
 
     chat_id = user_command.get_first_arg(lowercase=True)
     if chat_id is None:
@@ -1175,6 +1065,7 @@ async def delwhitelist_command(user_command: UserCommand) -> CommandResponse:
     return CommandResponse(user_message, f"Removed chat ID '{chat_id}' from the whitelist.")
 
 
+@requireadmin
 async def getuserid_command(user_command: UserCommand) -> CommandResponse:
     # Tells the user what their user ID is
     username = user_command.get_first_arg()
@@ -1183,11 +1074,6 @@ async def getuserid_command(user_command: UserCommand) -> CommandResponse:
         return CommandResponse("Can you tell me what my user ID is?", f"Your user ID is {user_id}.")
 
     user_message = f"What is {username}'s user ID?"
-
-    # Getting other user's IDs requires admin rights
-    if not user_command.is_admin():
-        return NoPermissionsResponse(user_message)
-
     user_id = user_command.get_id_by_username(username.lower())
 
     if user_id is None:
@@ -1196,23 +1082,18 @@ async def getuserid_command(user_command: UserCommand) -> CommandResponse:
     return CommandResponse(user_message, f"{username}'s user ID is {user_id}.")
 
 
+@requireadmin
 async def getchatid_command(user_command: UserCommand) -> CommandResponse:
     user_message = "Can you tell me what this chat's ID is?"
-
-    if not user_command.is_admin():
-        return NoPermissionsResponse(user_message)
-
     chat_id = user_command.get_chat_id()
 
     return CommandResponse(user_message, f"This chat's ID is {chat_id}")
 
 
+@requireadmin
 async def getfile_command(user_command: UserCommand) -> CommandResponse:
     file_path = Path(user_command.get_user_message())
     user_message = "Can you send me that file?"
-
-    if not user_command.is_admin():
-        return NoPermissionsResponse(user_message)
 
     if str(file_path) == '.':
         return CommandResponse(user_message, "Please provide the path to a file on my server.")
@@ -1258,7 +1139,7 @@ def discord_register_events(discord_bot: DiscordBot) -> None:
             await discord_bot.process_commands(message)
             return
 
-        message_handler = command_wrapper(discord_bot, handle_message_event)
+        message_handler = common.command_wrapper(discord_bot, handle_message_event)
         context = await discord_bot.get_context(message)
         await message_handler(context)
 
@@ -1284,7 +1165,7 @@ async def handle_message_event(user_command: UserCommand) -> CommandResponse:
 
     elif config.chat.recordall:
         user_prompt = user_command.get_user_prompt()
-        chat.append_to_memory(user_prompt=user_prompt)
+        common.append_to_gpt_memory(user_prompt=user_prompt)
 
     return response
 

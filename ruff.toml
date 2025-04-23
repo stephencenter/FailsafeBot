@@ -8,7 +8,6 @@ ignore = [  # Remove these at your own peril
     "ANN204",
     #"B903",
     #"C901",
-    #"COM812",
     "CPY001",
     "D100", "D101", "D102", "D103", "D105", "D107",
     "DTZ005",
