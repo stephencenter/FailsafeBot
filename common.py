@@ -2,6 +2,7 @@ import json
 import random
 from collections.abc import Generator, Iterable
 from dataclasses import asdict, dataclass, field
+from functools import wraps
 from pathlib import Path
 from typing import Any
 
@@ -415,9 +416,6 @@ class UserCommand:
 
     def is_admin(self) -> bool:
         # Returns whether the message sender is on the bot's admin list
-        if not Config().main.requireadmin:
-            return True
-
         user_id = self.get_user_id()
         admin_list = try_read_lines_list(ADMINS_PATH, [])
 
@@ -537,13 +535,16 @@ class UserCommand:
 
 def requireadmin(function: Callable[[UserCommand], Awaitable[CommandResponse]]) -> Callable:
     # Put this decorator on a function using @requireadmin to prevent its use without admin rights
+    @wraps(function)
     async def admin_wrapper(user_command: UserCommand) -> CommandResponse:
-        if not user_command.is_admin():
+        if Config().main.requireadmin and not user_command.is_admin():
             return NoPermissionsResponse()
 
         return await function(user_command)
 
+    admin_wrapper._requireadmin = True  # type: ignore | Used to flag whether a function requries admin rights or not
     return admin_wrapper
+
 
 async def send_response(command_function: Callable[[UserCommand], Awaitable[CommandResponse]], user_command: UserCommand) -> None:
     config = Config()

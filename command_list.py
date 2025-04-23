@@ -102,7 +102,6 @@ def register_commands(bot: TelegramBot | DiscordBot) -> None:
 
     else:
         raise InvalidBotTypeError
-# endregion
 
 
 # ==========================
@@ -851,13 +850,15 @@ async def setconfig_command(user_command: UserCommand) -> CommandResponse:
     return CommandResponse(user_message, f"Setting '{group_name}.{setting_name}' has been set to '{new_value}'.")
 
 
+@requireadmin
 async def configlist_command(_: UserCommand) -> CommandResponse:
     config = common.Config()
 
     setting_list = []
-    for group in config.__dict__:
-        for setting in getattr(config, group).__dict__:
-            setting_list.append(f"{group}.{setting}")
+    for g in config.__dict__:
+        for s in getattr(config, g).__dict__:
+            group_name, setting_name, value = config.find_setting(f"{g}.{s}")
+            setting_list.append(f"{group_name}.{setting_name}: {value}")
 
     setting_list = '\n-- '.join(setting_list)
     return CommandResponse('', f"Here is a list of all available settings: \n-- {setting_list}")
@@ -946,6 +947,7 @@ Disk: {disk_usage.percent}% - {round(disk_usage.used/divisor, 2):,} / {round(dis
     return CommandResponse("Can you show me your resource usage?", system_string)
 
 
+@requireadmin
 async def terminal_command(user_command: UserCommand) -> CommandResponse:
     if not user_command.is_admin():
         return NoResponse()
