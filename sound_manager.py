@@ -11,14 +11,14 @@ import common
 TXT_SOUND_NOT_PROVIDED = (
     "I'm afraid my mindreader unit has been malfunctioning lately, what sound did you want?",
     "Use your words please.",
-    "I unfortunately do not have any sounds without a name."
+    "I unfortunately do not have any sounds without a name.",
 )
 
 # This message is sent if the sound the user requests doesn't exist
 TXT_SOUND_NOT_FOUND = (
     "Are you insane, do you have any idea how dangerous a sound with that name would be?",
     "I wouldn't be caught dead with a sound like that on my list.",
-    "No dice. Someone probably forgot to upload it, what a fool."
+    "No dice. Someone probably forgot to upload it, what a fool.",
 )
 
 
@@ -38,7 +38,7 @@ def stream_audio_from_url(url: str) -> dict | None:
         'quiet': True,
         'no_warnings': True,
         'default_search': 'auto',
-        'logger': SilenceYTDL
+        'logger': SilenceYTDL,
     }
 
     with yt_dlp.YoutubeDL(ytdl_parameters) as ytdl:
@@ -72,13 +72,13 @@ def download_audio_from_url(url: str) -> Path | None:
         }],
         'postprocessor_args': [
             '-ss', '0',
-            '-t', str(config.misc.maxstreamtime)
+            '-t', str(config.misc.maxstreamtime),
         ],
         'prefer_ffmpeg': True,
         'quiet': True,
         'no_warnings': True,
         'default_search': 'auto',
-        'logger': SilenceYTDL
+        'logger': SilenceYTDL,
     }
 
     with yt_dlp.YoutubeDL(ytdl_parameters) as ytdl:

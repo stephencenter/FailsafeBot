@@ -85,7 +85,7 @@ def get_dnd_statroll() -> dict[str, int]:
         "CON": 0,
         "INT": 0,
         "WIS": 0,
-        "CHA": 0
+        "CHA": 0,
     }
 
     # All ability scores use 4d6 drop lowest
@@ -113,7 +113,7 @@ def get_coc_statroll() -> dict[str, int]:
         "LUC": 5*(roll_dice(2, 6, 6)),
 
         # This stat uses a single d10
-        "Bonus": random.randint(1, 10)
+        "Bonus": random.randint(1, 10),
     }
 
     return statroll
@@ -127,7 +127,7 @@ def get_pf_statroll() -> dict[str, int]:
         "CON": 0,
         "INT": 0,
         "WIS": 0,
-        "CHA": 0
+        "CHA": 0,
     }
 
     # All ability scores use 4d6 drop lowest
@@ -143,16 +143,16 @@ STATROLL_GAME_OPTIONS = [
     StatrollGame(
         "Dungeons & Dragons",
         ["dnd", "d&d", "dungeons and dragons", "dungeons & dragons", "dungeons n dragons"],
-        get_dnd_statroll
+        get_dnd_statroll,
     ),
     StatrollGame(
         "Call of Cthulhu",
         ["coc", "call of cthulhu"],
-        get_coc_statroll
+        get_coc_statroll,
     ),
     StatrollGame(
         "Pathfinder",
         ["pf", "pathfinder", "path finder"],
-        get_pf_statroll
-    )
+        get_pf_statroll,
+    ),
 ]

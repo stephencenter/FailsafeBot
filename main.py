@@ -6,9 +6,10 @@ import discord
 from discord.errors import LoginFailure
 from discord.ext.commands import Bot as DiscordBot
 from loguru import logger
-from telegram.error import InvalidToken
+from telegram.error import InvalidToken, NetworkError
 from telegram.ext import Application as TelegramBot
 from telegram.ext import ApplicationBuilder
+from telegram.ext import CallbackContext as TelegramContext
 
 import command_list
 import common
@@ -47,6 +48,17 @@ def prepare_runway() -> None:
 async def create_run_telegram_bot(telegram_token: str) -> TelegramBot:
     # Create telegram bot object
     telegram_bot = ApplicationBuilder().token(telegram_token).build()
+
+    async def error_handler(_, context: TelegramContext) -> None:  # noqa: ANN001
+        retry_delay = 5
+        if context.error is NetworkError:
+            logger.warning(f"Suppressed transient NetworkError during polling, retrying in {retry_delay} seconds (a)")
+            await asyncio.sleep(retry_delay)
+        else:
+            logger.exception("Unhandled exception in Telegram bot", exc_info=context.error)
+
+    telegram_bot.add_error_handler(error_handler)
+
     await telegram_bot.initialize()
     await telegram_bot.start()
 
@@ -133,7 +145,7 @@ async def main() -> None:
             logger.info("No bots were started, script will exit now")
 
     finally:
-        if telegram_bot is not None:
+        if telegram_bot is not None and telegram_bot.updater is not None:
             logger.info("Shutting down telegram bot...")
             await telegram_bot.updater.stop()
             await telegram_bot.stop()

@@ -383,11 +383,7 @@ class UserCommand:
 
     def get_user_message(self) -> str:
         # Returns the message that this user sent with this UserCommand
-        # If the bot has responded to this UserCommand and provided its own user message, return that instead
         # Ex. /test a b c -> 'a b c'
-        if self.response is not None:
-            return self.response.user_message
-
         if isinstance(self.context, TelegramContext) and self.context.args is not None:
             return ' '.join(self.context.args)
 
@@ -400,8 +396,13 @@ class UserCommand:
         raise InvalidBotTypeError
 
     def get_user_prompt(self) -> str:
+        # This is used for prompting the GPT chat completion model
         sender = self.get_user_name(map_name=True)
-        user_message = self.get_user_message()
+
+        if self.response is not None:
+            user_message = self.response.user_message
+        else:
+            user_message = self.get_user_message()
 
         return f'{sender}: {user_message}'
 

@@ -38,7 +38,7 @@ text_files = {
     common.D10000_LIST_PATH,
     common.ACTIVE_EFFECTS_PATH,
     common.TRIVIA_CURRENT_PATH,
-    common.TRACK_USERID_PATH
+    common.TRACK_USERID_PATH,
 }
 
 # Paths that we will not create, this is exclusions for the globals checking from common.py

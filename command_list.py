@@ -12,7 +12,6 @@ import psutil
 from discord.errors import HTTPException
 from discord.ext import commands as discord_commands
 from discord.ext.commands import Bot as DiscordBot
-from discord.ext.commands import CommandInvokeError
 from discord.ext.commands import Context as DiscordContext
 from elevenlabs.core.api_error import ApiError as ElevenLabsApiError
 from httpx import TransportError
@@ -165,7 +164,8 @@ def register_commands(bot: TelegramBot | DiscordBot) -> None:
         ("addwhitelist", addwhitelist_command),
         ("delwhitelist", delwhitelist_command),
         ("getuserid", getuserid_command),
-        ("getchatid", getchatid_command)
+        ("getchatid", getchatid_command),
+        ("getfile", getfile_command),
     ]
 
     if isinstance(bot, TelegramBot):
@@ -553,8 +553,7 @@ async def vcstop_command(user_command: UserCommand) -> CommandResponse:
 
     bot_voice_client = user_command.get_bot_voice_client()
 
-    # For some reason this can throw a lot of exceptions, we just ignore them
-    with contextlib.suppress(AttributeError, TypeError, CommandInvokeError):
+    if bot_voice_client is not None:
         bot_voice_client.stop()
 
     return CommandResponse(user_message, "If you insist.", send_to_chat=False)
@@ -642,11 +641,9 @@ async def vcleave_command(user_command: UserCommand) -> CommandResponse:
 
     bot_voice_client = user_command.get_bot_voice_client()
 
-    try:
+    if bot_voice_client is not None:
         await bot_voice_client.disconnect()
         bot_voice_client.cleanup()
-    except (AttributeError, CommandInvokeError):
-        pass
 
     return CommandResponse(user_message, "If you insist", send_to_chat=False)
 
@@ -857,7 +854,7 @@ async def lobotomize_command(_: UserCommand) -> CommandResponse:
     msg_options = [
         "My mind has never been clearer.",
         "Hey, what happened to those voices in my head?",
-        "My inner demons seem to have calmed down a bit."
+        "My inner demons seem to have calmed down a bit.",
     ]
     return CommandResponse('', random.choice(msg_options), record_to_memory=False)
 
@@ -1010,7 +1007,7 @@ async def test_command(_: UserCommand) -> CommandResponse:
     return CommandResponse("Hey, are you working?", chosen_response)
 
 
-async def restart_command(user_command: UserCommand) -> CommandResponse:  # noqa: RET503
+async def restart_command(user_command: UserCommand) -> CommandResponse:
     if not user_command.is_admin():
         return NoPermissionsResponse("Can you restart your script for me?")
 
@@ -1185,8 +1182,13 @@ async def getuserid_command(user_command: UserCommand) -> CommandResponse:
         user_id = user_command.get_user_id()
         return CommandResponse("Can you tell me what my user ID is?", f"Your user ID is {user_id}.")
 
-    user_id = user_command.get_id_by_username(username.lower())
     user_message = f"What is {username}'s user ID?"
+
+    # Getting other user's IDs requires admin rights
+    if not user_command.is_admin():
+        return NoPermissionsResponse(user_message)
+
+    user_id = user_command.get_id_by_username(username.lower())
 
     if user_id is None:
         return CommandResponse(user_message, f"{username}'s user ID has not been tracked.")
@@ -1196,9 +1198,30 @@ async def getuserid_command(user_command: UserCommand) -> CommandResponse:
 
 async def getchatid_command(user_command: UserCommand) -> CommandResponse:
     user_message = "Can you tell me what this chat's ID is?"
+
+    if not user_command.is_admin():
+        return NoPermissionsResponse(user_message)
+
     chat_id = user_command.get_chat_id()
 
     return CommandResponse(user_message, f"This chat's ID is {chat_id}")
+
+
+async def getfile_command(user_command: UserCommand) -> CommandResponse:
+    file_path = Path(user_command.get_user_message())
+    user_message = "Can you send me that file?"
+
+    if not user_command.is_admin():
+        return NoPermissionsResponse(user_message)
+
+    if str(file_path) == '.':
+        return CommandResponse(user_message, "Please provide the path to a file on my server.")
+
+    user_message = f"Can you send me the file at {file_path}"
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(user_message, "Sure, here you go.", file_path)
+
+    return CommandResponse(user_message, "Couldn't find a file at that path.")
 # endregion
 
 

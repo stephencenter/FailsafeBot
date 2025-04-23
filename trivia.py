@@ -14,7 +14,7 @@ TRIVIA_NUM_QUESTIONS = 3
 TRIVIA_DIFFICULTY_POINTS = {
     "easy": 10,
     "medium": 20,
-    "hard": 30
+    "hard": 30,
 }
 
 
@@ -50,7 +50,7 @@ class TriviaQuestion:
             'question': self.question,
             'correct_answer': self.correct_answer,
             'incorrect_answers': self.incorrect_answers,
-            'guesses_left': self.guesses_left
+            'guesses_left': self.guesses_left,
         }
         common.write_json_to_file(common.TRIVIA_CURRENT_PATH, trivia_data)
 
@@ -82,14 +82,14 @@ Type /guess [your answer] to answer!
                 points_dict[chat_id] = {
                     player_id: {
                         'name': player_name,
-                        'score': points_gained
-                    }
+                        'score': points_gained,
+                    },
                 }
 
             elif player_id not in points_dict[chat_id]:
                 points_dict[chat_id][player_id] = {
                     'name': player_name,
-                    'score': points_gained
+                    'score': points_gained,
                 }
 
             else:

@@ -78,7 +78,7 @@ def get_gpt_response(user_command: UserCommand) -> str:
         messages=messages,  # type: ignore
         model=config.chat.gptmodel,
         temperature=config.chat.gpttemp,
-        max_completion_tokens=config.chat.gptmaxtokens
+        max_completion_tokens=config.chat.gptmaxtokens,
     )
 
     response = gpt_completion.choices[0].message.content
@@ -149,7 +149,7 @@ def get_elevenlabs_response(input_text: str, *, save_to_file: bool = False) -> P
     audio = elevenlabs_client.text_to_speech.convert(
         text=input_text,
         voice_id=config.chat.sayvoiceid,
-        model_id=config.chat.saymodelid
+        model_id=config.chat.saymodelid,
     )
 
     # Save sound to temp file
@@ -187,7 +187,7 @@ def handle_elevenlabs_error(error: ElevenLabsApiError) -> str:
         'voice_not_found': f"ElevenLabs Voice ID '{config.chat.sayvoiceid}' is invalid!",
         'model_not_found': f"ElevenLabs Model ID '{config.chat.saymodelid}' is invalid!",
         'quota_exceeded': "ElevenLabs account is out of credits!",
-        'free_users_not_allowed': f"Voice with ID '{config.chat.sayvoiceid}' needs an active ElevenLabs subscription to use."
+        'free_users_not_allowed': f"Voice with ID '{config.chat.sayvoiceid}' needs an active ElevenLabs subscription to use.",
     }
 
     try:
