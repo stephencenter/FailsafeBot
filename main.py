@@ -43,6 +43,9 @@ async def prepare_runway() -> None:
     async for warning in common.verify_settings():
         logger.warning(warning)
 
+    async for warning in runway.check_superadmins():
+        logger.warning(warning)
+
 
 async def try_start_telegram_bot() -> TelegramBot | None:
     config = await common.Config.load()
@@ -66,7 +69,7 @@ async def try_start_telegram_bot() -> TelegramBot | None:
 
     logger.info("Starting telegram bot")
     await telegram_bot.start()
-    command_list.register_commands(telegram_bot)
+    await command_list.register_commands(telegram_bot)
 
     if telegram_bot.updater is not None:
         await telegram_bot.updater.start_polling(drop_pending_updates=True)
@@ -90,7 +93,7 @@ async def try_start_discord_bot() -> tuple[DiscordBot | None, asyncio.Task | Non
     intents.members = True
     intents.message_content = True
     discord_bot = DiscordBot(command_prefix='/', intents=intents, help_command=None)
-    command_list.register_commands(discord_bot)
+    await command_list.register_commands(discord_bot)
 
     try:
         await discord_bot.login(discord_token)

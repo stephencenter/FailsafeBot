@@ -1,4 +1,3 @@
-import asyncio
 import contextlib
 import io
 import os
@@ -26,20 +25,20 @@ import trivia
 from common import CommandResponse, FileResponse, InvalidBotTypeError, NoResponse, SoundResponse, UserCommand, requireadmin, requiresuper
 
 
-def register_commands(bot: TelegramBot | DiscordBot) -> None:
+async def register_commands(bot: TelegramBot | DiscordBot) -> None:
     if isinstance(bot, TelegramBot):
         for command in COMMAND_LIST:
-            bot.add_handler(CommandHandler(command[0], common.command_wrapper(bot, command[1])))
+            bot.add_handler(CommandHandler(command[0], await common.command_wrapper(bot, command[1])))
 
-        bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), common.command_wrapper(bot, handle_message_event)))
+        bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), await common.command_wrapper(bot, handle_message_event)))
 
     elif isinstance(bot, DiscordBot):
         for command in COMMAND_LIST:
-            new_command = discord_commands.Command(common.command_wrapper(bot, command[1]))
+            new_command = discord_commands.Command(await common.command_wrapper(bot, command[1]))
             new_command.name = command[0]
             bot.add_command(new_command)
 
-        discord_register_events(bot)
+        await discord_register_events(bot)
 
     else:
         raise InvalidBotTypeError
@@ -592,7 +591,7 @@ async def roll_command(user_command: UserCommand) -> CommandResponse:
         dice_text = ', '.join(f"{x:,}" for x in rolls)
         dice_text = f"({dice_text})"
 
-    sender = await user_command.get_username()
+    sender = await user_command.get_user_name()
 
     return CommandResponse(user_prompt, f"{sender} rolled a {total_roll:,} {dice_text}")
 
@@ -620,13 +619,13 @@ async def statroll_command(user_command: UserCommand) -> CommandResponse:
 
 
 async def d10000_command(user_command: UserCommand) -> CommandResponse:
-    username = await user_command.get_username()
+    username = await user_command.get_user_name()
     effect = await dice_roller.get_d10000_roll(username)
     return CommandResponse("Can you roll an effect on the d10000 table?", effect)
 
 
 async def effects_command(user_command: UserCommand) -> CommandResponse:
-    username = await user_command.get_username()
+    username = await user_command.get_user_name()
     active_effects = await dice_roller.get_active_effects(username)
 
     if active_effects:
@@ -639,7 +638,7 @@ async def effects_command(user_command: UserCommand) -> CommandResponse:
 
 
 async def reset_effects_command(user_command: UserCommand) -> CommandResponse:
-    username = await user_command.get_username()
+    username = await user_command.get_user_name()
     await dice_roller.reset_active_effects(username)
 
     return CommandResponse("Can you reset my active d10000 effects?", f"Active effects reset for {username}.")
@@ -669,7 +668,7 @@ async def guess_command(user_command: UserCommand) -> CommandResponse:
 
     if current_question.is_guess_correct(guess):
         points_gained = await current_question.score_question(user_command, was_correct=True)
-        player_name = await user_command.get_username()
+        player_name = await user_command.get_user_name()
         send_str = f"That is correct, the answer was '{current_question.correct_answer}'. {player_name} earned {points_gained} points!"
         return CommandResponse(user_message, send_str)
 
@@ -763,7 +762,7 @@ async def getconfig_command(user_command: UserCommand) -> CommandResponse:
     return CommandResponse(user_message, f"Setting '{group_name}.{setting_name}' is currently set to '{value}'.")
 
 
-@requireadmin
+@requiresuper
 async def setconfig_command(user_command: UserCommand) -> CommandResponse:
     user_message = "Can you change the value of that setting?"
 
@@ -868,19 +867,28 @@ async def clearlogs_command(_: UserCommand) -> CommandResponse:
     return CommandResponse("Can you clear your log file for me?", "Trying to erase history are we?")
 
 
-async def test_command(_: UserCommand) -> CommandResponse:
+async def test_command(user_command: UserCommand) -> CommandResponse:
     # This command is for verifying that the bot is online and receiving commands.
     # You can also supply it with a list of responses and it will pick a random one
     # I think of this as similar to how RTS units say things when you click them
     response_list = await common.try_read_lines_list(common.PATH_RESPONSE_LIST, [])
-    response_list = [line for line in response_list if not line.isspace() and not line.startswith("#")]
+    response_list = [line for line in response_list if line and not line.isspace() and not line.startswith("#")]
 
     if not response_list:
         CommandResponse("Hey, are you working?", "I'm still alive, unfortunately.")
 
     chosen_response = random.choice(response_list)
+
+    # Note that because we're using exec, this command is capable of executing arbitrary code.
+    # This is EXTREMELY DANGEROUS, be very sure that you know what lines are inside of the response list file!
+    async def evaluate_fstring(fstring: str, local_vars: dict) -> str:
+        code = f"async def _f(): return {fstring}"
+        namespace = {}
+        exec(code, local_vars, namespace)
+        return await namespace["_f"]()
+
     if chosen_response.startswith(('f"', "f'")):
-        chosen_response = eval(chosen_response)
+        chosen_response = await evaluate_fstring(chosen_response, {'user_command': user_command, 'random': random})
 
     return CommandResponse("Hey, are you working?", chosen_response)
 
@@ -917,36 +925,6 @@ Disk: {disk_usage.percent}% - {round(disk_usage.used/divisor, 2):,} / {round(dis
     return CommandResponse("Can you show me your resource usage?", system_string)
 
 
-@requiresuper
-async def terminal_command(user_command: UserCommand) -> CommandResponse:
-
-    command_string = user_command.get_user_message()
-
-    if not command_string:
-        return CommandResponse("Can you run a command in your terminal?", "What command do you want me to run?")
-
-    process = await asyncio.create_subprocess_shell(
-        command_string,
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
-    )
-
-    config = await common.Config.load()
-    if config.misc.cmdautoyes and process.stdin is not None:
-        # Write 'y' and optionally flush stdin
-        process.stdin.write(b'y\n')
-        await process.stdin.drain()
-
-    stdout, _ = await process.communicate()
-
-    user_message = f"Can you run this command: {command_string}"
-    if stdout:
-        return CommandResponse(user_message, stdout.decode())
-
-    return CommandResponse(user_message, "Done.")
-
-
 @requireadmin
 async def version_command(_: UserCommand) -> CommandResponse:
     user_message = "What script version are you running?"
@@ -969,17 +947,22 @@ async def addadmin_command(user_command: UserCommand) -> CommandResponse:
     if user_id is None:
         return CommandResponse(user_message, "Who do you want me to make an admin?")
 
-    admin_dict: dict[str, list[str]] = await common.try_read_json(common.PATH_ADMINS_LIST, {})
+    admin_dict: dict[str, dict[str, list[str]]] = await common.try_read_json(common.PATH_ADMIN_LIST, {})
+    platform_str = user_command.get_platform_string()
 
-    if "admin" not in admin_dict:
-        admin_dict["admin"] = []
+    if platform_str not in admin_dict:
+        admin_dict[platform_str] = {"admin": [user_id]}
 
-    if user_id in admin_dict["admin"]:
+    elif "admin" not in admin_dict[platform_str]:
+        admin_dict[platform_str]["admin"] = [user_id]
+
+    elif user_id in admin_dict[platform_str]["admin"]:
         return CommandResponse(user_message, f"That user ID '{user_id}' is already on the admin list.")
 
-    admin_dict["admin"].append(user_id)
-    await common.write_json_to_file(common.PATH_ADMINS_LIST, admin_dict)
+    else:
+        admin_dict[platform_str]["admin"].append(user_id)
 
+    await common.write_json_to_file(common.PATH_ADMIN_LIST, admin_dict)
     return CommandResponse(user_message, f"Added new user ID '{user_id}' to admin list.")
 
 
@@ -991,16 +974,21 @@ async def deladmin_command(user_command: UserCommand) -> CommandResponse:
     if user_id is None:
         return CommandResponse(user_message, "Who do you want me to remove from the admin list?")
 
-    admin_dict: dict[str, list[str]] = await common.try_read_json(common.PATH_ADMINS_LIST, {})
+    admin_dict: dict[str, dict[str, list[str]]] = await common.try_read_json(common.PATH_ADMIN_LIST, {})
+    platform_str = user_command.get_platform_string()
 
-    if "admin" not in admin_dict:
-        admin_dict["admin"] = []
+    error_response = f"The user ID '{user_id}' is not on the admin list."
+    if platform_str not in admin_dict:
+        return CommandResponse(user_message, error_response)
 
-    if user_id not in admin_dict["admin"]:
-        return CommandResponse(user_message, f"That user ID '{user_id}' is not on the admin list.")
+    if "admin" not in admin_dict[platform_str]:
+        return CommandResponse(user_message, error_response)
 
-    admin_dict["admin"] = [x for x in admin_dict["admin"] if x != user_id]
-    await common.write_json_to_file(common.PATH_ADMINS_LIST, admin_dict)
+    if user_id not in admin_dict[platform_str]["admin"]:
+        return CommandResponse(user_message, error_response)
+
+    admin_dict[platform_str]["admin"] = [x for x in admin_dict[platform_str]["admin"] if x != user_id]
+    await common.write_json_to_file(common.PATH_ADMIN_LIST, admin_dict)
 
     return CommandResponse(user_message, f"Removed user ID '{user_id}' from the admin list.")
 
@@ -1013,14 +1001,19 @@ async def addwhitelist_command(user_command: UserCommand) -> CommandResponse:
     if chat_id is None:
         return CommandResponse(user_message, "What chat ID do you want me to add to the whitelist?")
 
-    whitelist = await common.try_read_lines_list(common.PATH_WHITELIST, [])
+    whitelist: dict[str, list[str]] = await common.try_read_json(common.PATH_WHITELIST, {})
+    platform_str = user_command.get_platform_string()
 
-    if chat_id in whitelist:
+    if platform_str not in whitelist:
+        whitelist[platform_str] = [chat_id]
+
+    elif chat_id not in whitelist[platform_str]:
+        whitelist[platform_str].append(chat_id)
+
+    else:
         return CommandResponse(user_message, f"The chat ID '{chat_id}' is already on the whitelist.")
 
-    whitelist.append(chat_id)
-    await common.write_lines_to_file(common.PATH_WHITELIST, whitelist)
-
+    await common.write_json_to_file(common.PATH_WHITELIST, whitelist)
     return CommandResponse(user_message, f"Added new chat ID '{chat_id}' to the whitelist.")
 
 
@@ -1032,14 +1025,15 @@ async def delwhitelist_command(user_command: UserCommand) -> CommandResponse:
     if chat_id is None:
         return CommandResponse(user_message, "What chat ID do you want me to remove from the whitelist?")
 
-    whitelist = await common.try_read_lines_list(common.PATH_WHITELIST, [])
+    whitelist: dict[str, list[str]] = await common.try_read_json(common.PATH_WHITELIST, {})
+    platform_str = user_command.get_platform_string()
 
-    if chat_id not in whitelist:
+    if platform_str not in whitelist or chat_id not in whitelist[platform_str]:
         return CommandResponse(user_message, f"The chat ID '{chat_id}' is not on the whitelist.")
 
-    whitelist = [x for x in whitelist if x != chat_id]
-    await common.write_lines_to_file(common.PATH_WHITELIST, whitelist)
+    whitelist[platform_str] = [x for x in whitelist[platform_str] if x != chat_id]
 
+    await common.write_json_to_file(common.PATH_WHITELIST, whitelist)
     return CommandResponse(user_message, f"Removed chat ID '{chat_id}' from the whitelist.")
 
 
@@ -1088,7 +1082,7 @@ async def getfile_command(user_command: UserCommand) -> CommandResponse:
 # EVENTS
 # ==========================
 # region
-def discord_register_events(discord_bot: DiscordBot) -> None:
+async def discord_register_events(discord_bot: DiscordBot) -> None:
     # This function assigns all of the event handlers to the discord bot
 
     @discord_bot.event
@@ -1113,11 +1107,14 @@ def discord_register_events(discord_bot: DiscordBot) -> None:
 
     @discord_bot.event
     async def on_message(message: discord.Message) -> None:
+        if message.author.bot:
+            return
+
         if message.content.startswith(str(discord_bot.command_prefix)):
             await discord_bot.process_commands(message)
             return
 
-        message_handler = common.command_wrapper(discord_bot, handle_message_event)
+        message_handler = await common.command_wrapper(discord_bot, handle_message_event)
         context = await discord_bot.get_context(message)
         await message_handler(context)
 
@@ -1125,13 +1122,9 @@ def discord_register_events(discord_bot: DiscordBot) -> None:
 async def handle_message_event(user_command: UserCommand) -> CommandResponse:
     config = await common.Config.load()
     bot_name = config.main.botname.lower()
-
-    if isinstance(user_command.context, discord_commands.Context) and user_command.context.author.bot:
-        return NoResponse()
-
     message = user_command.get_user_message().lower()
-    response = NoResponse()
 
+    response = NoResponse()
     if config.chat.replytomonkey and "monkey" in message:
         response = await monkey_event(message)
 
@@ -1208,7 +1201,6 @@ COMMAND_LIST: list[tuple[str, Callable]] = [
     ("configlist", configlist_command),
     ("restart", restart_command),
     ("system", system_command),
-    ("terminal", terminal_command),
     ("version", version_command),
     ("crash", crash_command),
     ("addadmin", addadmin_command),

@@ -70,7 +70,7 @@ Type /guess [your answer] to answer!
             points_gained = math.floor(potential_points*points_multiplier)
 
             points_dict = await common.try_read_json(common.PATH_TRIVIA_SCORES, {})
-            player_name = await user_command.get_username()
+            player_name = await user_command.get_user_name()
             player_id = user_command.get_user_id()
             chat_id = user_command.get_chat_id()
 

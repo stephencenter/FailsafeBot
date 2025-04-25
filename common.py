@@ -1,7 +1,7 @@
 import json
 import random
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Iterable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from functools import wraps
 from pathlib import Path
 from typing import Any
@@ -24,7 +24,7 @@ from telegram.ext import CallbackContext as TelegramContext
 # region
 # PROJECT VARIABLES
 APPLICATION_NAME = "FailsafeBot"
-VERSION_NUMBER = "v1.1.9"
+VERSION_NUMBER = "v1.1.10"
 
 # DIRECTORIES
 PATH_DATA_FOLDER = Path('Data')
@@ -35,12 +35,12 @@ PATH_LOGGING_FOLDER = PATH_DATA_FOLDER / 'logging'
 # CORE FILES
 PATH_TELEGRAM_TOKEN = PATH_DATA_FOLDER / "telegram_token.txt"
 PATH_DISCORD_TOKEN = PATH_DATA_FOLDER / "discord_token.txt"
-PATH_ADMINS_LIST = PATH_DATA_FOLDER / "admins.json"
-PATH_WHITELIST = PATH_DATA_FOLDER / "whitelist.txt"
+PATH_ADMIN_LIST = PATH_DATA_FOLDER / "admins.json"
+PATH_WHITELIST = PATH_DATA_FOLDER / "whitelist.json"
 PATH_CONFIG_FILE = PATH_DATA_FOLDER / "settings.toml"
 PATH_LOGGING_FILE = PATH_LOGGING_FOLDER / "log.txt"
 PATH_USERNAME_MAP = PATH_DATA_FOLDER / "username_map.json"
-PATH_USERID_TRACK = PATH_DATA_FOLDER / "track_userid.json"
+PATH_TRACK_USERID = PATH_DATA_FOLDER / "track_userid.json"
 
 # CHATTING FILES
 PATH_OPENAI_KEY = PATH_DATA_FOLDER / "openai_key.txt"
@@ -110,7 +110,10 @@ class ConfigMain:
     rundiscord: bool = True  # Whether to run the discord bot or skip it
     requireadmin: bool = True  # Whether certain commands require admin rights to perform
     maxmessagelength: int = 1024  # Maximum amount of characters to allow in a CommandResponse object's bot_message property
-    usewhitelist: bool = False  # Whether a Telegram chat needs to be on the whitelist for commands to function
+    whitelistdiscord: bool = False  # Whether a Discord chat ID needs to be on the whitelist for commands to function
+    whitelisttelegram: bool = False  # Whether a Telegram chat ID needs to be on the whitelist for commands to function
+    autosuperdiscord: bool = True  # Whether Discord superadmin rights will be auto-assigned if none exist (disabled after first use)
+    autosupertelegram: bool = True  # Whether Telegram superadmin rights will be auto-assigned if none exist (disabled after first use)
 
 
 @dataclass
@@ -149,9 +152,9 @@ class ConfigMisc:
 
 @dataclass
 class Config:
-    main: ConfigMain
-    chat: ConfigChat
-    misc: ConfigMisc
+    main: ConfigMain = field(default_factory=ConfigMain)
+    chat: ConfigChat = field(default_factory=ConfigChat)
+    misc: ConfigMisc = field(default_factory=ConfigMisc)
 
     def __init__(self):
         error_msg = "Use `await Config.load()` instead of creating Config directly."
@@ -309,26 +312,20 @@ class UserCommand:
         self.response: CommandResponse | None = None
 
     async def track_user_id(self) -> None:
-        id_dict = await try_read_json(PATH_USERID_TRACK, {})
-        username = (await self.get_username()).lower()
+        id_dict: dict[str, dict[str, str]] = await try_read_json(PATH_TRACK_USERID, {})
+        username = (await self.get_user_name()).lower()
         user_id = self.get_user_id()
+        platform_str = self.get_platform_string()
 
-        if username in id_dict:
-            if isinstance(self.target_bot, TelegramBot):
-                id_dict[username]["telegram"] = user_id
-
-            if isinstance(self.target_bot, DiscordBot):
-                id_dict[username]["discord"] = user_id
+        if platform_str in id_dict:
+            id_dict[platform_str][username] = user_id
 
         else:
-            if isinstance(self.target_bot, TelegramBot):
-                id_dict[username] = {"telegram": user_id}
-            if isinstance(self.target_bot, DiscordBot):
-                id_dict[username] = {"discord": user_id}
+            id_dict[platform_str] = {username: user_id}
 
-        await write_json_to_file(PATH_USERID_TRACK, id_dict)
+        await write_json_to_file(PATH_TRACK_USERID, id_dict)
 
-    async def get_username(self, *, map_name: bool = False) -> str:
+    async def get_user_name(self, *, map_name: bool = False) -> str:
         # Returns the username of the user that sent the command or message
         if isinstance(self.update, TelegramUpdate):
             username = self.update.message.from_user.username
@@ -363,16 +360,11 @@ class UserCommand:
     async def get_id_by_username(self, username: str) -> str | None:
         # Attempt to retrieve the ID belonging to the provided username
         # This ID is platform-specific (Discord, Telegram) and can only be retrieved if the user has interacted with this bot before
-        id_dict = await try_read_json(PATH_USERID_TRACK, {})
+        id_dict = await try_read_json(PATH_TRACK_USERID, {})
+        platform_str = self.get_platform_string()
 
-        if username not in id_dict:
-            return None
-
-        if isinstance(self.target_bot, TelegramBot) and "telegram" in id_dict[username]:
-            return id_dict[username]["telegram"]
-
-        if isinstance(self.target_bot, DiscordBot) and "discord" in id_dict[username]:
-            return id_dict[username]["discord"]
+        if platform_str in id_dict and username in id_dict[platform_str]:
+            return id_dict[platform_str][username]
 
         return None
 
@@ -428,14 +420,16 @@ class UserCommand:
         if isinstance(self.update, TelegramUpdate) and self.update.message.text is not None:
             return self.update.message.text
 
-        if isinstance(self.context, DiscordContext) and len(self.context.message.content) > 0:
-            return ' '.join(self.context.message.content.split()[1:])
+        if isinstance(self.context, DiscordContext) and self.context.message.content:
+            if self.context.message.content.startswith("/"):
+                return ' '.join(self.context.message.content.split()[1:])
+            return self.context.message.content
 
         raise InvalidBotTypeError
 
     async def get_user_prompt(self) -> str | None:
         # This is used for prompting the GPT chat completion model
-        sender = await self.get_username(map_name=True)
+        sender = await self.get_user_name(map_name=True)
 
         if self.response is not None:
             user_message = self.response.user_message
@@ -450,13 +444,17 @@ class UserCommand:
     async def is_admin(self) -> bool:
         # Returns whether the message sender is on the bot's admin list or superadmin list
         user_id = self.get_user_id()
-        admin_dict: dict[str, list[str]] = await try_read_json(PATH_ADMINS_LIST, {})
+        admin_dict: dict[str, dict[str, list[str]]] = await try_read_json(PATH_ADMIN_LIST, {})
+        platform_str = self.get_platform_string()
 
-        if "admin" in admin_dict and user_id in admin_dict["admin"]:
+        if platform_str not in admin_dict:
+            return False
+
+        if "admin" in admin_dict[platform_str] and user_id in admin_dict[platform_str]["admin"]:
             return True
 
         # Superadmin rights also give you normal admin rights
-        if "superadmin" in admin_dict and user_id in admin_dict["superadmin"]:
+        if "superadmin" in admin_dict[platform_str] and user_id in admin_dict[platform_str]["superadmin"]:
             return True
 
         return False
@@ -465,12 +463,36 @@ class UserCommand:
         # Returns whether the message sender is on the bot's superadmin list
         # Normal admin rights are NOT sufficient for this to return True
         user_id = self.get_user_id()
-        admin_dict: dict[str, list[str]] = await try_read_json(PATH_ADMINS_LIST, {})
+        admin_dict: dict[str, dict[str, list[str]]] = await try_read_json(PATH_ADMIN_LIST, {})
+        platform_str = self.get_platform_string()
 
-        if "superadmin" in admin_dict and user_id in admin_dict["superadmin"]:
+        if platform_str not in admin_dict:
+            return False
+
+        if "superadmin" in admin_dict[platform_str] and user_id in admin_dict[platform_str]["superadmin"]:
             return True
 
         return False
+
+    async def assign_super_if_none(self) -> None:
+        # Gives the user the superadmin role if no superadmins are assigned
+        user_id = self.get_user_id()
+        user_name = await self.get_user_name()
+        admin_dict: dict[str, dict[str, list[str]]] = await try_read_json(PATH_ADMIN_LIST, {})
+        platform_str = self.get_platform_string()
+
+        message_str = f"Assigned vacant superadmin role for {platform_str} to {user_id} ({user_name})"
+        if platform_str not in admin_dict:
+            admin_dict[platform_str] = {"superadmin": [user_id]}
+            logger.warning(message_str)
+            await write_json_to_file(PATH_ADMIN_LIST, admin_dict)
+            return
+
+        if "superadmin" not in admin_dict[platform_str] or not admin_dict[platform_str]["superadmin"]:
+            admin_dict[platform_str]["superadmin"] = [user_id]
+            logger.warning(message_str)
+            await write_json_to_file(PATH_ADMIN_LIST, admin_dict)
+            return
 
     def get_chat_id(self) -> str | None:
         if isinstance(self.update, TelegramUpdate) and self.update.message is not None:
@@ -485,21 +507,15 @@ class UserCommand:
         return None
 
     async def is_whitelisted(self) -> bool:
-        # Returns whether the chat is on the bot's whitelist (telegram only)
-        config = await Config.load()
-        if not config.main.usewhitelist:
-            return True
+        # Returns whether the chat is on the bot's whitelist
+        chat_id = self.get_chat_id()
+        platform_str = self.get_platform_string()
+        whitelist: dict[str, list[str]] = await try_read_json(PATH_WHITELIST, {})
 
-        if isinstance(self.update, TelegramUpdate):
-            if self.update.message is None:
-                return False
+        if platform_str not in whitelist:
+            return False
 
-            chat_id = str(self.update.message.chat.id)
-            whitelist = await try_read_lines_list(PATH_WHITELIST, [])
-
-            return chat_id in whitelist
-
-        return True
+        return chat_id in whitelist[platform_str]
 
     async def send_text_response(self, response: str | None) -> None:
         if isinstance(self.update, TelegramUpdate):
@@ -546,6 +562,13 @@ class UserCommand:
     def is_discord(self) -> bool:
         # Returns whether this UserCommand object was sent to a Discord bot or not
         return isinstance(self.target_bot, DiscordBot)
+
+    def get_platform_string(self) -> str:
+        if self.is_telegram():
+            return "telegram"
+        if self.is_discord():
+            return "discord"
+        raise InvalidBotTypeError
 
     def get_user_voice_channel(self) -> discord.VoiceChannel | None:
         # Returns the voice channel that the user who sent this UserCommand is currently in
@@ -658,20 +681,31 @@ async def send_response(command_function: Callable[[UserCommand], Awaitable[Comm
         await append_to_gpt_memory(user_prompt=user_prompt, bot_prompt=user_command.response.bot_message)
 
 
-def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable[[UserCommand], Awaitable[CommandResponse]]) -> Callable:
+async def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable[[UserCommand], Awaitable[CommandResponse]]) -> Callable:
+    config = await Config.load()
+
     if isinstance(bot, TelegramBot):
         async def telegram_wrapper(update: TelegramUpdate, context: TelegramContext) -> None:
             if update.message is None:
                 return
 
             user_command = UserCommand(bot, context, update=update)
+
+            # Track this user's platform, name, and user ID
             await user_command.track_user_id()
-            if not await user_command.is_whitelisted():
-                # Telegram doesn't allow you to make "private" bots, meaning anyone can add your bot to their chat
-                # and use up your CPU time. This check prevents the bot from responding to commands unless it comes
-                # from a whitelisted chat
-                logger.warning(f"whitelist rejected {update.message.chat.id}")
+
+            # If the whitelist is enforced, don't allow interacting with this bot unless on the list
+            if config.main.whitelisttelegram and not await user_command.is_whitelisted():
+                logger.warning(f"Whitelist rejected chat ID {user_command.get_chat_id()} for Telegram Bot")
                 return
+
+            # If there are no superadmins assigned to this bot, assign this user as the superadmin
+            if config.main.autosupertelegram:
+                await user_command.assign_super_if_none()
+
+                # Automatically disable this setting after checking for superadmins to prevent accidents
+                config.main.autosupertelegram = False
+                await config.save_config()
 
             await send_response(command, user_command)
 
@@ -681,6 +715,20 @@ def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable[[UserComman
         async def discord_wrapper(context: DiscordContext) -> None:
             user_command = UserCommand(bot, context)
             await user_command.track_user_id()
+
+            # If the whitelist is enforced, don't allow interacting with this bot unless on the list
+            if config.main.whitelistdiscord and not await user_command.is_whitelisted():
+                logger.warning(f"Whitelist rejected chat ID {user_command.get_chat_id()} for Discord Bot")
+                return
+
+            # If there are no superadmins assigned to this bot, assign this user as the superadmin
+            if config.main.autosuperdiscord:
+                await user_command.assign_super_if_none()
+
+                # Automatically disable this setting after checking for superadmins to prevent accidents
+                config.main.autosuperdiscord = False
+                await config.save_config()
+
             await send_response(command, user_command)
 
         return discord_wrapper
