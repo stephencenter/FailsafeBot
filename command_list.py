@@ -117,7 +117,7 @@ async def sound_command(user_command: UserCommand) -> CommandResponse:
         return CommandResponse("Can you play that sound for me?", random.choice(common.TXT_SOUND_NOT_PROVIDED))
 
     # Parse the arguments the user provided for the sound name
-    sound_results = sound_manager.get_sound(sound_name)
+    sound_results = await sound_manager.get_sound(sound_name)
 
     user_message = f"Can you play the {sound_name} sound for me?"
 
@@ -172,7 +172,7 @@ async def soundlist_command(_: UserCommand) -> CommandResponse:
         response = f"There are {num_sounds} sounds available to use. Here's a text file with all of them listed out."
 
         soundlist_string = "\n".join(sound_list)
-        common.write_text_to_file(txt_path, soundlist_string)
+        await common.write_text_to_file(txt_path, soundlist_string)
 
         return FileResponse(user_message, response, txt_path, temp=True, send_to_chat=True)
 
@@ -185,7 +185,7 @@ async def soundlist_command(_: UserCommand) -> CommandResponse:
 
 
 async def newsounds_command(_: UserCommand) -> CommandResponse:
-    playcount_dict = sound_manager.get_playcount_dict()
+    playcount_dict = await sound_manager.get_playcount_dict()
     new_sounds = [sound for sound in playcount_dict if playcount_dict[sound] == 0]
     new_count = len(new_sounds)
     list_string = ', '.join(new_sounds)
@@ -213,7 +213,7 @@ async def addalias_command(user_command: UserCommand) -> CommandResponse:
     except IndexError:
         return CommandResponse("Can you add a new sound alias?", "Format is /addalias [new alias] [sound name]")
 
-    response = sound_manager.add_sound_alias(new_alias, sound_name)
+    response = await sound_manager.add_sound_alias(new_alias, sound_name)
     return CommandResponse(f"Can you make '{new_alias}' an alias for the sound '{sound_name}'?", response)
 
 
@@ -237,7 +237,7 @@ async def getalias_command(user_command: UserCommand) -> CommandResponse:
     if not sound_manager.sound_exists(sound_name):
         return CommandResponse(user_prompt, random.choice(common.TXT_SOUND_NOT_FOUND))
 
-    aliases = sound_manager.get_aliases(sound_name)
+    aliases = await sound_manager.get_aliases(sound_name)
     num_alias = len(aliases)
     join_string = "', '"
     alias_string = f"'{join_string.join(aliases)}'"
@@ -261,7 +261,7 @@ async def search_command(user_command: UserCommand) -> CommandResponse:
     if not search_string:
         return CommandResponse("Can you search for a sound?", "What sound do you want to search for?")
 
-    search_results = sound_manager.search_sounds(search_string)
+    search_results = await sound_manager.search_sounds(search_string)
 
     num_matches = len(search_results)
     results_string = ', '.join(search_results)
@@ -285,7 +285,7 @@ async def playcount_command(user_command: UserCommand) -> CommandResponse:
     if sound_name is None:
         return CommandResponse("How many times has that sound been played?", random.choice(common.TXT_SOUND_NOT_PROVIDED))
 
-    sound_aliases = sound_manager.get_alias_dict()
+    sound_aliases = await sound_manager.get_alias_dict()
     if sound_name in sound_aliases:
         sound_name = sound_aliases[sound_name]
 
@@ -294,12 +294,12 @@ async def playcount_command(user_command: UserCommand) -> CommandResponse:
     if sound_name not in sound_manager.get_sound_dict():
         return CommandResponse(user_prompt, random.choice(common.TXT_SOUND_NOT_FOUND))
 
-    playcount = sound_manager.get_playcount_dict()[sound_name]
+    playcount = (await sound_manager.get_playcount_dict())[sound_name]
     return CommandResponse(user_prompt, f"/sound {sound_name} has been used {playcount} times")
 
 
 async def topsounds_command(_: UserCommand) -> CommandResponse:
-    play_counts = sound_manager.get_playcount_dict()
+    play_counts = await sound_manager.get_playcount_dict()
     list_size = 20
     top_sounds = sorted(play_counts, key=lambda x: play_counts[x], reverse=True)[:list_size]
 
@@ -308,7 +308,7 @@ async def topsounds_command(_: UserCommand) -> CommandResponse:
 
 
 async def botsounds_command(_: UserCommand) -> CommandResponse:
-    play_counts = sound_manager.get_playcount_dict()
+    play_counts = await sound_manager.get_playcount_dict()
     list_size = 20
     bot_sounds = sorted(play_counts, key=lambda x: play_counts[x])[:list_size]
 
@@ -325,14 +325,15 @@ async def chat_command(user_command: UserCommand) -> CommandResponse:
     user_message = user_command.get_user_message()
 
     # Have GPT generate a response to the user's message
-    response = chat.get_gpt_response(user_command)
+    response = await chat.get_gpt_response(user_command)
 
     return CommandResponse(user_message, response)
 
 
 async def wisdom_command(_: UserCommand) -> CommandResponse:
-    response = chat.generate_markov_text()
-    bot_name = common.Config().main.botname
+    config = await common.Config.load()
+    response = await chat.generate_markov_text()
+    bot_name = config.main.botname
     return CommandResponse(f"O, wise and powerful {bot_name}, please grant me your wisdom!", response)
 
 
@@ -347,18 +348,18 @@ async def say_command(user_command: UserCommand) -> CommandResponse:
     # Say whatever string the user provided. If the user didn't provide a string, say the
     # most recent thing the bot said in memory
     if not text_prompt:
-        text_prompt = chat.get_most_recent_bot_message()
+        text_prompt = await chat.get_most_recent_bot_message()
 
     if text_prompt is None:
         return CommandResponse("Can you say that last thing you said out loud?", "My memory unit appears to be malfuncitoning.")
 
-    text_prompt = chat.cap_elevenlabs_prompt(text_prompt)
+    text_prompt = await chat.cap_elevenlabs_prompt(text_prompt)
     user_message = f"Can you say this for me: {text_prompt}"
 
     try:
-        elevenlabs_response = chat.get_elevenlabs_response(text_prompt, save_to_file=True)
+        elevenlabs_response = await chat.get_elevenlabs_response(text_prompt, save_to_file=True)
     except ElevenLabsApiError as e:
-        error_response = chat.handle_elevenlabs_error(e)
+        error_response = await chat.handle_elevenlabs_error(e)
         return CommandResponse(user_message, error_response)
     except ValueError:
         return CommandResponse(user_message, "Failed to retrieve ElevenLabs key from file.")
@@ -379,7 +380,7 @@ async def stream_command(user_command: UserCommand) -> CommandResponse:
 
     error_message = "Couldn't find a video with that URL or search string!"
     try:
-        ytdl_response = sound_manager.download_audio_from_url(yt_url)
+        ytdl_response = await sound_manager.download_audio_from_url(yt_url)
     except (YtdlDownloadError, TransportError):
         return CommandResponse(user_message, error_message)
     if ytdl_response is None:
@@ -413,7 +414,7 @@ async def vcsound_command(user_command: UserCommand) -> CommandResponse:
     user_message = f"Can you play the {sound_name} sound in the voice channel?"
 
     # Alert the user if the sound they requested does not exist
-    sound_results = sound_manager.get_sound(sound_name)
+    sound_results = await sound_manager.get_sound(sound_name)
     if sound_results is None:
         return CommandResponse(user_message, random.choice(common.TXT_SOUND_NOT_FOUND))
 
@@ -577,18 +578,18 @@ async def vcsay_command(user_command: UserCommand) -> CommandResponse:
     # Say whatever string the user provided. If the user didn't provide a string, say the
     # most recent thing the bot said in memory
     if not text_prompt:
-        text_prompt = chat.get_most_recent_bot_message()
+        text_prompt = await chat.get_most_recent_bot_message()
 
     if text_prompt is None:
         return CommandResponse("Can you say that last thing you said out loud?", "My memory unit appears to be malfuncitoning.")
 
-    text_prompt = chat.cap_elevenlabs_prompt(text_prompt)
+    text_prompt = await chat.cap_elevenlabs_prompt(text_prompt)
     user_message = f"Can you say this for me in the voice channel: {text_prompt}"
 
     try:
-        elevenlabs_response = chat.get_elevenlabs_response(text_prompt, save_to_file=False)
+        elevenlabs_response = await chat.get_elevenlabs_response(text_prompt, save_to_file=False)
     except ElevenLabsApiError as e:
-        error_response = chat.handle_elevenlabs_error(e)
+        error_response = await chat.handle_elevenlabs_error(e)
         return CommandResponse(user_message, error_response)
     except ValueError:
         return CommandResponse(user_message, "Failed to retrieve ElevenLabs key from file.")
@@ -635,7 +636,7 @@ async def roll_command(user_command: UserCommand) -> CommandResponse:
 
     user_prompt = f"Can you roll a {roll_text} for me?"
 
-    config = common.Config()
+    config = await common.Config.load()
     if num_dice > config.misc.maxdice:
         return CommandResponse(user_prompt, f"Keep it to {config.misc.maxdice:,} dice or fewer please, I'm not a god.")
 
@@ -651,7 +652,7 @@ async def roll_command(user_command: UserCommand) -> CommandResponse:
         dice_text = ', '.join(f"{x:,}" for x in rolls)
         dice_text = f"({dice_text})"
 
-    sender = user_command.get_user_name()
+    sender = await user_command.get_username()
 
     return CommandResponse(user_prompt, f"{sender} rolled a {total_roll:,} {dice_text}")
 
@@ -679,14 +680,14 @@ async def statroll_command(user_command: UserCommand) -> CommandResponse:
 
 
 async def d10000_command(user_command: UserCommand) -> CommandResponse:
-    username = user_command.get_user_name()
-    effect = dice_roller.get_d10000_roll(username)
+    username = await user_command.get_username()
+    effect = await dice_roller.get_d10000_roll(username)
     return CommandResponse("Can you roll an effect on the d10000 table?", effect)
 
 
 async def effects_command(user_command: UserCommand) -> CommandResponse:
-    username = user_command.get_user_name()
-    active_effects = dice_roller.get_active_effects(username)
+    username = await user_command.get_username()
+    active_effects = await dice_roller.get_active_effects(username)
 
     if active_effects:
         effects_string = '\n    '.join(active_effects)
@@ -698,8 +699,8 @@ async def effects_command(user_command: UserCommand) -> CommandResponse:
 
 
 async def reset_effects_command(user_command: UserCommand) -> CommandResponse:
-    username = user_command.get_user_name()
-    dice_roller.reset_active_effects(username)
+    username = await user_command.get_username()
+    await dice_roller.reset_active_effects(username)
 
     return CommandResponse("Can you reset my active d10000 effects?", f"Active effects reset for {username}.")
 # endregion
@@ -710,7 +711,7 @@ async def reset_effects_command(user_command: UserCommand) -> CommandResponse:
 # ==========================
 # region
 async def trivia_command(user_command: UserCommand) -> CommandResponse:
-    trivia_question = trivia.get_trivia_question(user_command)
+    trivia_question = await trivia.get_trivia_question(user_command)
 
     return CommandResponse("Can you give me a trivia question?", trivia_question.get_question_string())
 
@@ -719,7 +720,7 @@ async def guess_command(user_command: UserCommand) -> CommandResponse:
     guess = user_command.get_user_message()
     user_message = f"Is the trivia answer {guess}?"
 
-    current_question = trivia.get_current_question(user_command)
+    current_question = await trivia.get_current_question(user_command)
     if current_question is None:
         return CommandResponse(user_message, "Trivia is not active!")
 
@@ -727,13 +728,13 @@ async def guess_command(user_command: UserCommand) -> CommandResponse:
         return CommandResponse(user_message, "You need to provide an answer, like /guess abc")
 
     if current_question.is_guess_correct(guess):
-        points_gained = current_question.score_question(user_command, was_correct=True)
-        player_name = user_command.get_user_name()
+        points_gained = await current_question.score_question(user_command, was_correct=True)
+        player_name = await user_command.get_username()
         send_str = f"That is correct, the answer was '{current_question.correct_answer}'. {player_name} earned {points_gained} points!"
         return CommandResponse(user_message, send_str)
 
     if current_question.is_guess_on_list(guess):
-        current_question.score_question(user_command, was_correct=False)
+        await current_question.score_question(user_command, was_correct=False)
         if current_question.guesses_left > 0:
             return CommandResponse(user_message, f"That is incorrect, {current_question.guesses_left} guesses remaining.")
 
@@ -745,7 +746,7 @@ async def guess_command(user_command: UserCommand) -> CommandResponse:
 async def triviarank_command(user_command: UserCommand) -> CommandResponse:
     user_message = "What are the current trivia rankings for this chat?"
 
-    rankings = trivia.get_trivia_rankings(user_command)
+    rankings = await trivia.get_trivia_rankings(user_command)
     if rankings is None:
         return CommandResponse(user_message, "There are no trivia rankings for this chat.")
 
@@ -785,7 +786,7 @@ async def memory_command(_: UserCommand) -> CommandResponse:
 async def memorylist_command(_: UserCommand) -> CommandResponse:
     user_message = "Can you send me your memory as a list?"
 
-    memory_list = common.get_gpt_memory()
+    memory_list = await common.get_gpt_memory()
 
     if not memory_list:
         return CommandResponse(user_message, "My mind is a blank slate.")
@@ -793,7 +794,7 @@ async def memorylist_command(_: UserCommand) -> CommandResponse:
     memory_list = [f"{item['role']}: {item['content']}" for item in memory_list if 'content' in item]
 
     temp_path = common.PATH_TEMP_FOLDER / 'mem_list.txt'
-    common.write_lines_to_file(temp_path, memory_list)
+    await common.write_lines_to_file(temp_path, memory_list)
 
     return FileResponse(user_message, "Sure, here's my memory list.", temp_path, temp=True)
 # endregion
@@ -811,7 +812,7 @@ async def getconfig_command(user_command: UserCommand) -> CommandResponse:
     if search_string is None:
         return CommandResponse(user_message, "You need to provide a setting name to check.")
 
-    config = common.Config()
+    config = await common.Config.load()
     group_name, setting_name, value = config.find_setting(search_string)
 
     user_message = f"Can you tell me the value of the setting {search_string}?"
@@ -836,24 +837,22 @@ async def setconfig_command(user_command: UserCommand) -> CommandResponse:
     if not new_value:
         return CommandResponse(user_message, "Format is /setconfig [setting] [new value]")
 
-    config = common.Config()
+    config = await common.Config.load()
     group_name, setting_name, _ = config.find_setting(search_string)
 
     user_message = f"Can you change the value of the setting {search_string}?"
     if group_name is None or setting_name is None:
         return CommandResponse(user_message, f"Couldn't find a setting called '{search_string}'.")
 
-    new_value = common.parse_value_input(new_value)
-
-    setattr(getattr(config, group_name), setting_name, new_value)
-    common.save_config(config)
+    config.update_setting(group_name, setting_name, new_value)
+    await config.save_config()
 
     return CommandResponse(user_message, f"Setting '{group_name}.{setting_name}' has been set to '{new_value}'.")
 
 
 @requireadmin
 async def configlist_command(_: UserCommand) -> CommandResponse:
-    config = common.Config()
+    config = await common.Config.load()
 
     setting_list = []
     for g in config.__dict__:
@@ -901,7 +900,7 @@ async def logs_command(_: UserCommand) -> CommandResponse:
 
 @requireadmin
 async def clearlogs_command(_: UserCommand) -> CommandResponse:
-    common.write_lines_to_file(common.PATH_LOGGING_FILE, [])
+    await common.write_lines_to_file(common.PATH_LOGGING_FILE, [])
     return CommandResponse("Can you clear your log file for me?", "Trying to erase history are we?")
 
 
@@ -909,7 +908,7 @@ async def test_command(_: UserCommand) -> CommandResponse:
     # This command is for verifying that the bot is online and receiving commands.
     # You can also supply it with a list of responses and it will pick a random one
     # I think of this as similar to how RTS units say things when you click them
-    response_list = common.try_read_lines_list(common.PATH_RESPONSE_LIST, [])
+    response_list = await common.try_read_lines_list(common.PATH_RESPONSE_LIST, [])
     response_list = [line for line in response_list if not line.isspace() and not line.startswith("#")]
 
     if not response_list:
@@ -933,7 +932,7 @@ async def restart_command(user_command: UserCommand) -> CommandResponse:
 
 @requireadmin
 async def system_command(_: UserCommand) -> CommandResponse:
-    config = common.Config()
+    config = await common.Config.load()
     mem_usage = psutil.virtual_memory()
     disk_usage = psutil.disk_usage('/')
 
@@ -956,8 +955,6 @@ Disk: {disk_usage.percent}% - {round(disk_usage.used/divisor, 2):,} / {round(dis
 
 @requireadmin
 async def terminal_command(user_command: UserCommand) -> CommandResponse:
-    if not user_command.is_admin():
-        return NoResponse()
 
     command_string = user_command.get_user_message()
 
@@ -971,7 +968,7 @@ async def terminal_command(user_command: UserCommand) -> CommandResponse:
         stderr=asyncio.subprocess.STDOUT,
     )
 
-    config = common.Config()
+    config = await common.Config.load()
     if config.misc.cmdautoyes and process.stdin is not None:
         # Write 'y' and optionally flush stdin
         process.stdin.write(b'y\n')
@@ -1006,13 +1003,13 @@ async def addadmin_command(user_command: UserCommand) -> CommandResponse:
     if user_id is None:
         return CommandResponse(user_message, "Who do you want me to make an admin?")
 
-    admin_list = common.try_read_lines_list(common.PATH_ADMINS_LIST, [])
+    admin_list = await common.try_read_lines_list(common.PATH_ADMINS_LIST, [])
 
     if user_id in admin_list:
         return CommandResponse(user_message, f"That user ID '{user_id}' is already on the admin list.")
 
     admin_list.append(user_id)
-    common.write_lines_to_file(common.PATH_ADMINS_LIST, admin_list)
+    await common.write_lines_to_file(common.PATH_ADMINS_LIST, admin_list)
 
     return CommandResponse(user_message, f"Added new user ID '{user_id}' to admin list.")
 
@@ -1025,13 +1022,13 @@ async def deladmin_command(user_command: UserCommand) -> CommandResponse:
     if user_id is None:
         return CommandResponse(user_message, "Who do you want me to remove from the admin list?")
 
-    admin_list = common.try_read_lines_list(common.PATH_ADMINS_LIST, [])
+    admin_list = await common.try_read_lines_list(common.PATH_ADMINS_LIST, [])
 
     if user_id not in admin_list:
         return CommandResponse(user_message, f"That user ID '{user_id}' is not on the admin list.")
 
     admin_list = [x for x in admin_list if x != user_id]
-    common.write_lines_to_file(common.PATH_ADMINS_LIST, admin_list)
+    await common.write_lines_to_file(common.PATH_ADMINS_LIST, admin_list)
 
     return CommandResponse(user_message, f"Removed user ID '{user_id}' from the admin list.")
 
@@ -1044,13 +1041,13 @@ async def addwhitelist_command(user_command: UserCommand) -> CommandResponse:
     if chat_id is None:
         return CommandResponse(user_message, "What chat ID do you want me to add to the whitelist?")
 
-    whitelist = common.try_read_lines_list(common.PATH_WHITELIST, [])
+    whitelist = await common.try_read_lines_list(common.PATH_WHITELIST, [])
 
     if chat_id in whitelist:
         return CommandResponse(user_message, f"The chat ID '{chat_id}' is already on the whitelist.")
 
     whitelist.append(chat_id)
-    common.write_lines_to_file(common.PATH_WHITELIST, whitelist)
+    await common.write_lines_to_file(common.PATH_WHITELIST, whitelist)
 
     return CommandResponse(user_message, f"Added new chat ID '{chat_id}' to the whitelist.")
 
@@ -1063,13 +1060,13 @@ async def delwhitelist_command(user_command: UserCommand) -> CommandResponse:
     if chat_id is None:
         return CommandResponse(user_message, "What chat ID do you want me to remove from the whitelist?")
 
-    whitelist = common.try_read_lines_list(common.PATH_WHITELIST, [])
+    whitelist = await common.try_read_lines_list(common.PATH_WHITELIST, [])
 
     if chat_id not in whitelist:
         return CommandResponse(user_message, f"The chat ID '{chat_id}' is not on the whitelist.")
 
     whitelist = [x for x in whitelist if x != chat_id]
-    common.write_lines_to_file(common.PATH_WHITELIST, whitelist)
+    await common.write_lines_to_file(common.PATH_WHITELIST, whitelist)
 
     return CommandResponse(user_message, f"Removed chat ID '{chat_id}' from the whitelist.")
 
@@ -1126,7 +1123,7 @@ def discord_register_events(discord_bot: DiscordBot) -> None:
     async def on_voice_state_update(member, before, after) -> None:  # noqa: ANN001, ARG001
         # This function automatically disconnects the bot if it's the only
         # member remaining in a voice channel
-        config = common.Config()
+        config = await common.Config.load()
 
         if not config.chat.vcautodc:
             return
@@ -1154,7 +1151,7 @@ def discord_register_events(discord_bot: DiscordBot) -> None:
 
 
 async def handle_message_event(user_command: UserCommand) -> CommandResponse:
-    config = common.Config()
+    config = await common.Config.load()
     bot_name = config.main.botname.lower()
 
     if isinstance(user_command.context, discord_commands.Context) and user_command.context.author.bot:
@@ -1173,8 +1170,8 @@ async def handle_message_event(user_command: UserCommand) -> CommandResponse:
         response = await reply_event(user_command)
 
     elif config.chat.recordall:
-        user_prompt = user_command.get_user_prompt()
-        common.append_to_gpt_memory(user_prompt=user_prompt)
+        user_prompt = await user_command.get_user_prompt()
+        await common.append_to_gpt_memory(user_prompt=user_prompt)
 
     return response
 
@@ -1186,6 +1183,6 @@ async def monkey_event(message: str) -> CommandResponse:
 
 async def reply_event(user_command: UserCommand) -> CommandResponse:
     # Have GPT generate a response to the user's message
-    response = chat.get_gpt_response(user_command)
+    response = await chat.get_gpt_response(user_command)
     return CommandResponse(user_command.get_user_message(), response)
 # endregion

@@ -1,13 +1,12 @@
 import datetime
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
 from pathlib import Path
 
-import elevenlabs
 import numpy as np
-from elevenlabs.client import ElevenLabs
+from elevenlabs.client import AsyncElevenLabs
 from elevenlabs.core.api_error import ApiError as ElevenLabsApiError
 from loguru import logger
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 import common
 from common import UserCommand
@@ -15,14 +14,14 @@ from common import UserCommand
 MAX_GPT_ATTEMPTS = 3
 
 
-def generate_markov_text() -> str:
+async def generate_markov_text() -> str:
     # Markov-powered Text Generation Command
-    config = common.Config()
+    config = await common.Config.load()
     if config.chat.minmarkov > config.chat.maxmarkov:
         error_message = "Markov minimum length cannot be greater than maximum length (config issue)"
         raise ValueError(error_message)
 
-    markov_chain = common.try_read_json(common.PATH_MARKOV_CHAIN, {})
+    markov_chain = await common.try_read_json(common.PATH_MARKOV_CHAIN, {})
 
     if not markov_chain:
         return "No markov chain data was found!"
@@ -52,28 +51,28 @@ def generate_markov_text() -> str:
     return output_message
 
 
-def get_gpt_response(user_command: UserCommand) -> str:
-    config = common.Config()
+async def get_gpt_response(user_command: UserCommand) -> str:
+    config = await common.Config.load()
 
     # Load and set the OpenAI API key
-    openai_api_key = common.try_read_single_line(common.PATH_OPENAI_KEY, None)
-    openai_client = OpenAI(api_key=openai_api_key)
+    openai_api_key = await common.try_read_single_line(common.PATH_OPENAI_KEY, None)
+    openai_client = AsyncOpenAI(api_key=openai_api_key)
 
     # Load and place the system prompt before the loaded memory to instruct the AI how to act
-    system_prompt = common.try_read_lines_str(common.PATH_GPT_PROMPT, None)
+    system_prompt = await common.try_read_lines_str(common.PATH_GPT_PROMPT, None)
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
 
     # Place an assistant message after the system prompt but before the loaded memory
     # This is useful specifically with fine-tuned models to set the tone for the bot's responses
-    prepend_message = common.try_read_lines_str(common.PATH_GPT_PREPEND, None)
+    prepend_message = await common.try_read_lines_str(common.PATH_GPT_PREPEND, None)
     if prepend_message is not None:
         messages.append({"role": "assistant", "content": prepend_message})
 
     # Load the current conversation so far and add it to the end of the message history
-    loaded_memory: list[dict] = common.get_gpt_memory()
+    loaded_memory: list[dict] = await common.get_gpt_memory()
     messages += loaded_memory
 
-    user_prompt = user_command.get_user_prompt()
+    user_prompt = await user_command.get_user_prompt()
 
     if user_prompt is not None:
         messages.append({"role": "user", "content": user_prompt})
@@ -81,7 +80,7 @@ def get_gpt_response(user_command: UserCommand) -> str:
     attempt_counter = 0
     re_attempt_text = "Failed to get GPT response, trying again..."
     while attempt_counter < MAX_GPT_ATTEMPTS:
-        gpt_completion = openai_client.chat.completions.create(
+        gpt_completion = await openai_client.chat.completions.create(
             messages=messages,  # type: ignore
             model=config.chat.gptmodel,
             temperature=config.chat.gpttemp,
@@ -110,8 +109,8 @@ def get_gpt_response(user_command: UserCommand) -> str:
     return common.TXT_BZZZT_ERROR
 
 
-def get_most_recent_bot_message() -> str | None:
-    memory_list: list[dict] = common.get_gpt_memory()
+async def get_most_recent_bot_message() -> str | None:
+    memory_list: list[dict] = await common.get_gpt_memory()
 
     for memory in memory_list[::-1]:
         if memory["role"] == "assistant":
@@ -120,18 +119,18 @@ def get_most_recent_bot_message() -> str | None:
     return None
 
 
-def get_elevenlabs_response(input_text: str, *, save_to_file: bool = False) -> Path | Iterator[bytes]:
+async def get_elevenlabs_response(input_text: str, *, save_to_file: bool = False) -> Path | AsyncIterator[bytes]:
     # Get elevenlabs key from file
-    elevenlabs_key = common.try_read_single_line(common.PATH_ELEVENLABS_KEY, None)
+    elevenlabs_key = await common.try_read_single_line(common.PATH_ELEVENLABS_KEY, None)
     if elevenlabs_key is None:
         error_message = "Couldn't retrieve elevenlabs key!"
         raise ValueError(error_message)
 
-    config = common.Config()
-    elevenlabs_client = ElevenLabs(api_key=elevenlabs_key)
+    config = await common.Config.load()
+    elevenlabs_client = AsyncElevenLabs(api_key=elevenlabs_key)
 
     # Get text-to-speech response from elevenlabs
-    audio = elevenlabs_client.text_to_speech.convert(
+    audio_stream = elevenlabs_client.text_to_speech.convert(
         text=input_text,
         voice_id=config.chat.sayvoiceid,
         model_id=config.chat.saymodelid,
@@ -140,15 +139,14 @@ def get_elevenlabs_response(input_text: str, *, save_to_file: bool = False) -> P
     # Save sound to temp file
     if save_to_file:
         temp_path = common.PATH_TEMP_FOLDER / f"{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.mp3"
-        common.PATH_TEMP_FOLDER.mkdir(parents=True, exist_ok=True)
-        elevenlabs.save(audio, str(temp_path))
+        await common.write_bytes_to_file(temp_path, audio_stream)
         return temp_path
 
-    return audio
+    return audio_stream
 
 
-def cap_elevenlabs_prompt(text_prompt: str) -> str:
-    config = common.Config()
+async def cap_elevenlabs_prompt(text_prompt: str) -> str:
+    config = await common.Config.load()
 
     # Hard cap cuts off the text abruptly, to keep costs down (longer strings = more elevenlabs credits)
     text_prompt = text_prompt[:min(len(text_prompt), config.chat.sayhardcap)]
@@ -162,9 +160,9 @@ def cap_elevenlabs_prompt(text_prompt: str) -> str:
     return text_prompt
 
 
-def handle_elevenlabs_error(error: ElevenLabsApiError) -> str:
+async def handle_elevenlabs_error(error: ElevenLabsApiError) -> str:
     status = error.body['detail']['status']
-    config = common.Config()
+    config = await common.Config.load()
 
     error_map = {
         'max_character_limit_exceeded': "Text input has too many characters for ElevenLabs text-to-speech (max is ~10k)",

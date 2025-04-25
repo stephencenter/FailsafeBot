@@ -27,12 +27,12 @@ def parse_diceroll(roll_string: str) -> tuple[int, int, int] | None:
     return num_dice, num_faces, modifier
 
 
-def get_d10000_roll(username: str) -> str:
-    effects = common.try_read_lines_list(common.PATH_D10000_LIST, None)
+async def get_d10000_roll(username: str) -> str:
+    effects = await common.try_read_lines_list(common.PATH_D10000_LIST, None)
     if effects is None:
         return "The d10000 file couldn't be found!"
 
-    active_effects = common.try_read_json(common.PATH_ACTIVE_EFFECTS, {})
+    active_effects = await common.try_read_json(common.PATH_ACTIVE_EFFECTS, {})
 
     try:
         effects = [x for x in effects if x not in active_effects[username]]
@@ -43,13 +43,13 @@ def get_d10000_roll(username: str) -> str:
     active_effects[username].append(chosen_effect)
     active_effects[username] = sorted(set(active_effects[username]))
 
-    common.write_json_to_file(common.PATH_ACTIVE_EFFECTS, active_effects)
+    await common.write_json_to_file(common.PATH_ACTIVE_EFFECTS, active_effects)
 
     return chosen_effect
 
 
-def get_active_effects(username: str) -> list:
-    effects_dict = common.try_read_json(common.PATH_ACTIVE_EFFECTS, {})
+async def get_active_effects(username: str) -> list:
+    effects_dict = await common.try_read_json(common.PATH_ACTIVE_EFFECTS, {})
 
     try:
         active_effects = effects_dict[username]
@@ -59,11 +59,11 @@ def get_active_effects(username: str) -> list:
     return active_effects
 
 
-def reset_active_effects(username: str) -> None:
-    effects_dict = common.try_read_json(common.PATH_ACTIVE_EFFECTS, {})
+async def reset_active_effects(username: str) -> None:
+    effects_dict = await common.try_read_json(common.PATH_ACTIVE_EFFECTS, {})
     effects_dict[username] = []
 
-    common.write_json_to_file(common.PATH_ACTIVE_EFFECTS, effects_dict)
+    await common.write_json_to_file(common.PATH_ACTIVE_EFFECTS, effects_dict)
 
 
 @dataclass

@@ -35,7 +35,6 @@ text_files = {
     common.PATH_RESPONSE_LIST,
     common.PATH_LOGGING_FILE,
     common.PATH_TRIVIA_SCORES,
-    common.PATH_TRIVIA_MEMORY,
     common.PATH_D10000_LIST,
     common.PATH_ACTIVE_EFFECTS,
     common.PATH_CURRENT_TRIVIA,
@@ -90,7 +89,7 @@ def init_logging() -> None:
     sys.excepthook = log_exceptions
 
 
-def check_for_missing_paths() -> Generator[str]:
+def check_for_untracked_paths() -> Generator[str]:
     for obj in common.__dict__.values():
         if isinstance(obj, Path) and obj not in directories | text_files | do_not_create:
             yield f"Path '{obj}' is expected but was not checked for"

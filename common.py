@@ -1,11 +1,12 @@
 import json
 import random
-from collections.abc import Awaitable, Callable, Generator, Iterable
-from dataclasses import asdict, dataclass, field
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Iterable
+from dataclasses import asdict, dataclass
 from functools import wraps
 from pathlib import Path
 from typing import Any
 
+import aiofiles
 import discord
 import toml
 from discord.errors import HTTPException
@@ -23,7 +24,7 @@ from telegram.ext import CallbackContext as TelegramContext
 # region
 # PROJECT VARIABLES
 APPLICATION_NAME = "FailsafeBot"
-VERSION_NUMBER = "v1.1.7"
+VERSION_NUMBER = "v1.1.8"
 
 # DIRECTORIES
 PATH_DATA_FOLDER = Path('Data')
@@ -57,7 +58,6 @@ PATH_PLAYCOUNTS = PATH_DATA_FOLDER / "playcounts.json"
 # TRIVIA FILES
 PATH_TRIVIA_SCORES = PATH_DATA_FOLDER / "trivia_points.json"
 PATH_CURRENT_TRIVIA = PATH_DATA_FOLDER / "current_trivia.json"
-PATH_TRIVIA_MEMORY = PATH_DATA_FOLDER / "trivia_memory.txt"
 URL_TRIVIA = "https://opentdb.com/api.php?amount="
 
 # D10000 FILES
@@ -149,18 +149,28 @@ class ConfigMisc:
 
 @dataclass
 class Config:
-    main: ConfigMain = field(default_factory=ConfigMain)
-    chat: ConfigChat = field(default_factory=ConfigChat)
-    misc: ConfigMisc = field(default_factory=ConfigMisc)
+    main: ConfigMain
+    chat: ConfigChat
+    misc: ConfigMisc
 
-    def __post_init__(self):
-        try:
-            with PATH_CONFIG_FILE.open(encoding='utf-8') as f:
-                loaded = toml.load(f)
+    def __init__(self):
+        error_msg = "Use `await Config.load()` instead of creating Config directly."
+        raise RuntimeError(error_msg)
 
-        except (FileNotFoundError, toml.TomlDecodeError):
-            return
+    @classmethod
+    async def load(cls) -> "Config":
+        self = object.__new__(cls)
+        self.main = ConfigMain()
+        self.chat = ConfigChat()
+        self.misc = ConfigMisc()
 
+        loaded = await try_read_toml(PATH_CONFIG_FILE, {})
+
+        if not loaded:
+            logger.warning(f"Failed to load {PATH_CONFIG_FILE}, falling back to default settings")
+            return self
+
+        # Use loaded toml file to update fields
         for key in self.__dict__:
             for subkey in self.__dict__[key].__dict__:
                 if key in loaded and subkey in loaded[key]:
@@ -172,6 +182,8 @@ class Config:
                         if other_key != key and subkey in loaded[other_key]:
                             self.__dict__[key].__dict__[subkey] = loaded[other_key][subkey]
                             break
+
+        return self
 
     def find_setting(self, search_string: str) -> tuple[str | None, str | None, Any]:
         # Provide a search string (either the setting name or [group name].[setting name]) and
@@ -199,34 +211,31 @@ class Config:
 
         return group_name, setting_name, value
 
+    async def save_config(self) -> None:
+        await write_toml_to_file(PATH_CONFIG_FILE, asdict(self))
 
-def save_config(config: Config) -> None:
-    with PATH_CONFIG_FILE.open(mode='w', encoding='utf-8') as f:
-        toml.dump(asdict(config), f)
+    def update_setting(self, group_name: str, setting_name: str, value: str) -> None:
+        lowercase = value.lower()
+        if lowercase == "true":
+            new_value = True
+        elif lowercase == "false":
+            new_value = False
 
+        else:
+            try:
+                new_value = int(value)
+            except ValueError:
+                try:
+                    new_value = float(value)
+                except ValueError:
+                    new_value = value
 
-def parse_value_input(value: str) -> int | float | bool | str:
-    if value.lower() == "true":
-        return True
-    if value.lower() == "false":
-        return False
-
-    try:
-        return int(value)
-    except ValueError:
-        pass
-
-    try:
-        return float(value)
-    except ValueError:
-        pass
-
-    return value
+        setattr(getattr(self, group_name), setting_name, new_value)
 
 
-def verify_settings() -> Generator[str]:
+async def verify_settings() -> AsyncGenerator[str]:
     seen = {}
-    config = Config()
+    config = await Config.load()
 
     for outer_key, subdict in config.__dict__.items():
         for subkey in subdict.__dict__:
@@ -299,11 +308,9 @@ class UserCommand:
         self.update = update
         self.response: CommandResponse | None = None
 
-        self.track_user_id()
-
-    def track_user_id(self) -> None:
-        id_dict = try_read_json(PATH_USERID_TRACK, {})
-        username = self.get_user_name().lower()
+    async def track_user_id(self) -> None:
+        id_dict = await try_read_json(PATH_USERID_TRACK, {})
+        username = (await self.get_username()).lower()
         user_id = self.get_user_id()
 
         if username in id_dict:
@@ -319,9 +326,9 @@ class UserCommand:
             if isinstance(self.target_bot, DiscordBot):
                 id_dict[username] = {"discord": user_id}
 
-        write_json_to_file(PATH_USERID_TRACK, id_dict)
+        await write_json_to_file(PATH_USERID_TRACK, id_dict)
 
-    def get_user_name(self, *, map_name: bool = False) -> str:
+    async def get_username(self, *, map_name: bool = False) -> str:
         # Returns the username of the user that sent the command or message
         if isinstance(self.update, TelegramUpdate):
             username = self.update.message.from_user.username
@@ -336,7 +343,7 @@ class UserCommand:
             return ''
 
         if map_name:
-            return self.map_username(username)
+            return await self.map_username(username)
 
         return username
 
@@ -353,10 +360,10 @@ class UserCommand:
 
         return user_id
 
-    def get_id_by_username(self, username: str) -> str | None:
+    async def get_id_by_username(self, username: str) -> str | None:
         # Attempt to retrieve the ID belonging to the provided username
         # This ID is platform-specific (Discord, Telegram) and can only be retrieved if the user has interacted with this bot before
-        id_dict = try_read_json(PATH_USERID_TRACK, {})
+        id_dict = await try_read_json(PATH_USERID_TRACK, {})
 
         if username not in id_dict:
             return None
@@ -426,9 +433,9 @@ class UserCommand:
 
         raise InvalidBotTypeError
 
-    def get_user_prompt(self) -> str | None:
+    async def get_user_prompt(self) -> str | None:
         # This is used for prompting the GPT chat completion model
-        sender = self.get_user_name(map_name=True)
+        sender = await self.get_username(map_name=True)
 
         if self.response is not None:
             user_message = self.response.user_message
@@ -440,10 +447,10 @@ class UserCommand:
 
         return f'{sender}: {user_message}'
 
-    def is_admin(self) -> bool:
+    async def is_admin(self) -> bool:
         # Returns whether the message sender is on the bot's admin list
         user_id = self.get_user_id()
-        admin_list = try_read_lines_list(PATH_ADMINS_LIST, [])
+        admin_list = await try_read_lines_list(PATH_ADMINS_LIST, [])
 
         return user_id in admin_list
 
@@ -459,9 +466,10 @@ class UserCommand:
 
         return None
 
-    def is_whitelisted(self) -> bool:
+    async def is_whitelisted(self) -> bool:
         # Returns whether the chat is on the bot's whitelist (telegram only)
-        if not Config().main.usewhitelist:
+        config = await Config.load()
+        if not config.main.usewhitelist:
             return True
 
         if isinstance(self.update, TelegramUpdate):
@@ -469,7 +477,7 @@ class UserCommand:
                 return False
 
             chat_id = str(self.update.message.chat.id)
-            whitelist = try_read_lines_list(PATH_WHITELIST, [])
+            whitelist = await try_read_lines_list(PATH_WHITELIST, [])
 
             return chat_id in whitelist
 
@@ -548,8 +556,8 @@ class UserCommand:
 
         return self.context.voice_client
 
-    def map_username(self, username: str) -> str:
-        username_map = try_read_json(PATH_USERNAME_MAP, {})
+    async def map_username(self, username: str) -> str:
+        username_map = await try_read_json(PATH_USERNAME_MAP, {})
 
         try:
             corrected_name = username_map[username.lower()]
@@ -563,7 +571,8 @@ def requireadmin(function: Callable[[UserCommand], Awaitable[CommandResponse]]) 
     # Put this decorator on a function using @requireadmin to prevent its use without admin rights
     @wraps(function)
     async def admin_wrapper(user_command: UserCommand) -> CommandResponse:
-        if Config().main.requireadmin and not user_command.is_admin():
+        config = await Config.load()
+        if config.main.requireadmin and not await user_command.is_admin():
             return NoPermissionsResponse()
 
         return await function(user_command)
@@ -573,7 +582,7 @@ def requireadmin(function: Callable[[UserCommand], Awaitable[CommandResponse]]) 
 
 
 async def send_response(command_function: Callable[[UserCommand], Awaitable[CommandResponse]], user_command: UserCommand) -> None:
-    config = Config()
+    config = await Config.load()
     user_command.response = await command_function(user_command)
 
     if user_command.response is None:
@@ -612,8 +621,8 @@ async def send_response(command_function: Callable[[UserCommand], Awaitable[Comm
 
     # Add the command and its response to memory if necessary
     if user_command.response.record_to_memory:
-        user_prompt = user_command.get_user_prompt()
-        append_to_gpt_memory(user_prompt=user_prompt, bot_prompt=user_command.response.bot_message)
+        user_prompt = await user_command.get_user_prompt()
+        await append_to_gpt_memory(user_prompt=user_prompt, bot_prompt=user_command.response.bot_message)
 
 
 def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable[[UserCommand], Awaitable[CommandResponse]]) -> Callable:
@@ -623,7 +632,8 @@ def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable[[UserComman
                 return
 
             user_command = UserCommand(bot, context, update=update)
-            if not user_command.is_whitelisted():
+            await user_command.track_user_id()
+            if not await user_command.is_whitelisted():
                 # Telegram doesn't allow you to make "private" bots, meaning anyone can add your bot to their chat
                 # and use up your CPU time. This check prevents the bot from responding to commands unless it comes
                 # from a whitelisted chat
@@ -637,6 +647,7 @@ def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable[[UserComman
     if isinstance(bot, DiscordBot):
         async def discord_wrapper(context: DiscordContext) -> None:
             user_command = UserCommand(bot, context)
+            await user_command.track_user_id()
             await send_response(command, user_command)
 
         return discord_wrapper
@@ -646,13 +657,13 @@ def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable[[UserComman
 
 
 # region
-def append_to_gpt_memory(*, user_prompt: str | None = None, bot_prompt: str | None = None) -> None:
-    config = Config()
+async def append_to_gpt_memory(*, user_prompt: str | None = None, bot_prompt: str | None = None) -> None:
+    config = await Config.load()
 
     if not config.chat.usememory:
         return
 
-    memory = get_gpt_memory()
+    memory = await get_gpt_memory()
 
     if user_prompt is not None:
         memory.append({"role": "user", "content": user_prompt})
@@ -665,39 +676,25 @@ def append_to_gpt_memory(*, user_prompt: str | None = None, bot_prompt: str | No
         memory = memory[size - config.chat.memorysize:]
 
     # Write the AI's memory to a file so it can be retrieved later
-    write_json_to_file(PATH_MEMORY_LIST, memory)
+    await write_json_to_file(PATH_MEMORY_LIST, memory)
 
 
-def get_gpt_memory() -> list[dict]:
+async def get_gpt_memory() -> list[dict]:
     # Load the AI's memory (if it exists)
-    config = Config()
+    config = await Config.load()
 
     if config.chat.usememory:
-        return try_read_json(PATH_MEMORY_LIST, [])
+        return await try_read_json(PATH_MEMORY_LIST, [])
 
     return []
 
 
-def try_read_json[T](path: str | Path, default: T) -> T:
-    # Attempt to load a json object from the provided path and return it
-    # If this fails, return the provided default object instead
-    try:
-        with Path(path).open(encoding='utf-8') as f:
-            data = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return default
-
-    if data:
-        return data
-    return default
-
-
-def try_read_lines_list[T](path: str | Path, default: T) -> list | T:
+async def try_read_lines_list[T](path: str | Path, default: T) -> list | T:
     # Attempt to load the text data from the provided path, treating each line as a separate element in a list, and return it
     # If this fails, return the provided default object instead
     try:
-        with Path(path).open(encoding='utf-8') as f:
-            lines = [x.strip() for x in f]
+        async with aiofiles.open(path, encoding='utf-8') as f:
+            lines = [x.strip() for x in await f.readlines()]
     except OSError:
         return default
 
@@ -706,12 +703,12 @@ def try_read_lines_list[T](path: str | Path, default: T) -> list | T:
     return default
 
 
-def try_read_lines_str[T](path: str | Path, default: T) -> str | T:
+async def try_read_lines_str[T](path: str | Path, default: T) -> str | T:
     # Attempt to load the text data from the provided path, treating the entire text file as a single string, and return it
     # If this fails, return the provided default object instead
     try:
-        with Path(path).open(encoding='utf-8') as f:
-            string_lines = ''.join(f.readlines())
+        async with aiofiles.open(path, encoding='utf-8') as f:
+            string_lines = ''.join(await f.readlines())
     except OSError:
         return default
 
@@ -720,12 +717,12 @@ def try_read_lines_str[T](path: str | Path, default: T) -> str | T:
     return default
 
 
-def try_read_single_line[T](path: str | Path, default: T) -> str | T:
+async def try_read_single_line[T](path: str | Path, default: T) -> str | T:
     # Attempt to read only the first line of text data from the provided path and return it
     # If this fails, return the provided default object instead
     try:
-        with Path(path).open(encoding='utf-8') as f:
-            line = f.readline().strip()
+        async with aiofiles.open(path, encoding='utf-8') as f:
+            line = (await f.readline()).strip()
     except OSError:
         return default
 
@@ -734,20 +731,63 @@ def try_read_single_line[T](path: str | Path, default: T) -> str | T:
     return default
 
 
-def write_json_to_file(path: str | Path, data: Iterable) -> None:
+async def try_read_json[T](path: str | Path, default: T) -> T:
+    # Attempt to load a json object from the provided path and return it
+    # If this fails, return the provided default object instead
+    try:
+        async with aiofiles.open(path, encoding='utf-8') as f:
+            data = json.loads(await f.read())
+    except (OSError, json.JSONDecodeError) as e:
+        logger.error(e)
+        return default
+
+    if data:
+        return data
+    return default
+
+
+async def try_read_toml(path: str | Path, default: dict[str, Any]) -> dict[str, Any]:
+    try:
+        async with aiofiles.open(path, encoding='utf-8') as f:
+            data = toml.loads(await f.read())
+    except (OSError, toml.TomlDecodeError) as e:
+        logger.error(e)
+        return default
+
+    if data:
+        return data
+    return default
+
+
+async def write_lines_to_file(path: str | Path, lines: list) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    with Path(path).open('w', encoding='utf-8') as f:
-        json.dump(data, f, indent=4)
+    async with aiofiles.open(path, mode='w', encoding='utf-8') as f:
+        await f.writelines(f"{x}\n" for x in lines)
 
 
-def write_lines_to_file(path: str | Path, lines: list) -> None:
+async def write_text_to_file(path: str | Path, text: str) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    with Path(path).open('w', encoding='utf-8') as f:
-        f.writelines(f"{x}\n" for x in lines)
+    async with aiofiles.open(path, mode='w', encoding='utf-8') as f:
+        await f.write(text)
 
 
-def write_text_to_file(path: str | Path, text: str) -> None:
+async def write_bytes_to_file(path: str | Path, iter_bytes: AsyncIterator[bytes]) -> None:
+    async with aiofiles.open(path, "wb") as f:
+        async for chunk in iter_bytes:
+            await f.write(chunk)
+
+
+async def write_json_to_file(path: str | Path, data: Iterable) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    with Path(path).open('w', encoding='utf-8') as f:
-        f.write(text)
+    async with aiofiles.open(path, mode='w', encoding='utf-8') as f:
+        content = json.dumps(data, indent=4)
+        await f.write(content)
+
+
+async def write_toml_to_file(path: str | Path, data: dict[str, Any]) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    async with aiofiles.open(path, mode='w', encoding='utf-8') as f:
+        content = toml.dumps(data)
+        await f.write(content)
+
 # endregion
