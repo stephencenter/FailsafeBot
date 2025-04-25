@@ -53,6 +53,7 @@ def register_commands(bot: TelegramBot | DiscordBot) -> None:
         ("memory", memory_command),
         ("memorylist", memorylist_command),
         ("logs", logs_command),
+        ("clearlogs", clearlogs_command),
         ("vcsound", vcsound_command),
         ("vcrandom", vcrandom_command),
         ("vcstop", vcstop_command),
@@ -895,7 +896,13 @@ async def logs_command(_: UserCommand) -> CommandResponse:
     if not common.LOGGING_FILE_PATH.exists():
         return CommandResponse(user_message, "There are no logs recorded.")
 
-    return FileResponse("Can you send me your error log?", "Sure, here you go.", common.LOGGING_FILE_PATH)
+    return FileResponse(user_message, "Sure, here you go.", common.LOGGING_FILE_PATH)
+
+
+@requireadmin
+async def clearlogs_command(_: UserCommand) -> CommandResponse:
+    common.write_lines_to_file(common.LOGGING_FILE_PATH, [])
+    return CommandResponse("Can you clear your log file for me?", "Trying to erase history are we?")
 
 
 async def test_command(_: UserCommand) -> CommandResponse:

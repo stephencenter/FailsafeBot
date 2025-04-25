@@ -12,6 +12,8 @@ from openai import OpenAI
 import common
 from common import UserCommand
 
+MAX_GPT_ATTEMPTS = 3
+
 
 def generate_markov_text() -> str:
     # Markov-powered Text Generation Command
@@ -72,25 +74,40 @@ def get_gpt_response(user_command: UserCommand) -> str:
     messages += loaded_memory
 
     user_prompt = user_command.get_user_prompt()
-    messages.append({"role": "user", "content": user_prompt})
 
-    gpt_completion = openai_client.chat.completions.create(
-        messages=messages,  # type: ignore
-        model=config.chat.gptmodel,
-        temperature=config.chat.gpttemp,
-        max_completion_tokens=config.chat.gptmaxtokens,
-    )
+    if user_prompt is not None:
+        messages.append({"role": "user", "content": user_prompt})
 
-    response = gpt_completion.choices[0].message.content
+    attempt_counter = 0
+    re_attempt_text = "Failed to get GPT response, trying again..."
+    while attempt_counter < MAX_GPT_ATTEMPTS:
+        gpt_completion = openai_client.chat.completions.create(
+            messages=messages,  # type: ignore
+            model=config.chat.gptmodel,
+            temperature=config.chat.gpttemp,
+            max_completion_tokens=config.chat.gptmaxtokens,
+        )
 
-    if response is None:
-        return ''
+        response = gpt_completion.choices[0].message.content
 
-    # Remove quotation marks from the message if GPT decided to use them
-    if response.startswith('"') and response.endswith('"'):
-        response = response[1:-1]
+        # We try to get a response from OpenAI up to MAX_GPT_ATTEMPTS times
+        # If the response is None, blank, or is blank after removing quotes, we don't accept and try again
+        # up to MAX_GPT_ATTEMPTS times
+        if response is not None:
+            # Remove quotation marks from the message if GPT decided to use them
+            if response.startswith('"') and response.endswith('"'):
+                response = response[1:-1]
 
-    return response
+            if response:
+                return response
+
+        logger.warning(re_attempt_text)
+        attempt_counter += 1
+        continue
+
+    error_msg = f"Failed to get a response from OpenAI Chat Completion API within {MAX_GPT_ATTEMPTS} attempts"
+    logger.error(error_msg)
+    return common.BZZZT_MESSAGE_TEXT
 
 
 def get_most_recent_bot_message() -> str | None:

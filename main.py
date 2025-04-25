@@ -3,10 +3,10 @@ import contextlib
 import sys
 
 import discord
-from discord.errors import LoginFailure
+from discord.errors import LoginFailure as DiscordInvalidToken
 from discord.ext.commands import Bot as DiscordBot
 from loguru import logger
-from telegram.error import InvalidToken
+from telegram.error import InvalidToken as TelegramInvalidToken
 from telegram.ext import Application as TelegramBot
 from telegram.ext import ApplicationBuilder
 
@@ -44,14 +44,28 @@ def prepare_runway() -> None:
         logger.warning(warning)
 
 
-async def create_run_telegram_bot(telegram_token: str) -> TelegramBot:
-    # Create telegram bot object
+async def try_start_telegram_bot() -> TelegramBot | None:
+    config = common.Config()
+    if not config.main.runtelegram:
+        logger.info(f"Telegram bot disabled in {common.CONFIG_PATH}, skipping")
+        return None
+
+    telegram_token = common.try_read_single_line(common.TELEGRAM_TOKEN_PATH, None)
+    if telegram_token is None:
+        logger.error(f"Telegram bot is enabled but token not found at {common.TELEGRAM_TOKEN_PATH}, couldn't start bot")
+        return None
+
     telegram_bot = ApplicationBuilder().token(telegram_token).build()
 
-    await telegram_bot.initialize()
-    await telegram_bot.start()
+    try:
+        await telegram_bot.initialize()
 
-    # Register all commands to the telegram bot
+    except TelegramInvalidToken:
+        logger.error(f"Telegram token at {common.TELEGRAM_TOKEN_PATH} was rejected, couldn't start bot")
+        return None
+
+    logger.info("Starting telegram bot")
+    await telegram_bot.start()
     command_list.register_commands(telegram_bot)
 
     if telegram_bot.updater is not None:
@@ -60,65 +74,61 @@ async def create_run_telegram_bot(telegram_token: str) -> TelegramBot:
     return telegram_bot
 
 
-async def create_run_discord_bot(discord_token: str) -> tuple[DiscordBot, asyncio.Task[None]]:
-    # Set intents for discord bot
+async def try_start_discord_bot() -> tuple[DiscordBot | None, asyncio.Task | None]:
+    config = common.Config()
+    if not config.main.rundiscord:
+        logger.info(f"Discord bot disabled in {common.CONFIG_PATH}, skipping")
+        return None, None
+
+    discord_token = common.try_read_single_line(common.DISCORD_TOKEN_PATH, None)
+    if discord_token is None:
+        logger.error(f"Discord bot is enabled but token not found at {common.DISCORD_TOKEN_PATH}, couldn't start bot")
+        return None, None
+
+    logger.info("Starting discord bot")
     intents = discord.Intents.default()
     intents.members = True
     intents.message_content = True
-
-    # Create discord bot object
     discord_bot = DiscordBot(command_prefix='/', intents=intents, help_command=None)
-
-    # Register all commands to the discord bot
     command_list.register_commands(discord_bot)
 
-    # Create a background task to start the discord bot
-    discord_task = asyncio.create_task(discord_bot.start(discord_token))
+    try:
+        await discord_bot.login(discord_token)
+        discord_task = asyncio.create_task(discord_bot.connect())
+
+    except DiscordInvalidToken:
+        logger.error(f"Discord token at {common.DISCORD_TOKEN_PATH} was rejected, couldn't start bot")
+        return None, None
 
     return discord_bot, discord_task
 
 
-async def initialize_and_run() -> tuple[TelegramBot | None, DiscordBot | None, asyncio.Task | None]:
-    config = common.Config()
+async def shutdown_telegram_bot(telegram_bot: TelegramBot | None) -> None:
+    if telegram_bot is not None:
+        if telegram_bot.updater is not None:
+            await telegram_bot.updater.stop()
 
-    # Telegram Bot
-    telegram_bot = None
-    if config.main.runtelegram:
-        # Retrieve telegram bot token from file
-        telegram_token = common.try_read_single_line(common.TELEGRAM_TOKEN_PATH, None)
+        await telegram_bot.stop()
+        await telegram_bot.shutdown()
 
-        # Attempt to run Telgram bot
-        if telegram_token is not None:
-            logger.info("Starting telegram bot")
-            try:
-                telegram_bot = await create_run_telegram_bot(telegram_token)
-            except InvalidToken:
-                logger.error(f"Telegram token at {common.TELEGRAM_TOKEN_PATH} is invalid, couldn't start bot")
-        else:
-            logger.error(f"Telegram bot is enabled but token not found at {common.TELEGRAM_TOKEN_PATH}, couldn't start bot")
-    else:
-        logger.info(f"Telegram bot disabled in {common.CONFIG_PATH}, skipping")
 
-    # Discord Bot
-    discord_bot = None
-    discord_task = None
-    if config.main.rundiscord:
-        # Retrieve discord bot token from file
-        discord_token = common.try_read_single_line(common.DISCORD_TOKEN_PATH, None)
+async def shutdown_discord_bot(discord_bot: DiscordBot | None, discord_task: asyncio.Task | None) -> None:
+    if discord_bot is not None:
+        logger.info("Shutting down discord bot...")
+        with contextlib.suppress(IndexError):
+            # Disconnect from discord voice channels if necessary
+            bot_channel = discord_bot.voice_clients[0].channel
 
-        # Attempt to run Discord bot
-        if discord_token is not None:
-            logger.info("Starting discord bot")
-            try:
-                discord_bot, discord_task = await create_run_discord_bot(discord_token)
-            except LoginFailure:
-                logger.error(f"Discord token at {common.DISCORD_TOKEN_PATH} is invalid, couldn't start bot")
-        else:
-            logger.error(f"Discord bot is enabled but token not found at {common.DISCORD_TOKEN_PATH}, couldn't start bot")
-    else:
-        logger.info(f"Discord bot disabled in {common.CONFIG_PATH}, skipping")
+            if isinstance(bot_channel, discord.VoiceChannel):
+                logger.info('Disconnecting discord bot from voice channel...')
+                await discord_bot.voice_clients[0].disconnect(force=False)
 
-    return telegram_bot, discord_bot, discord_task
+        await discord_bot.close()
+
+    if discord_task is not None:
+        discord_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await discord_task
 
 
 async def main() -> None:
@@ -126,37 +136,19 @@ async def main() -> None:
     discord_bot = None
     discord_task = None
     try:
-        telegram_bot, discord_bot, discord_task = await initialize_and_run()
-        if telegram_bot or discord_bot:
-            logger.info("Setup complete, polling for user commands...")
-            await asyncio.Event().wait()  # Continue with tasks until they are completed or user exits
-        else:
+        telegram_bot = await try_start_telegram_bot()
+        discord_bot, discord_task = await try_start_discord_bot()
+
+        if telegram_bot is None and discord_bot is None:
             logger.info("No bots were started, script will exit now")
 
+        else:
+            logger.info("Setup complete, polling for user commands...")
+            await asyncio.Event().wait()  # Continue with tasks until they are completed or user exits
+
     finally:
-        if telegram_bot is not None and telegram_bot.updater is not None:
-            logger.info("Shutting down telegram bot...")
-            await telegram_bot.updater.stop()
-            await telegram_bot.stop()
-            await telegram_bot.shutdown()
-
-        if discord_bot is not None:
-            logger.info("Shutting down discord bot...")
-            with contextlib.suppress(IndexError):
-                # Disconnect from discord voice channels if necessary
-                bot_channel = discord_bot.voice_clients[0].channel
-
-                if isinstance(bot_channel, discord.VoiceChannel):
-                    logger.info('Disconnecting discord bot from voice channel...')
-                    await discord_bot.voice_clients[0].disconnect(force=False)
-
-            await discord_bot.close()
-
-        if discord_task is not None:
-            discord_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await discord_task
-
+        await shutdown_telegram_bot(telegram_bot)
+        await shutdown_discord_bot(discord_bot, discord_task)
         logger.info('Exiting...')
 
 

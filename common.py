@@ -1,6 +1,6 @@
 import json
 import random
-from collections.abc import Generator, Iterable
+from collections.abc import Awaitable, Callable, Generator, Iterable
 from dataclasses import asdict, dataclass, field
 from functools import wraps
 from pathlib import Path
@@ -8,21 +8,18 @@ from typing import Any
 
 import discord
 import toml
+from discord.errors import HTTPException
 from discord.ext.commands import Bot as DiscordBot
 from discord.ext.commands import Context as DiscordContext
-from telegram import Update as TelegramUpdate
-from telegram.ext import Application as TelegramBot
-from telegram.ext import CallbackContext as TelegramContext
-from collections.abc import Awaitable, Callable
-from discord.errors import HTTPException
+from loguru import logger
 from telegram import Update as TelegramUpdate
 from telegram.error import BadRequest, NetworkError, TimedOut
+from telegram.ext import Application as TelegramBot
 from telegram.ext import CallbackContext as TelegramContext
-from loguru import logger
 
 # PROJECT VARIABLES
 APPLICATION_NAME = "FailsafeBot"
-VERSION_NUMBER = "v1.1.6"
+VERSION_NUMBER = "v1.1.7"
 
 # DIRECTORIES
 DATA_FOLDER_PATH = Path('Data')
@@ -63,13 +60,17 @@ TRIVIA_URL = "https://opentdb.com/api.php?amount="
 D10000_LIST_PATH = DATA_FOLDER_PATH / "d10000_list.txt"
 ACTIVE_EFFECTS_PATH = DATA_FOLDER_PATH / "active_effects.json"
 
+# CONSTANTS
+BZZZT_MESSAGE_TEXT = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
+
+
 # ==========================
 # EXCEPTION TYPES
 # ==========================
 # region
 class InvalidBotTypeError(TypeError):
     # This exception type should be raised if a function expects a TelegramBot or DiscordBot but gets something else instead
-    def __init__(self, message=None):
+    def __init__(self, message: str | None = None):
         self.message = f"{APPLICATION_NAME} currently supports only Telegram and Discord bots"
         if message is not None:
             self.message = message
@@ -260,13 +261,16 @@ class NoResponse(CommandResponse):
 class UserCommand:
     def __init__(self, target_bot: TelegramBot | DiscordBot, context: TelegramContext | DiscordContext, update: TelegramUpdate | None = None):
         if isinstance(target_bot, TelegramBot) and update is None:
-            raise ValueError("Update cannot be None when sending message to telegram bot")
+            error_msg = "Update cannot be None when sending message to telegram bot"
+            raise ValueError(error_msg)
 
         if isinstance(target_bot, TelegramBot) != isinstance(context, TelegramContext):
-            raise TypeError("Context type and bot type must match")
+            error_msg = "Context type and bot type must match"
+            raise TypeError(error_msg)
 
         if isinstance(target_bot, DiscordBot) != isinstance(context, DiscordContext):
-            raise TypeError("Context type and bot type must match")
+            error_msg = "Context type and bot type must match"
+            raise TypeError(error_msg)
 
         if not isinstance(target_bot, TelegramBot) and not isinstance(target_bot, DiscordBot):
             raise InvalidBotTypeError
@@ -403,7 +407,7 @@ class UserCommand:
 
         raise InvalidBotTypeError
 
-    def get_user_prompt(self) -> str:
+    def get_user_prompt(self) -> str | None:
         # This is used for prompting the GPT chat completion model
         sender = self.get_user_name(map_name=True)
 
@@ -411,6 +415,9 @@ class UserCommand:
             user_message = self.response.user_message
         else:
             user_message = self.get_user_message()
+
+        if not user_message:
+            return None
 
         return f'{sender}: {user_message}'
 
@@ -542,7 +549,7 @@ def requireadmin(function: Callable[[UserCommand], Awaitable[CommandResponse]]) 
 
         return await function(user_command)
 
-    admin_wrapper._requireadmin = True  # type: ignore | Used to flag whether a function requries admin rights or not
+    admin_wrapper.requireadmin = True  # type: ignore | Used to flag whether a function requries admin rights or not
     return admin_wrapper
 
 
@@ -578,8 +585,7 @@ async def send_response(command_function: Callable[[UserCommand], Awaitable[Comm
             await user_command.send_text_response(text_response)
 
     except (BadRequest, TimedOut, NetworkError, HTTPException) as e:
-        error_response = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
-        await user_command.send_text_response(error_response)
+        await user_command.send_text_response(BZZZT_MESSAGE_TEXT)
 
         # Re-raise BadRequests, as these indicate a bug with the script that will need to be fixed
         if e is BadRequest:
@@ -619,8 +625,9 @@ def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable[[UserComman
     raise InvalidBotTypeError
 # endregion
 
+
 # region
-def append_to_gpt_memory(user_prompt: str = '', bot_prompt: str = '') -> None:
+def append_to_gpt_memory(*, user_prompt: str | None = None, bot_prompt: str | None = None) -> None:
     config = Config()
 
     if not config.chat.usememory:
@@ -628,10 +635,10 @@ def append_to_gpt_memory(user_prompt: str = '', bot_prompt: str = '') -> None:
 
     memory = get_gpt_memory()
 
-    if user_prompt:
+    if user_prompt is not None:
         memory.append({"role": "user", "content": user_prompt})
 
-    if bot_prompt:
+    if bot_prompt is not None:
         memory.append({"role": "assistant", "content": bot_prompt})
 
     # The AI's memory has a size limit to keep API usage low, and to keep it from veering off track too much

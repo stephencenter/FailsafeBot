@@ -1,0 +1,30 @@
+{
+   "editor.wordWrap": "off",
+   "search.exclude": {
+      "**/node_modules": true,
+      "**/bower_components": true,
+      "**/*.code-search": true,
+      "**/.venv": true,
+      "**.bat": true
+   },
+   "files.exclude": {
+      "**/.git": true,
+      "**/.svn": true,
+      "**/.hg": true,
+      "**/CVS": true,
+      "**/.DS_Store": true,
+      "**/Thumbs.db": true,
+      "**/.venv": true,
+      "**/Sounds": true,
+      "**/__pycache__": true,
+      "**.exe": true,
+      "Test/": true,
+      "**.bat": true
+   },
+   "python.analysis.diagnosticSeverityOverrides": {
+      "reportOptionalMemberAccess": "none",
+   },
+   "editor.codeActionsOnSave": {
+       "source.organizeImports.ruff": "explicit"
+   }
+}
