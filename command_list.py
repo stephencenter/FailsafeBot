@@ -4,7 +4,7 @@ import io
 import os
 import random
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import discord
@@ -27,73 +27,14 @@ from common import CommandResponse, FileResponse, InvalidBotTypeError, NoRespons
 
 
 def register_commands(bot: TelegramBot | DiscordBot) -> None:
-    # List of all commands, add commands here to register them.
-    # The first item in each tuple is the name of the command (/name), and the second is
-    # the function that will be assigned to that name
-    command_list = [
-        ("sound", sound_command),
-        ("random", randomsound_command),
-        ("soundlist", soundlist_command),
-        ("playcount", playcount_command),
-        ("topsounds", topsounds_command),
-        ("botsounds", botsounds_command),
-        ("newsounds", newsounds_command),
-        ("addalias", addalias_command),
-        ("delalias", delalias_command),
-        ("getalias", getalias_command),
-        ("search", search_command),
-        ("say", say_command),
-        ("stream", stream_command),
-        ("pressf", pressf_command),
-        ("wisdom", wisdom_command),
-        ("help", help_command),
-        ("chat", chat_command),
-        ("test", test_command),
-        ("lobotomize", lobotomize_command),
-        ("memory", memory_command),
-        ("memorylist", memorylist_command),
-        ("logs", logs_command),
-        ("clearlogs", clearlogs_command),
-        ("vcsound", vcsound_command),
-        ("vcrandom", vcrandom_command),
-        ("vcstop", vcstop_command),
-        ("vcjoin", vcjoin_command),
-        ("vcleave", vcleave_command),
-        ("vcstream", vcstream_command),
-        ("vcpause", vcpause_command),
-        ("vcsay", vcsay_command),
-        ("roll", roll_command),
-        ("statroll", statroll_command),
-        ("d10000", d10000_command),
-        ("effects", effects_command),
-        ("reseteffects", reset_effects_command),
-        ("trivia", trivia_command),
-        ("guess", guess_command),
-        ("triviarank", triviarank_command),
-        ("getconfig", getconfig_command),
-        ("setconfig", setconfig_command),
-        ("configlist", configlist_command),
-        ("restart", restart_command),
-        ("system", system_command),
-        ("terminal", terminal_command),
-        ("version", version_command),
-        ("crash", crash_command),
-        ("addadmin", addadmin_command),
-        ("deladmin", deladmin_command),
-        ("addwhitelist", addwhitelist_command),
-        ("delwhitelist", delwhitelist_command),
-        ("getuserid", getuserid_command),
-        ("getchatid", getchatid_command),
-        ("getfile", getfile_command),
-    ]
     if isinstance(bot, TelegramBot):
-        for command in command_list:
+        for command in COMMAND_LIST:
             bot.add_handler(CommandHandler(command[0], common.command_wrapper(bot, command[1])))
 
         bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), common.command_wrapper(bot, handle_message_event)))
 
     elif isinstance(bot, DiscordBot):
-        for command in command_list:
+        for command in COMMAND_LIST:
             new_command = discord_commands.Command(common.command_wrapper(bot, command[1]))
             new_command.name = command[0]
             bot.add_command(new_command)
@@ -888,6 +829,29 @@ Look upon my works, ye mighty, and despair:
     return CommandResponse("What chat commands are available?", help_string)
 
 
+async def mycommands_command(user_command: UserCommand) -> CommandResponse:
+    is_admin = await user_command.is_admin()
+    is_super = await user_command.is_superadmin()
+
+    my_commands = []
+    for name, function in COMMAND_LIST:
+        if hasattr(function, "requireadmin") and not is_admin:
+            continue
+        if hasattr(function, "requiresuper") and not is_super:
+            continue
+        my_commands.append(name)
+
+    user_message = "What commands do I have access to?"
+
+    # It should literally be impossible for this to happen, but we'll account for it anyway
+    if not my_commands:
+        return CommandResponse(user_message, "You don't have access to any commands!")
+
+    my_commands = sorted(my_commands)
+    commandlist_string = ", ".join(f"/{command}" for command in my_commands)
+    return CommandResponse(user_message, f"You have access to these commands: {commandlist_string}")
+
+
 @requireadmin
 async def logs_command(_: UserCommand) -> CommandResponse:
     user_message = "Can you send me your log file?"
@@ -1088,7 +1052,7 @@ async def getuserid_command(user_command: UserCommand) -> CommandResponse:
         return CommandResponse("Can you tell me what my user ID is?", f"Your user ID is {user_id}.")
 
     user_message = f"What is {username}'s user ID?"
-    user_id = user_command.get_id_by_username(username.lower())
+    user_id = await user_command.get_id_by_username(username.lower())
 
     if user_id is None:
         return CommandResponse(user_message, f"{username}'s user ID has not been tracked.")
@@ -1194,3 +1158,65 @@ async def reply_event(user_command: UserCommand) -> CommandResponse:
     response = await chat.get_gpt_response(user_command)
     return CommandResponse(user_command.get_user_message(), response)
 # endregion
+
+
+# List of all commands, add commands here to register them.
+# The first item in each tuple is the name of the command (/name), and the second is
+# the function that will be assigned to that name
+COMMAND_LIST: list[tuple[str, Callable]] = [
+    ("sound", sound_command),
+    ("random", randomsound_command),
+    ("soundlist", soundlist_command),
+    ("playcount", playcount_command),
+    ("topsounds", topsounds_command),
+    ("botsounds", botsounds_command),
+    ("newsounds", newsounds_command),
+    ("addalias", addalias_command),
+    ("delalias", delalias_command),
+    ("getalias", getalias_command),
+    ("search", search_command),
+    ("say", say_command),
+    ("stream", stream_command),
+    ("pressf", pressf_command),
+    ("wisdom", wisdom_command),
+    ("help", help_command),
+    ("chat", chat_command),
+    ("test", test_command),
+    ("lobotomize", lobotomize_command),
+    ("memory", memory_command),
+    ("memorylist", memorylist_command),
+    ("logs", logs_command),
+    ("clearlogs", clearlogs_command),
+    ("vcsound", vcsound_command),
+    ("vcrandom", vcrandom_command),
+    ("vcstop", vcstop_command),
+    ("vcjoin", vcjoin_command),
+    ("vcleave", vcleave_command),
+    ("vcstream", vcstream_command),
+    ("vcpause", vcpause_command),
+    ("vcsay", vcsay_command),
+    ("roll", roll_command),
+    ("statroll", statroll_command),
+    ("d10000", d10000_command),
+    ("effects", effects_command),
+    ("reseteffects", reset_effects_command),
+    ("trivia", trivia_command),
+    ("guess", guess_command),
+    ("triviarank", triviarank_command),
+    ("getconfig", getconfig_command),
+    ("setconfig", setconfig_command),
+    ("configlist", configlist_command),
+    ("restart", restart_command),
+    ("system", system_command),
+    ("terminal", terminal_command),
+    ("version", version_command),
+    ("crash", crash_command),
+    ("addadmin", addadmin_command),
+    ("deladmin", deladmin_command),
+    ("addwhitelist", addwhitelist_command),
+    ("delwhitelist", delwhitelist_command),
+    ("getuserid", getuserid_command),
+    ("getchatid", getchatid_command),
+    ("getfile", getfile_command),
+    ("mycommands", mycommands_command),
+]
