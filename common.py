@@ -24,7 +24,7 @@ from telegram.ext import CallbackContext as TelegramContext
 # region
 # PROJECT VARIABLES
 APPLICATION_NAME = "FailsafeBot"
-VERSION_NUMBER = "v1.1.8"
+VERSION_NUMBER = "v1.1.9"
 
 # DIRECTORIES
 PATH_DATA_FOLDER = Path('Data')
@@ -35,7 +35,7 @@ PATH_LOGGING_FOLDER = PATH_DATA_FOLDER / 'logging'
 # CORE FILES
 PATH_TELEGRAM_TOKEN = PATH_DATA_FOLDER / "telegram_token.txt"
 PATH_DISCORD_TOKEN = PATH_DATA_FOLDER / "discord_token.txt"
-PATH_ADMINS_LIST = PATH_DATA_FOLDER / "admins.txt"
+PATH_ADMINS_LIST = PATH_DATA_FOLDER / "admins.json"
 PATH_WHITELIST = PATH_DATA_FOLDER / "whitelist.txt"
 PATH_CONFIG_FILE = PATH_DATA_FOLDER / "settings.toml"
 PATH_LOGGING_FILE = PATH_LOGGING_FOLDER / "log.txt"
@@ -448,11 +448,29 @@ class UserCommand:
         return f'{sender}: {user_message}'
 
     async def is_admin(self) -> bool:
-        # Returns whether the message sender is on the bot's admin list
+        # Returns whether the message sender is on the bot's admin list or superadmin list
         user_id = self.get_user_id()
-        admin_list = await try_read_lines_list(PATH_ADMINS_LIST, [])
+        admin_dict: dict[str, list[str]] = await try_read_json(PATH_ADMINS_LIST, {})
 
-        return user_id in admin_list
+        if "admin" in admin_dict and user_id in admin_dict["admin"]:
+            return True
+
+        # Superadmin rights also give you normal admin rights
+        if "superadmin" in admin_dict and user_id in admin_dict["superadmin"]:
+            return True
+
+        return False
+
+    async def is_superadmin(self) -> bool:
+        # Returns whether the message sender is on the bot's superadmin list
+        # Normal admin rights are NOT sufficient for this to return True
+        user_id = self.get_user_id()
+        admin_dict: dict[str, list[str]] = await try_read_json(PATH_ADMINS_LIST, {})
+
+        if "superadmin" in admin_dict and user_id in admin_dict["superadmin"]:
+            return True
+
+        return False
 
     def get_chat_id(self) -> str | None:
         if isinstance(self.update, TelegramUpdate) and self.update.message is not None:
@@ -579,6 +597,21 @@ def requireadmin(function: Callable[[UserCommand], Awaitable[CommandResponse]]) 
 
     admin_wrapper.requireadmin = True  # type: ignore | Used to flag whether a function requries admin rights or not
     return admin_wrapper
+
+
+def requiresuper(function: Callable[[UserCommand], Awaitable[CommandResponse]]) -> Callable:
+    # Put this decorator on a functio using @requiresuper to prevent its use without superadmin rights
+    # This is strictly stronger than admin rights, normal admin rights are insufficent
+    @wraps(function)
+    async def superadmin_wrapper(user_command: UserCommand) -> CommandResponse:
+        config = await Config.load()
+        if config.main.requireadmin and not await user_command.is_superadmin():
+            return NoPermissionsResponse()
+
+        return await function(user_command)
+
+    superadmin_wrapper.requiresuper = True  # type: ignore | Used to flag whether a function requries superadmin rights or not
+    return superadmin_wrapper
 
 
 async def send_response(command_function: Callable[[UserCommand], Awaitable[CommandResponse]], user_command: UserCommand) -> None:

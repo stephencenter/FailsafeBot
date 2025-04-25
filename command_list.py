@@ -23,7 +23,7 @@ import common
 import dice_roller
 import sound_manager
 import trivia
-from common import CommandResponse, FileResponse, InvalidBotTypeError, NoResponse, SoundResponse, UserCommand, requireadmin
+from common import CommandResponse, FileResponse, InvalidBotTypeError, NoResponse, SoundResponse, UserCommand, requireadmin, requiresuper
 
 
 def register_commands(bot: TelegramBot | DiscordBot) -> None:
@@ -86,7 +86,6 @@ def register_commands(bot: TelegramBot | DiscordBot) -> None:
         ("getchatid", getchatid_command),
         ("getfile", getfile_command),
     ]
-
     if isinstance(bot, TelegramBot):
         for command in command_list:
             bot.add_handler(CommandHandler(command[0], common.command_wrapper(bot, command[1])))
@@ -759,6 +758,7 @@ async def triviarank_command(user_command: UserCommand) -> CommandResponse:
 # MEMORY COMMANDS
 # ==========================
 # region
+@requireadmin
 async def lobotomize_command(_: UserCommand) -> CommandResponse:
     # Clear the bot's AI memory by deleting the memory file
     with contextlib.suppress(FileNotFoundError):
@@ -898,7 +898,7 @@ async def logs_command(_: UserCommand) -> CommandResponse:
     return FileResponse(user_message, "Sure, here you go.", common.PATH_LOGGING_FILE)
 
 
-@requireadmin
+@requiresuper
 async def clearlogs_command(_: UserCommand) -> CommandResponse:
     await common.write_lines_to_file(common.PATH_LOGGING_FILE, [])
     return CommandResponse("Can you clear your log file for me?", "Trying to erase history are we?")
@@ -921,7 +921,7 @@ async def test_command(_: UserCommand) -> CommandResponse:
     return CommandResponse("Hey, are you working?", chosen_response)
 
 
-@requireadmin
+@requiresuper
 async def restart_command(user_command: UserCommand) -> CommandResponse:
     logger.info("Restarting...")
     await user_command.send_text_response("Restarting...")
@@ -953,7 +953,7 @@ Disk: {disk_usage.percent}% - {round(disk_usage.used/divisor, 2):,} / {round(dis
     return CommandResponse("Can you show me your resource usage?", system_string)
 
 
-@requireadmin
+@requiresuper
 async def terminal_command(user_command: UserCommand) -> CommandResponse:
 
     command_string = user_command.get_user_message()
@@ -989,32 +989,37 @@ async def version_command(_: UserCommand) -> CommandResponse:
     return CommandResponse(user_message, f"Running {common.APPLICATION_NAME} {common.VERSION_NUMBER}")
 
 
-@requireadmin
+@requiresuper
 async def crash_command(_: UserCommand) -> CommandResponse:
     error_message = "/crash command used"
     raise ZeroDivisionError(error_message)
 
 
-@requireadmin
+@requiresuper
 async def addadmin_command(user_command: UserCommand) -> CommandResponse:
+    # This command lets you add new users to the admin list
+    # It does NOT let you add new superadmins, that has to be done manually by editing the json file
     user_message = "Can you make this person an admin?"
 
     user_id = user_command.get_first_arg(lowercase=True)
     if user_id is None:
         return CommandResponse(user_message, "Who do you want me to make an admin?")
 
-    admin_list = await common.try_read_lines_list(common.PATH_ADMINS_LIST, [])
+    admin_dict: dict[str, list[str]] = await common.try_read_json(common.PATH_ADMINS_LIST, {})
 
-    if user_id in admin_list:
+    if "admin" not in admin_dict:
+        admin_dict["admin"] = []
+
+    if user_id in admin_dict["admin"]:
         return CommandResponse(user_message, f"That user ID '{user_id}' is already on the admin list.")
 
-    admin_list.append(user_id)
-    await common.write_lines_to_file(common.PATH_ADMINS_LIST, admin_list)
+    admin_dict["admin"].append(user_id)
+    await common.write_json_to_file(common.PATH_ADMINS_LIST, admin_dict)
 
     return CommandResponse(user_message, f"Added new user ID '{user_id}' to admin list.")
 
 
-@requireadmin
+@requiresuper
 async def deladmin_command(user_command: UserCommand) -> CommandResponse:
     user_message = "Can you remove this person from the admin list?"
 
@@ -1022,18 +1027,21 @@ async def deladmin_command(user_command: UserCommand) -> CommandResponse:
     if user_id is None:
         return CommandResponse(user_message, "Who do you want me to remove from the admin list?")
 
-    admin_list = await common.try_read_lines_list(common.PATH_ADMINS_LIST, [])
+    admin_dict: dict[str, list[str]] = await common.try_read_json(common.PATH_ADMINS_LIST, {})
 
-    if user_id not in admin_list:
+    if "admin" not in admin_dict:
+        admin_dict["admin"] = []
+
+    if user_id not in admin_dict["admin"]:
         return CommandResponse(user_message, f"That user ID '{user_id}' is not on the admin list.")
 
-    admin_list = [x for x in admin_list if x != user_id]
-    await common.write_lines_to_file(common.PATH_ADMINS_LIST, admin_list)
+    admin_dict["admin"] = [x for x in admin_dict["admin"] if x != user_id]
+    await common.write_json_to_file(common.PATH_ADMINS_LIST, admin_dict)
 
     return CommandResponse(user_message, f"Removed user ID '{user_id}' from the admin list.")
 
 
-@requireadmin
+@requiresuper
 async def addwhitelist_command(user_command: UserCommand) -> CommandResponse:
     user_message = "Can you add this chat ID to the whitelist?"
 
@@ -1052,7 +1060,7 @@ async def addwhitelist_command(user_command: UserCommand) -> CommandResponse:
     return CommandResponse(user_message, f"Added new chat ID '{chat_id}' to the whitelist.")
 
 
-@requireadmin
+@requiresuper
 async def delwhitelist_command(user_command: UserCommand) -> CommandResponse:
     user_message = "Can you remove this chat ID from the whitelist?"
 
@@ -1096,7 +1104,7 @@ async def getchatid_command(user_command: UserCommand) -> CommandResponse:
     return CommandResponse(user_message, f"This chat's ID is {chat_id}")
 
 
-@requireadmin
+@requiresuper
 async def getfile_command(user_command: UserCommand) -> CommandResponse:
     file_path = Path(user_command.get_user_message())
     user_message = "Can you send me that file?"

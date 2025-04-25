@@ -4,6 +4,7 @@ from collections.abc import Generator
 from pathlib import Path
 
 from loguru import logger
+from telegram.error import Conflict as TelegramConflict
 from telegram.error import NetworkError
 
 import common
@@ -51,6 +52,10 @@ class InterceptHandler(logging.Handler):
             exc_type = record.exc_info[0]
             if exc_type is NetworkError:
                 logger.warning("Suppressed transient NetworkError during polling")
+                return
+
+            if exc_type is TelegramConflict:
+                logger.critical("Multiple instances of Telegram bot are running! Bot will not work until this is resolved")
                 return
 
         # Convert LogRecord to Loguru format
