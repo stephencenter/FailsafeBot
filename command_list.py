@@ -114,7 +114,7 @@ async def sound_command(user_command: UserCommand) -> CommandResponse:
 
     # Alert the user if they forgot to provide a sound name
     if sound_name is None:
-        return CommandResponse("Can you play that sound for me?", random.choice(sound_manager.TXT_SOUND_NOT_PROVIDED))
+        return CommandResponse("Can you play that sound for me?", random.choice(common.TXT_SOUND_NOT_PROVIDED))
 
     # Parse the arguments the user provided for the sound name
     sound_results = sound_manager.get_sound(sound_name)
@@ -123,7 +123,7 @@ async def sound_command(user_command: UserCommand) -> CommandResponse:
 
     # Alert the user if the sound they requested does not exist
     if sound_results is None:
-        return CommandResponse(user_message, random.choice(sound_manager.TXT_SOUND_NOT_FOUND))
+        return CommandResponse(user_message, random.choice(common.TXT_SOUND_NOT_FOUND))
 
     if isinstance(sound_results, list):
         num_candidates = len(sound_results)
@@ -165,10 +165,10 @@ async def soundlist_command(_: UserCommand) -> CommandResponse:
 
     user_message = "How many sounds are available to use? Can you list them for me?"
     if not sound_list:
-        return CommandResponse(user_message, f"You have no sounds available to play! Put some .mp3s in {common.SOUNDS_FOLDER_PATH}.")
+        return CommandResponse(user_message, f"You have no sounds available to play! Put some .mp3s in {common.PATH_SOUNDS_FOLDER}.")
 
     if num_sounds > 100:
-        txt_path = common.TEMP_FOLDER_PATH / "soundlist.txt"
+        txt_path = common.PATH_TEMP_FOLDER / "soundlist.txt"
         response = f"There are {num_sounds} sounds available to use. Here's a text file with all of them listed out."
 
         soundlist_string = "\n".join(sound_list)
@@ -221,7 +221,7 @@ async def addalias_command(user_command: UserCommand) -> CommandResponse:
 async def delalias_command(user_command: UserCommand) -> CommandResponse:
     alias_to_delete = user_command.get_first_arg(lowercase=True)
     if alias_to_delete is None:
-        return CommandResponse("Can you delete a sound alias for me?", random.choice(sound_manager.TXT_SOUND_NOT_PROVIDED))
+        return CommandResponse("Can you delete a sound alias for me?", random.choice(common.TXT_SOUND_NOT_PROVIDED))
 
     response = await sound_manager.del_sound_alias(alias_to_delete)
     return CommandResponse(f"Can you delete the sound alias '{alias_to_delete}'?", response)
@@ -230,12 +230,12 @@ async def delalias_command(user_command: UserCommand) -> CommandResponse:
 async def getalias_command(user_command: UserCommand) -> CommandResponse:
     sound_name = user_command.get_first_arg(lowercase=True)
     if sound_name is None:
-        return CommandResponse("How many aliases does that sound have?", random.choice(sound_manager.TXT_SOUND_NOT_PROVIDED))
+        return CommandResponse("How many aliases does that sound have?", random.choice(common.TXT_SOUND_NOT_PROVIDED))
 
     user_prompt = f"How many aliases does the sound '{sound_name}' have?"
 
     if not sound_manager.sound_exists(sound_name):
-        return CommandResponse(user_prompt, random.choice(sound_manager.TXT_SOUND_NOT_FOUND))
+        return CommandResponse(user_prompt, random.choice(common.TXT_SOUND_NOT_FOUND))
 
     aliases = sound_manager.get_aliases(sound_name)
     num_alias = len(aliases)
@@ -283,7 +283,7 @@ async def search_command(user_command: UserCommand) -> CommandResponse:
 async def playcount_command(user_command: UserCommand) -> CommandResponse:
     sound_name = user_command.get_first_arg(lowercase=True)
     if sound_name is None:
-        return CommandResponse("How many times has that sound been played?", random.choice(sound_manager.TXT_SOUND_NOT_PROVIDED))
+        return CommandResponse("How many times has that sound been played?", random.choice(common.TXT_SOUND_NOT_PROVIDED))
 
     sound_aliases = sound_manager.get_alias_dict()
     if sound_name in sound_aliases:
@@ -292,7 +292,7 @@ async def playcount_command(user_command: UserCommand) -> CommandResponse:
     user_prompt = f"How many times has the sound {sound_name} been played?"
 
     if sound_name not in sound_manager.get_sound_dict():
-        return CommandResponse(user_prompt, random.choice(sound_manager.TXT_SOUND_NOT_FOUND))
+        return CommandResponse(user_prompt, random.choice(common.TXT_SOUND_NOT_FOUND))
 
     playcount = sound_manager.get_playcount_dict()[sound_name]
     return CommandResponse(user_prompt, f"/sound {sound_name} has been used {playcount} times")
@@ -408,14 +408,14 @@ async def vcsound_command(user_command: UserCommand) -> CommandResponse:
 
     # Alert the user if they forgot to provide a sound name
     if sound_name is None:
-        return CommandResponse(user_message, random.choice(sound_manager.TXT_SOUND_NOT_PROVIDED))
+        return CommandResponse(user_message, random.choice(common.TXT_SOUND_NOT_PROVIDED))
 
     user_message = f"Can you play the {sound_name} sound in the voice channel?"
 
     # Alert the user if the sound they requested does not exist
     sound_results = sound_manager.get_sound(sound_name)
     if sound_results is None:
-        return CommandResponse(user_message, random.choice(sound_manager.TXT_SOUND_NOT_FOUND))
+        return CommandResponse(user_message, random.choice(common.TXT_SOUND_NOT_FOUND))
 
     if isinstance(sound_results, list):
         num_candidates = len(sound_results)
@@ -761,7 +761,7 @@ async def triviarank_command(user_command: UserCommand) -> CommandResponse:
 async def lobotomize_command(_: UserCommand) -> CommandResponse:
     # Clear the bot's AI memory by deleting the memory file
     with contextlib.suppress(FileNotFoundError):
-        common.MEMORY_PATH.unlink()
+        common.PATH_MEMORY_LIST.unlink()
 
     msg_options = [
         "My mind has never been clearer.",
@@ -775,10 +775,10 @@ async def lobotomize_command(_: UserCommand) -> CommandResponse:
 async def memory_command(_: UserCommand) -> CommandResponse:
     user_message = "Can you send me your memory file?"
 
-    if not common.MEMORY_PATH.exists():
+    if not common.PATH_MEMORY_LIST.exists():
         return CommandResponse(user_message, "My mind is a blank slate.")
 
-    return FileResponse(user_message, "Sure, here's my memory file.", common.MEMORY_PATH)
+    return FileResponse(user_message, "Sure, here's my memory file.", common.PATH_MEMORY_LIST)
 
 
 @requireadmin
@@ -792,7 +792,7 @@ async def memorylist_command(_: UserCommand) -> CommandResponse:
 
     memory_list = [f"{item['role']}: {item['content']}" for item in memory_list if 'content' in item]
 
-    temp_path = common.TEMP_FOLDER_PATH / 'mem_list.txt'
+    temp_path = common.PATH_TEMP_FOLDER / 'mem_list.txt'
     common.write_lines_to_file(temp_path, memory_list)
 
     return FileResponse(user_message, "Sure, here's my memory list.", temp_path, temp=True)
@@ -893,15 +893,15 @@ Look upon my works, ye mighty, and despair:
 async def logs_command(_: UserCommand) -> CommandResponse:
     user_message = "Can you send me your log file?"
 
-    if not common.LOGGING_FILE_PATH.exists():
+    if not common.PATH_LOGGING_FILE.exists():
         return CommandResponse(user_message, "There are no logs recorded.")
 
-    return FileResponse(user_message, "Sure, here you go.", common.LOGGING_FILE_PATH)
+    return FileResponse(user_message, "Sure, here you go.", common.PATH_LOGGING_FILE)
 
 
 @requireadmin
 async def clearlogs_command(_: UserCommand) -> CommandResponse:
-    common.write_lines_to_file(common.LOGGING_FILE_PATH, [])
+    common.write_lines_to_file(common.PATH_LOGGING_FILE, [])
     return CommandResponse("Can you clear your log file for me?", "Trying to erase history are we?")
 
 
@@ -909,7 +909,7 @@ async def test_command(_: UserCommand) -> CommandResponse:
     # This command is for verifying that the bot is online and receiving commands.
     # You can also supply it with a list of responses and it will pick a random one
     # I think of this as similar to how RTS units say things when you click them
-    response_list = common.try_read_lines_list(common.RESPONSES_PATH, [])
+    response_list = common.try_read_lines_list(common.PATH_RESPONSE_LIST, [])
     response_list = [line for line in response_list if not line.isspace() and not line.startswith("#")]
 
     if not response_list:
@@ -1006,13 +1006,13 @@ async def addadmin_command(user_command: UserCommand) -> CommandResponse:
     if user_id is None:
         return CommandResponse(user_message, "Who do you want me to make an admin?")
 
-    admin_list = common.try_read_lines_list(common.ADMINS_PATH, [])
+    admin_list = common.try_read_lines_list(common.PATH_ADMINS_LIST, [])
 
     if user_id in admin_list:
         return CommandResponse(user_message, f"That user ID '{user_id}' is already on the admin list.")
 
     admin_list.append(user_id)
-    common.write_lines_to_file(common.ADMINS_PATH, admin_list)
+    common.write_lines_to_file(common.PATH_ADMINS_LIST, admin_list)
 
     return CommandResponse(user_message, f"Added new user ID '{user_id}' to admin list.")
 
@@ -1025,13 +1025,13 @@ async def deladmin_command(user_command: UserCommand) -> CommandResponse:
     if user_id is None:
         return CommandResponse(user_message, "Who do you want me to remove from the admin list?")
 
-    admin_list = common.try_read_lines_list(common.ADMINS_PATH, [])
+    admin_list = common.try_read_lines_list(common.PATH_ADMINS_LIST, [])
 
     if user_id not in admin_list:
         return CommandResponse(user_message, f"That user ID '{user_id}' is not on the admin list.")
 
     admin_list = [x for x in admin_list if x != user_id]
-    common.write_lines_to_file(common.ADMINS_PATH, admin_list)
+    common.write_lines_to_file(common.PATH_ADMINS_LIST, admin_list)
 
     return CommandResponse(user_message, f"Removed user ID '{user_id}' from the admin list.")
 
@@ -1044,13 +1044,13 @@ async def addwhitelist_command(user_command: UserCommand) -> CommandResponse:
     if chat_id is None:
         return CommandResponse(user_message, "What chat ID do you want me to add to the whitelist?")
 
-    whitelist = common.try_read_lines_list(common.TELEGRAM_WHITELIST_PATH, [])
+    whitelist = common.try_read_lines_list(common.PATH_WHITELIST, [])
 
     if chat_id in whitelist:
         return CommandResponse(user_message, f"The chat ID '{chat_id}' is already on the whitelist.")
 
     whitelist.append(chat_id)
-    common.write_lines_to_file(common.TELEGRAM_WHITELIST_PATH, whitelist)
+    common.write_lines_to_file(common.PATH_WHITELIST, whitelist)
 
     return CommandResponse(user_message, f"Added new chat ID '{chat_id}' to the whitelist.")
 
@@ -1063,13 +1063,13 @@ async def delwhitelist_command(user_command: UserCommand) -> CommandResponse:
     if chat_id is None:
         return CommandResponse(user_message, "What chat ID do you want me to remove from the whitelist?")
 
-    whitelist = common.try_read_lines_list(common.TELEGRAM_WHITELIST_PATH, [])
+    whitelist = common.try_read_lines_list(common.PATH_WHITELIST, [])
 
     if chat_id not in whitelist:
         return CommandResponse(user_message, f"The chat ID '{chat_id}' is not on the whitelist.")
 
     whitelist = [x for x in whitelist if x != chat_id]
-    common.write_lines_to_file(common.TELEGRAM_WHITELIST_PATH, whitelist)
+    common.write_lines_to_file(common.PATH_WHITELIST, whitelist)
 
     return CommandResponse(user_message, f"Removed chat ID '{chat_id}' from the whitelist.")
 
@@ -1181,7 +1181,7 @@ async def handle_message_event(user_command: UserCommand) -> CommandResponse:
 
 async def monkey_event(message: str) -> CommandResponse:
     # Discworld adventure game reference
-    return SoundResponse(message, bot_message="AAAAAHHHHH-EEEEE-AAAAAHHHHH!", file_path=common.SOUNDS_FOLDER_PATH / "monkey.mp3")
+    return SoundResponse(message, bot_message="AAAAAHHHHH-EEEEE-AAAAAHHHHH!", file_path=common.PATH_SOUNDS_FOLDER / "monkey.mp3")
 
 
 async def reply_event(user_command: UserCommand) -> CommandResponse:

@@ -17,51 +17,70 @@ from telegram.error import BadRequest, NetworkError, TimedOut
 from telegram.ext import Application as TelegramBot
 from telegram.ext import CallbackContext as TelegramContext
 
+# ==========================
+# CONSTANTS
+# ==========================
+# region
 # PROJECT VARIABLES
 APPLICATION_NAME = "FailsafeBot"
 VERSION_NUMBER = "v1.1.7"
 
 # DIRECTORIES
-DATA_FOLDER_PATH = Path('Data')
-TEMP_FOLDER_PATH = DATA_FOLDER_PATH / '.temp'
-SOUNDS_FOLDER_PATH = DATA_FOLDER_PATH / 'Sounds'
-LOGGING_FOLDER_PATH = DATA_FOLDER_PATH / 'logging'
+PATH_DATA_FOLDER = Path('Data')
+PATH_TEMP_FOLDER = PATH_DATA_FOLDER / '.temp'
+PATH_SOUNDS_FOLDER = PATH_DATA_FOLDER / 'Sounds'
+PATH_LOGGING_FOLDER = PATH_DATA_FOLDER / 'logging'
 
 # CORE FILES
-TELEGRAM_TOKEN_PATH = DATA_FOLDER_PATH / "telegram_token.txt"
-DISCORD_TOKEN_PATH = DATA_FOLDER_PATH / "discord_token.txt"
-ADMINS_PATH = DATA_FOLDER_PATH / "admins.txt"
-TELEGRAM_WHITELIST_PATH = DATA_FOLDER_PATH / "tg_whitelist.txt"
-CONFIG_PATH = DATA_FOLDER_PATH / "settings.toml"
-LOGGING_FILE_PATH = LOGGING_FOLDER_PATH / "log.txt"
-USERNAME_MAP_PATH = DATA_FOLDER_PATH / "username_map.json"
-TRACK_USERID_PATH = DATA_FOLDER_PATH / "track_userid.json"
+PATH_TELEGRAM_TOKEN = PATH_DATA_FOLDER / "telegram_token.txt"
+PATH_DISCORD_TOKEN = PATH_DATA_FOLDER / "discord_token.txt"
+PATH_ADMINS_LIST = PATH_DATA_FOLDER / "admins.txt"
+PATH_WHITELIST = PATH_DATA_FOLDER / "whitelist.txt"
+PATH_CONFIG_FILE = PATH_DATA_FOLDER / "settings.toml"
+PATH_LOGGING_FILE = PATH_LOGGING_FOLDER / "log.txt"
+PATH_USERNAME_MAP = PATH_DATA_FOLDER / "username_map.json"
+PATH_USERID_TRACK = PATH_DATA_FOLDER / "track_userid.json"
 
 # CHATTING FILES
-OPENAI_KEY_PATH = DATA_FOLDER_PATH / "openai_key.txt"
-ELEVENLABS_KEY_PATH = DATA_FOLDER_PATH / "eleven_key.txt"
-PREPEND_PATH = DATA_FOLDER_PATH / "prepend_message.txt"
-GPT_PROMPT_PATH = DATA_FOLDER_PATH / "gpt_prompt.txt"
-MARKOV_PATH = DATA_FOLDER_PATH / "markov_chain.json"
-MEMORY_PATH = DATA_FOLDER_PATH / "openai_memory.json"
-RESPONSES_PATH = DATA_FOLDER_PATH / "response_list.txt"
+PATH_OPENAI_KEY = PATH_DATA_FOLDER / "openai_key.txt"
+PATH_ELEVENLABS_KEY = PATH_DATA_FOLDER / "eleven_key.txt"
+PATH_GPT_PREPEND = PATH_DATA_FOLDER / "prepend_message.txt"
+PATH_GPT_PROMPT = PATH_DATA_FOLDER / "gpt_prompt.txt"
+PATH_MARKOV_CHAIN = PATH_DATA_FOLDER / "markov_chain.json"
+PATH_MEMORY_LIST = PATH_DATA_FOLDER / "openai_memory.json"
+PATH_RESPONSE_LIST = PATH_DATA_FOLDER / "response_list.txt"
 
 # SOUNDS FILES
-ALIAS_PATH = DATA_FOLDER_PATH / "sound_aliases.json"
-PLAYCOUNTS_PATH = DATA_FOLDER_PATH / "playcounts.json"
+PATH_SOUND_ALIASES = PATH_DATA_FOLDER / "sound_aliases.json"
+PATH_PLAYCOUNTS = PATH_DATA_FOLDER / "playcounts.json"
 
 # TRIVIA FILES
-TRIVIA_POINTS_PATH = DATA_FOLDER_PATH / "trivia_points.json"
-TRIVIA_CURRENT_PATH = DATA_FOLDER_PATH / "current_trivia.json"
-TRIVIA_MEMORY_PATH = DATA_FOLDER_PATH / "trivia_memory.txt"
-TRIVIA_URL = "https://opentdb.com/api.php?amount="
+PATH_TRIVIA_SCORES = PATH_DATA_FOLDER / "trivia_points.json"
+PATH_CURRENT_TRIVIA = PATH_DATA_FOLDER / "current_trivia.json"
+PATH_TRIVIA_MEMORY = PATH_DATA_FOLDER / "trivia_memory.txt"
+URL_TRIVIA = "https://opentdb.com/api.php?amount="
 
 # D10000 FILES
-D10000_LIST_PATH = DATA_FOLDER_PATH / "d10000_list.txt"
-ACTIVE_EFFECTS_PATH = DATA_FOLDER_PATH / "active_effects.json"
+PATH_D10000_LIST = PATH_DATA_FOLDER / "d10000_list.txt"
+PATH_ACTIVE_EFFECTS = PATH_DATA_FOLDER / "active_effects.json"
 
-# CONSTANTS
-BZZZT_MESSAGE_TEXT = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
+# This message is sent if the bot is unable to create a response for whatever reason (API errors, etc)
+TXT_BZZZT_ERROR = "*BZZZT* my telecommunication circuits *BZZZT* appear to be *BZZZT* malfunctioning *BZZZT*"
+
+# This message is sent if the user doesn't provide a sound name for /sound
+TXT_SOUND_NOT_PROVIDED = (
+    "I'm afraid my mindreader unit has been malfunctioning lately, what sound did you want?",
+    "Use your words please.",
+    "I unfortunately do not have any sounds without a name.",
+)
+
+# This message is sent if the user requests a sound that doesn't exist with /sound
+TXT_SOUND_NOT_FOUND = (
+    "Are you insane, do you have any idea how dangerous a sound with that name would be?",
+    "I wouldn't be caught dead with a sound like that on my list.",
+    "No dice. Someone probably forgot to upload it, what a fool.",
+)
+# endregion
 
 
 # ==========================
@@ -136,7 +155,7 @@ class Config:
 
     def __post_init__(self):
         try:
-            with CONFIG_PATH.open(encoding='utf-8') as f:
+            with PATH_CONFIG_FILE.open(encoding='utf-8') as f:
                 loaded = toml.load(f)
 
         except (FileNotFoundError, toml.TomlDecodeError):
@@ -182,7 +201,7 @@ class Config:
 
 
 def save_config(config: Config) -> None:
-    with CONFIG_PATH.open(mode='w', encoding='utf-8') as f:
+    with PATH_CONFIG_FILE.open(mode='w', encoding='utf-8') as f:
         toml.dump(asdict(config), f)
 
 
@@ -283,7 +302,7 @@ class UserCommand:
         self.track_user_id()
 
     def track_user_id(self) -> None:
-        id_dict = try_read_json(TRACK_USERID_PATH, {})
+        id_dict = try_read_json(PATH_USERID_TRACK, {})
         username = self.get_user_name().lower()
         user_id = self.get_user_id()
 
@@ -300,7 +319,7 @@ class UserCommand:
             if isinstance(self.target_bot, DiscordBot):
                 id_dict[username] = {"discord": user_id}
 
-        write_json_to_file(TRACK_USERID_PATH, id_dict)
+        write_json_to_file(PATH_USERID_TRACK, id_dict)
 
     def get_user_name(self, *, map_name: bool = False) -> str:
         # Returns the username of the user that sent the command or message
@@ -337,7 +356,7 @@ class UserCommand:
     def get_id_by_username(self, username: str) -> str | None:
         # Attempt to retrieve the ID belonging to the provided username
         # This ID is platform-specific (Discord, Telegram) and can only be retrieved if the user has interacted with this bot before
-        id_dict = try_read_json(TRACK_USERID_PATH, {})
+        id_dict = try_read_json(PATH_USERID_TRACK, {})
 
         if username not in id_dict:
             return None
@@ -424,7 +443,7 @@ class UserCommand:
     def is_admin(self) -> bool:
         # Returns whether the message sender is on the bot's admin list
         user_id = self.get_user_id()
-        admin_list = try_read_lines_list(ADMINS_PATH, [])
+        admin_list = try_read_lines_list(PATH_ADMINS_LIST, [])
 
         return user_id in admin_list
 
@@ -450,7 +469,7 @@ class UserCommand:
                 return False
 
             chat_id = str(self.update.message.chat.id)
-            whitelist = try_read_lines_list(TELEGRAM_WHITELIST_PATH, [])
+            whitelist = try_read_lines_list(PATH_WHITELIST, [])
 
             return chat_id in whitelist
 
@@ -530,7 +549,7 @@ class UserCommand:
         return self.context.voice_client
 
     def map_username(self, username: str) -> str:
-        username_map = try_read_json(USERNAME_MAP_PATH, {})
+        username_map = try_read_json(PATH_USERNAME_MAP, {})
 
         try:
             corrected_name = username_map[username.lower()]
@@ -585,7 +604,7 @@ async def send_response(command_function: Callable[[UserCommand], Awaitable[Comm
             await user_command.send_text_response(text_response)
 
     except (BadRequest, TimedOut, NetworkError, HTTPException) as e:
-        await user_command.send_text_response(BZZZT_MESSAGE_TEXT)
+        await user_command.send_text_response(TXT_BZZZT_ERROR)
 
         # Re-raise BadRequests, as these indicate a bug with the script that will need to be fixed
         if e is BadRequest:
@@ -646,7 +665,7 @@ def append_to_gpt_memory(*, user_prompt: str | None = None, bot_prompt: str | No
         memory = memory[size - config.chat.memorysize:]
 
     # Write the AI's memory to a file so it can be retrieved later
-    write_json_to_file(MEMORY_PATH, memory)
+    write_json_to_file(PATH_MEMORY_LIST, memory)
 
 
 def get_gpt_memory() -> list[dict]:
@@ -654,7 +673,7 @@ def get_gpt_memory() -> list[dict]:
     config = Config()
 
     if config.chat.usememory:
-        return try_read_json(MEMORY_PATH, [])
+        return try_read_json(PATH_MEMORY_LIST, [])
 
     return []
 

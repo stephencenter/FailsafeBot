@@ -10,36 +10,36 @@ import common
 
 # Directories to check for and create if they don't exist
 directories = {
-    common.DATA_FOLDER_PATH,
-    common.TEMP_FOLDER_PATH,
-    common.SOUNDS_FOLDER_PATH,
-    common.LOGGING_FOLDER_PATH,
+    common.PATH_DATA_FOLDER,
+    common.PATH_TEMP_FOLDER,
+    common.PATH_SOUNDS_FOLDER,
+    common.PATH_LOGGING_FOLDER,
 }
 
 # Text files (.txt, .json, etc) to check for and create if they don't exist
 text_files = {
-    common.TELEGRAM_TOKEN_PATH,
-    common.DISCORD_TOKEN_PATH,
-    common.ADMINS_PATH,
-    common.TELEGRAM_WHITELIST_PATH,
-    common.CONFIG_PATH,
-    common.OPENAI_KEY_PATH,
-    common.ELEVENLABS_KEY_PATH,
-    common.USERNAME_MAP_PATH,
-    common.ALIAS_PATH,
-    common.PLAYCOUNTS_PATH,
-    common.GPT_PROMPT_PATH,
-    common.MARKOV_PATH,
-    common.MEMORY_PATH,
-    common.PREPEND_PATH,
-    common.RESPONSES_PATH,
-    common.LOGGING_FILE_PATH,
-    common.TRIVIA_POINTS_PATH,
-    common.TRIVIA_MEMORY_PATH,
-    common.D10000_LIST_PATH,
-    common.ACTIVE_EFFECTS_PATH,
-    common.TRIVIA_CURRENT_PATH,
-    common.TRACK_USERID_PATH,
+    common.PATH_TELEGRAM_TOKEN,
+    common.PATH_DISCORD_TOKEN,
+    common.PATH_ADMINS_LIST,
+    common.PATH_WHITELIST,
+    common.PATH_CONFIG_FILE,
+    common.PATH_OPENAI_KEY,
+    common.PATH_ELEVENLABS_KEY,
+    common.PATH_USERNAME_MAP,
+    common.PATH_SOUND_ALIASES,
+    common.PATH_PLAYCOUNTS,
+    common.PATH_GPT_PROMPT,
+    common.PATH_MARKOV_CHAIN,
+    common.PATH_MEMORY_LIST,
+    common.PATH_GPT_PREPEND,
+    common.PATH_RESPONSE_LIST,
+    common.PATH_LOGGING_FILE,
+    common.PATH_TRIVIA_SCORES,
+    common.PATH_TRIVIA_MEMORY,
+    common.PATH_D10000_LIST,
+    common.PATH_ACTIVE_EFFECTS,
+    common.PATH_CURRENT_TRIVIA,
+    common.PATH_USERID_TRACK,
 }
 
 # Paths that we will not create, this is exclusions for the globals checking from common.py
@@ -72,7 +72,7 @@ def init_logging() -> None:
     logger.add(sys.stderr, level="INFO", backtrace=False, diagnose=False, format=info_format)
 
     # Add file output with error logging
-    logger.add(common.LOGGING_FILE_PATH, level="WARNING", backtrace=False, diagnose=False)
+    logger.add(common.PATH_LOGGING_FILE, level="WARNING", backtrace=False, diagnose=False)
 
     logging.root.handlers = [InterceptHandler()]
     logging.root.setLevel(logging.INFO)
@@ -110,9 +110,9 @@ def create_project_structure() -> Generator[str]:
 
 def clear_temp_folder() -> Generator[str]:
     deleted_temp = False
-    for temp in common.TEMP_FOLDER_PATH.iterdir():
+    for temp in common.PATH_TEMP_FOLDER.iterdir():
         temp.unlink()
         deleted_temp = True
 
     if deleted_temp:
-        yield f"Cleared temp directory '{common.TEMP_FOLDER_PATH}'"
+        yield f"Cleared temp directory '{common.PATH_TEMP_FOLDER}'"

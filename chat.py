@@ -22,7 +22,7 @@ def generate_markov_text() -> str:
         error_message = "Markov minimum length cannot be greater than maximum length (config issue)"
         raise ValueError(error_message)
 
-    markov_chain = common.try_read_json(common.MARKOV_PATH, {})
+    markov_chain = common.try_read_json(common.PATH_MARKOV_CHAIN, {})
 
     if not markov_chain:
         return "No markov chain data was found!"
@@ -56,16 +56,16 @@ def get_gpt_response(user_command: UserCommand) -> str:
     config = common.Config()
 
     # Load and set the OpenAI API key
-    openai_api_key = common.try_read_single_line(common.OPENAI_KEY_PATH, None)
+    openai_api_key = common.try_read_single_line(common.PATH_OPENAI_KEY, None)
     openai_client = OpenAI(api_key=openai_api_key)
 
     # Load and place the system prompt before the loaded memory to instruct the AI how to act
-    system_prompt = common.try_read_lines_str(common.GPT_PROMPT_PATH, None)
+    system_prompt = common.try_read_lines_str(common.PATH_GPT_PROMPT, None)
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
 
     # Place an assistant message after the system prompt but before the loaded memory
     # This is useful specifically with fine-tuned models to set the tone for the bot's responses
-    prepend_message = common.try_read_lines_str(common.PREPEND_PATH, None)
+    prepend_message = common.try_read_lines_str(common.PATH_GPT_PREPEND, None)
     if prepend_message is not None:
         messages.append({"role": "assistant", "content": prepend_message})
 
@@ -107,7 +107,7 @@ def get_gpt_response(user_command: UserCommand) -> str:
 
     error_msg = f"Failed to get a response from OpenAI Chat Completion API within {MAX_GPT_ATTEMPTS} attempts"
     logger.error(error_msg)
-    return common.BZZZT_MESSAGE_TEXT
+    return common.TXT_BZZZT_ERROR
 
 
 def get_most_recent_bot_message() -> str | None:
@@ -122,7 +122,7 @@ def get_most_recent_bot_message() -> str | None:
 
 def get_elevenlabs_response(input_text: str, *, save_to_file: bool = False) -> Path | Iterator[bytes]:
     # Get elevenlabs key from file
-    elevenlabs_key = common.try_read_single_line(common.ELEVENLABS_KEY_PATH, None)
+    elevenlabs_key = common.try_read_single_line(common.PATH_ELEVENLABS_KEY, None)
     if elevenlabs_key is None:
         error_message = "Couldn't retrieve elevenlabs key!"
         raise ValueError(error_message)
@@ -139,8 +139,8 @@ def get_elevenlabs_response(input_text: str, *, save_to_file: bool = False) -> P
 
     # Save sound to temp file
     if save_to_file:
-        temp_path = common.TEMP_FOLDER_PATH / f"{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.mp3"
-        common.TEMP_FOLDER_PATH.mkdir(parents=True, exist_ok=True)
+        temp_path = common.PATH_TEMP_FOLDER / f"{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.mp3"
+        common.PATH_TEMP_FOLDER.mkdir(parents=True, exist_ok=True)
         elevenlabs.save(audio, str(temp_path))
         return temp_path
 
@@ -168,7 +168,7 @@ def handle_elevenlabs_error(error: ElevenLabsApiError) -> str:
 
     error_map = {
         'max_character_limit_exceeded': "Text input has too many characters for ElevenLabs text-to-speech (max is ~10k)",
-        'invalid_api_key': f"ElevenLabs API Key in '{common.ELEVENLABS_KEY_PATH}' is invalid!",
+        'invalid_api_key': f"ElevenLabs API Key in '{common.PATH_ELEVENLABS_KEY}' is invalid!",
         'voice_not_found': f"ElevenLabs Voice ID '{config.chat.sayvoiceid}' is invalid!",
         'model_not_found': f"ElevenLabs Model ID '{config.chat.saymodelid}' is invalid!",
         'quota_exceeded': "ElevenLabs account is out of credits!",

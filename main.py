@@ -19,7 +19,7 @@ import sound_manager
 def prepare_runway() -> None:
     # Initialize logging
     runway.init_logging()
-    logger.info(f"Loaded {common.APPLICATION_NAME} {common.VERSION_NUMBER}, logging to {common.LOGGING_FILE_PATH}")
+    logger.info(f"Loaded {common.APPLICATION_NAME} {common.VERSION_NUMBER}, logging to {common.PATH_LOGGING_FILE}")
 
     # Make sure all files and folders exist that this script needs
     for info in runway.create_project_structure():
@@ -47,12 +47,12 @@ def prepare_runway() -> None:
 async def try_start_telegram_bot() -> TelegramBot | None:
     config = common.Config()
     if not config.main.runtelegram:
-        logger.info(f"Telegram bot disabled in {common.CONFIG_PATH}, skipping")
+        logger.info(f"Telegram bot disabled in {common.PATH_CONFIG_FILE}, skipping")
         return None
 
-    telegram_token = common.try_read_single_line(common.TELEGRAM_TOKEN_PATH, None)
+    telegram_token = common.try_read_single_line(common.PATH_TELEGRAM_TOKEN, None)
     if telegram_token is None:
-        logger.error(f"Telegram bot is enabled but token not found at {common.TELEGRAM_TOKEN_PATH}, couldn't start bot")
+        logger.error(f"Telegram bot is enabled but token not found at {common.PATH_TELEGRAM_TOKEN}, couldn't start bot")
         return None
 
     telegram_bot = ApplicationBuilder().token(telegram_token).build()
@@ -61,7 +61,7 @@ async def try_start_telegram_bot() -> TelegramBot | None:
         await telegram_bot.initialize()
 
     except TelegramInvalidToken:
-        logger.error(f"Telegram token at {common.TELEGRAM_TOKEN_PATH} was rejected, couldn't start bot")
+        logger.error(f"Telegram token at {common.PATH_TELEGRAM_TOKEN} was rejected, couldn't start bot")
         return None
 
     logger.info("Starting telegram bot")
@@ -77,12 +77,12 @@ async def try_start_telegram_bot() -> TelegramBot | None:
 async def try_start_discord_bot() -> tuple[DiscordBot | None, asyncio.Task | None]:
     config = common.Config()
     if not config.main.rundiscord:
-        logger.info(f"Discord bot disabled in {common.CONFIG_PATH}, skipping")
+        logger.info(f"Discord bot disabled in {common.PATH_CONFIG_FILE}, skipping")
         return None, None
 
-    discord_token = common.try_read_single_line(common.DISCORD_TOKEN_PATH, None)
+    discord_token = common.try_read_single_line(common.PATH_DISCORD_TOKEN, None)
     if discord_token is None:
-        logger.error(f"Discord bot is enabled but token not found at {common.DISCORD_TOKEN_PATH}, couldn't start bot")
+        logger.error(f"Discord bot is enabled but token not found at {common.PATH_DISCORD_TOKEN}, couldn't start bot")
         return None, None
 
     logger.info("Starting discord bot")
@@ -97,7 +97,7 @@ async def try_start_discord_bot() -> tuple[DiscordBot | None, asyncio.Task | Non
         discord_task = asyncio.create_task(discord_bot.connect())
 
     except DiscordInvalidToken:
-        logger.error(f"Discord token at {common.DISCORD_TOKEN_PATH} was rejected, couldn't start bot")
+        logger.error(f"Discord token at {common.PATH_DISCORD_TOKEN} was rejected, couldn't start bot")
         return None, None
 
     return discord_bot, discord_task
