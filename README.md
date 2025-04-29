@@ -38,4 +38,4 @@ Navigate to the newly-created `Data` folder and find the files named `discord_to
 You should now be able to return to the folder containing `main.py` and run `uv run main.py` again. If the script gets to the line that says `Setup Complete, polling for user commands...` then the script is working and your bots should begin responding to commands.
 
 ### Step 7: Message Bot
-Message the bot with `/help` for a list of commands to experiment with. Use `/mycommands` to get a full list of commands you have access to. Note that some commands are unavailable without admin or superadmin rights. The first user to message the bot when no superadmins are assigned will be given the role. This auto-assign function is disabled after first use.
+Message the bot with `/help` for a list of commands to experiment with. Use `/mycommands` to get a full list of commands you have access to. Note that some commands are unavailable without admin or superadmin rights. The first user to message the bot when no superadmins are assigned will be given the superadmin role — this auto-assign function is disabled after first use.

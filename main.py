@@ -108,6 +108,8 @@ async def try_start_discord_bot() -> tuple[DiscordBot | None, asyncio.Task | Non
 
 async def shutdown_telegram_bot(telegram_bot: TelegramBot | None) -> None:
     if telegram_bot is not None:
+        logger.info("Shutting down telegram bot...")
+
         if telegram_bot.updater is not None:
             await telegram_bot.updater.stop()
 

@@ -5,7 +5,7 @@ line-length = 150
 preview = true
 select = ["ALL"]
 ignore = [  # Remove these at your own peril
-    "ANN204",
+    "ANN204", "ANN401",
     "B903",
     "CPY001",
     "D100", "D101", "D102", "D103", "D105", "D107",
