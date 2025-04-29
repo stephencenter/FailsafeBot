@@ -24,7 +24,7 @@ from telegram.ext import CallbackContext as TelegramContext
 # region
 # PROJECT VARIABLES
 APPLICATION_NAME = "FailsafeBot"
-VERSION_NUMBER = "v1.1.10"
+VERSION_NUMBER = "v1.1.11"
 
 # DIRECTORIES
 PATH_DATA_FOLDER = Path('Data')
@@ -108,11 +108,11 @@ class MissingUpdateInfoError(ValueError):
         elif update.message is None:
             self.message = "Update.message cannot be None"
 
-        elif update.message.from_user is None:
-            self.message = "Update.message.from_user cannot be None"
-
         elif update.message.text is None:
             self.message = "Update.message.text cannot be None"
+
+        elif update.message.from_user is None:
+            self.message = "Update.message.from_user cannot be None"
 
         elif update.effective_chat is None:
             self.message = "Update.effective_chat cannot be None"
