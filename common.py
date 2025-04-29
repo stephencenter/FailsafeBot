@@ -171,7 +171,6 @@ class ConfigMisc:
     maxstreamtime: int = 30  # How much of a video the /stream command will download (does not apply to /vcstream)
     maxdice: int = 100  # Maximum number of dice in one command for dice roller (bigger numbers might make messages too large for telegram)
     maxfaces: int = 10000  # Maximum number of faces for the dice for dice roller
-    cmdautoyes: bool = False  # Whether the /terminal command should automatically say 'y' to y/n questions (prevents hanging)
 
 
 @dataclass
