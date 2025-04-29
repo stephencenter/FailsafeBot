@@ -332,7 +332,7 @@ class UserCommand:
 
         self.target_bot = target_bot
         self.context = context
-        self.update = None
+        self.update = update
         self.response: CommandResponse | None = None
 
     async def get_command_name(self) -> str | None:
@@ -553,7 +553,7 @@ class UserCommand:
 
     def get_chat_id(self) -> str | None:
         if isinstance(self.target_bot, TelegramBot):
-            if self.update is None:
+            if self.update is None or self.update.message is None:
                 raise MissingUpdateInfoError(self.update)
             return str(self.update.message.chat.id)
 
