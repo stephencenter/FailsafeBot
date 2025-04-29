@@ -1,4 +1,3 @@
-import contextlib
 import io
 import os
 import random
@@ -701,8 +700,7 @@ async def triviarank_command(user_command: UserCommand) -> CommandResponse:
 @requireadmin
 async def lobotomize_command(_: UserCommand) -> CommandResponse:
     # Clear the bot's AI memory by deleting the memory file
-    with contextlib.suppress(FileNotFoundError):
-        common.PATH_MEMORY_LIST.unlink()
+    await common.write_json_to_file(common.PATH_MEMORY_LIST, {})
 
     msg_options = [
         "My mind has never been clearer.",

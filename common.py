@@ -355,12 +355,7 @@ class UserCommand:
 
     async def track_user_id(self) -> None:
         id_dict: dict[str, dict[str, str]] = await try_read_json(PATH_TRACK_USERID, {})
-        username = await self.get_user_name()
-
-        if username is None:
-            return
-
-        username = username.lower()
+        username = (await self.get_user_name()).lower()
         user_id = self.get_user_id()
         platform_str = self.get_platform_string()
 
@@ -372,7 +367,7 @@ class UserCommand:
 
         await write_json_to_file(PATH_TRACK_USERID, id_dict)
 
-    async def get_user_name(self, *, map_name: bool = False) -> str | None:
+    async def get_user_name(self, *, map_name: bool = False) -> str:
         # Returns the username of the user that sent the command or message
         username = None
         if isinstance(self.target_bot, TelegramBot):
@@ -387,7 +382,11 @@ class UserCommand:
         else:
             raise InvalidBotTypeError(self.target_bot)
 
-        if username is not None and map_name:
+        if username is None:
+            error_msg = f"Failed to obtain username for bot type {type(self.target_bot).__name__}"
+            raise ValueError(error_msg)
+
+        if map_name:
             return await self.map_username(username)
 
         return username
