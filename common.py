@@ -1,11 +1,12 @@
 import json
 import random
-from collections.abc import Awaitable, Callable, Generator, Iterable
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Iterable
 from dataclasses import asdict, dataclass, field
 from functools import wraps
 from pathlib import Path
 from typing import Any
 
+import aiofiles
 import discord
 import toml
 from discord.errors import HTTPException
@@ -23,7 +24,7 @@ from telegram.ext import CallbackContext as TelegramContext
 # region
 # PROJECT VARIABLES
 APPLICATION_NAME = "FailsafeBot"
-VERSION_NUMBER = "v1.1.7"
+VERSION_NUMBER = "v1.1.11"
 
 # DIRECTORIES
 PATH_DATA_FOLDER = Path('Data')
@@ -34,12 +35,12 @@ PATH_LOGGING_FOLDER = PATH_DATA_FOLDER / 'logging'
 # CORE FILES
 PATH_TELEGRAM_TOKEN = PATH_DATA_FOLDER / "telegram_token.txt"
 PATH_DISCORD_TOKEN = PATH_DATA_FOLDER / "discord_token.txt"
-PATH_ADMINS_LIST = PATH_DATA_FOLDER / "admins.txt"
-PATH_WHITELIST = PATH_DATA_FOLDER / "whitelist.txt"
+PATH_ADMIN_LIST = PATH_DATA_FOLDER / "admins.json"
+PATH_WHITELIST = PATH_DATA_FOLDER / "whitelist.json"
 PATH_CONFIG_FILE = PATH_DATA_FOLDER / "settings.toml"
 PATH_LOGGING_FILE = PATH_LOGGING_FOLDER / "log.txt"
 PATH_USERNAME_MAP = PATH_DATA_FOLDER / "username_map.json"
-PATH_USERID_TRACK = PATH_DATA_FOLDER / "track_userid.json"
+PATH_TRACK_USERID = PATH_DATA_FOLDER / "track_userid.json"
 
 # CHATTING FILES
 PATH_OPENAI_KEY = PATH_DATA_FOLDER / "openai_key.txt"
@@ -57,7 +58,6 @@ PATH_PLAYCOUNTS = PATH_DATA_FOLDER / "playcounts.json"
 # TRIVIA FILES
 PATH_TRIVIA_SCORES = PATH_DATA_FOLDER / "trivia_points.json"
 PATH_CURRENT_TRIVIA = PATH_DATA_FOLDER / "current_trivia.json"
-PATH_TRIVIA_MEMORY = PATH_DATA_FOLDER / "trivia_memory.txt"
 URL_TRIVIA = "https://opentdb.com/api.php?amount="
 
 # D10000 FILES
@@ -89,10 +89,34 @@ TXT_SOUND_NOT_FOUND = (
 # region
 class InvalidBotTypeError(TypeError):
     # This exception type should be raised if a function expects a TelegramBot or DiscordBot but gets something else instead
-    def __init__(self, message: str | None = None):
-        self.message = f"{APPLICATION_NAME} currently supports only Telegram and Discord bots"
+    def __init__(self, bot: Any, message: str | None = None):
+        self.message = f"{APPLICATION_NAME} currently supports only Telegram and Discord bots (got type {type(bot).__name__})"
         if message is not None:
             self.message = message
+        super().__init__(self.message)
+
+
+class MissingUpdateInfoError(ValueError):
+    # This exception type should be raised if a function is passed a Telegram Update but it is missing information
+    def __init__(self, update: TelegramUpdate | None, message: str | None = None):
+        if message is not None:
+            self.message = message
+
+        elif update is None:
+            self.message = "Update cannot be None"
+
+        elif update.message is None:
+            self.message = "Update.message cannot be None"
+
+        elif update.message.text is None:
+            self.message = "Update.message.text cannot be None"
+
+        elif update.message.from_user is None:
+            self.message = "Update.message.from_user cannot be None"
+
+        elif update.effective_chat is None:
+            self.message = "Update.effective_chat cannot be None"
+
         super().__init__(self.message)
 # endregion
 
@@ -110,7 +134,10 @@ class ConfigMain:
     rundiscord: bool = True  # Whether to run the discord bot or skip it
     requireadmin: bool = True  # Whether certain commands require admin rights to perform
     maxmessagelength: int = 1024  # Maximum amount of characters to allow in a CommandResponse object's bot_message property
-    usewhitelist: bool = False  # Whether a Telegram chat needs to be on the whitelist for commands to function
+    whitelistdiscord: bool = False  # Whether a Discord chat ID needs to be on the whitelist for commands to function
+    whitelisttelegram: bool = False  # Whether a Telegram chat ID needs to be on the whitelist for commands to function
+    autosuperdiscord: bool = True  # Whether Discord superadmin rights will be auto-assigned if none exist (disabled after first use)
+    autosupertelegram: bool = True  # Whether Telegram superadmin rights will be auto-assigned if none exist (disabled after first use)
 
 
 @dataclass
@@ -153,14 +180,24 @@ class Config:
     chat: ConfigChat = field(default_factory=ConfigChat)
     misc: ConfigMisc = field(default_factory=ConfigMisc)
 
-    def __post_init__(self):
-        try:
-            with PATH_CONFIG_FILE.open(encoding='utf-8') as f:
-                loaded = toml.load(f)
+    def __init__(self):
+        error_msg = "Use `await Config.load()` instead of creating Config directly."
+        raise RuntimeError(error_msg)
 
-        except (FileNotFoundError, toml.TomlDecodeError):
-            return
+    @classmethod
+    async def load(cls) -> "Config":
+        self = object.__new__(cls)
+        self.main = ConfigMain()
+        self.chat = ConfigChat()
+        self.misc = ConfigMisc()
 
+        loaded = await try_read_toml(PATH_CONFIG_FILE, {})
+
+        if not loaded:
+            logger.warning(f"Failed to load {PATH_CONFIG_FILE}, falling back to default settings")
+            return self
+
+        # Use loaded toml file to update fields
         for key in self.__dict__:
             for subkey in self.__dict__[key].__dict__:
                 if key in loaded and subkey in loaded[key]:
@@ -172,6 +209,8 @@ class Config:
                         if other_key != key and subkey in loaded[other_key]:
                             self.__dict__[key].__dict__[subkey] = loaded[other_key][subkey]
                             break
+
+        return self
 
     def find_setting(self, search_string: str) -> tuple[str | None, str | None, Any]:
         # Provide a search string (either the setting name or [group name].[setting name]) and
@@ -199,34 +238,31 @@ class Config:
 
         return group_name, setting_name, value
 
+    async def save_config(self) -> None:
+        await write_toml_to_file(PATH_CONFIG_FILE, asdict(self))
 
-def save_config(config: Config) -> None:
-    with PATH_CONFIG_FILE.open(mode='w', encoding='utf-8') as f:
-        toml.dump(asdict(config), f)
+    def update_setting(self, group_name: str, setting_name: str, value: str) -> None:
+        lowercase = value.lower()
+        if lowercase == "true":
+            new_value = True
+        elif lowercase == "false":
+            new_value = False
 
+        else:
+            try:
+                new_value = int(value)
+            except ValueError:
+                try:
+                    new_value = float(value)
+                except ValueError:
+                    new_value = value
 
-def parse_value_input(value: str) -> int | float | bool | str:
-    if value.lower() == "true":
-        return True
-    if value.lower() == "false":
-        return False
-
-    try:
-        return int(value)
-    except ValueError:
-        pass
-
-    try:
-        return float(value)
-    except ValueError:
-        pass
-
-    return value
+        setattr(getattr(self, group_name), setting_name, new_value)
 
 
-def verify_settings() -> Generator[str]:
+async def verify_settings() -> AsyncGenerator[str]:
     seen = {}
-    config = Config()
+    config = await Config.load()
 
     for outer_key, subdict in config.__dict__.items():
         for subkey in subdict.__dict__:
@@ -284,11 +320,11 @@ class UserCommand:
             raise ValueError(error_msg)
 
         if isinstance(target_bot, TelegramBot) != isinstance(context, TelegramContext):
-            error_msg = "Context type and bot type must match"
+            error_msg = f"Bot type (telegram bot) and context type ({type(context).__name__}) must match"
             raise TypeError(error_msg)
 
         if isinstance(target_bot, DiscordBot) != isinstance(context, DiscordContext):
-            error_msg = "Context type and bot type must match"
+            error_msg = f"Bot type (discord bot) and context type ({type(context).__name__}) must match"
             raise TypeError(error_msg)
 
         if not isinstance(target_bot, TelegramBot) and not isinstance(target_bot, DiscordBot):
@@ -296,88 +332,105 @@ class UserCommand:
 
         self.target_bot = target_bot
         self.context = context
-        self.update = update
+        self.update = None
         self.response: CommandResponse | None = None
 
-        self.track_user_id()
+    async def get_command_name(self) -> str | None:
+        command_name = None
+        if isinstance(self.target_bot, TelegramBot):
+            if self.update is None or self.update.message is None or self.update.message.text is None:
+                raise MissingUpdateInfoError(self.update)
 
-    def track_user_id(self) -> None:
-        id_dict = try_read_json(PATH_USERID_TRACK, {})
-        username = self.get_user_name().lower()
-        user_id = self.get_user_id()
+            if self.update.message.text.startswith("/"):
+                command_name = self.update.message.text.split()[0][1:]
 
-        if username in id_dict:
-            if isinstance(self.target_bot, TelegramBot):
-                id_dict[username]["telegram"] = user_id
-
-            if isinstance(self.target_bot, DiscordBot):
-                id_dict[username]["discord"] = user_id
+        elif isinstance(self.context, DiscordContext):
+            if self.context.command is not None:
+                command_name = self.context.command.name
 
         else:
-            if isinstance(self.target_bot, TelegramBot):
-                id_dict[username] = {"telegram": user_id}
-            if isinstance(self.target_bot, DiscordBot):
-                id_dict[username] = {"discord": user_id}
+            raise InvalidBotTypeError(self.target_bot)
 
-        write_json_to_file(PATH_USERID_TRACK, id_dict)
+        return command_name
 
-    def get_user_name(self, *, map_name: bool = False) -> str:
+    async def track_user_id(self) -> None:
+        id_dict: dict[str, dict[str, str]] = await try_read_json(PATH_TRACK_USERID, {})
+        username = await self.get_user_name()
+
+        if username is None:
+            return
+
+        username = username.lower()
+        user_id = self.get_user_id()
+        platform_str = self.get_platform_string()
+
+        if platform_str in id_dict:
+            id_dict[platform_str][username] = user_id
+
+        else:
+            id_dict[platform_str] = {username: user_id}
+
+        await write_json_to_file(PATH_TRACK_USERID, id_dict)
+
+    async def get_user_name(self, *, map_name: bool = False) -> str | None:
         # Returns the username of the user that sent the command or message
-        if isinstance(self.update, TelegramUpdate):
+        username = None
+        if isinstance(self.target_bot, TelegramBot):
+            if self.update is None or self.update.message is None or self.update.message.from_user is None:
+                raise MissingUpdateInfoError(self.update)
+
             username = self.update.message.from_user.username
 
         elif isinstance(self.context, DiscordContext):
             username = self.context.author.name
 
         else:
-            raise InvalidBotTypeError
+            raise InvalidBotTypeError(self.target_bot)
 
-        if username is None:
-            return ''
-
-        if map_name:
-            return self.map_username(username)
+        if username is not None and map_name:
+            return await self.map_username(username)
 
         return username
 
     def get_user_id(self) -> str:
         # Returns the user ID of the user that sent the command or message
-        if isinstance(self.update, TelegramUpdate):
+        if isinstance(self.target_bot, TelegramBot):
+            if self.update is None or self.update.message is None or self.update.message.from_user is None:
+                raise MissingUpdateInfoError(self.update)
+
             user_id = str(self.update.message.from_user.id)
 
         elif isinstance(self.context, DiscordContext):
             user_id = str(self.context.author.id)
 
         else:
-            raise InvalidBotTypeError
+            raise InvalidBotTypeError(self.target_bot)
 
         return user_id
 
-    def get_id_by_username(self, username: str) -> str | None:
+    async def get_id_by_username(self, username: str) -> str | None:
         # Attempt to retrieve the ID belonging to the provided username
         # This ID is platform-specific (Discord, Telegram) and can only be retrieved if the user has interacted with this bot before
-        id_dict = try_read_json(PATH_USERID_TRACK, {})
+        id_dict = await try_read_json(PATH_TRACK_USERID, {})
+        platform_str = self.get_platform_string()
 
-        if username not in id_dict:
-            return None
-
-        if isinstance(self.target_bot, TelegramBot) and "telegram" in id_dict[username]:
-            return id_dict[username]["telegram"]
-
-        if isinstance(self.target_bot, DiscordBot) and "discord" in id_dict[username]:
-            return id_dict[username]["discord"]
+        if platform_str in id_dict and username in id_dict[platform_str]:
+            return id_dict[platform_str][username]
 
         return None
 
     def is_private(self) -> bool:
         # Returns whether the command was called in a private chat or a group chat
-        if isinstance(self.update, TelegramUpdate):
+        if isinstance(self.target_bot, TelegramBot):
+            if self.update is None or self.update.message is None:
+                raise MissingUpdateInfoError(self.update)
+
             return self.update.message.chat.type == "private"
 
         if isinstance(self.context, DiscordContext):
             return self.context.guild is None
 
-        raise InvalidBotTypeError
+        raise InvalidBotTypeError(self.target_bot)
 
     def get_args_list(self) -> list[str]:
         # Returns the list of arguments provided with the command
@@ -388,7 +441,7 @@ class UserCommand:
         if isinstance(self.context, DiscordContext) and len(self.context.message.content) > 0:
             return self.context.message.content.split()[1:]
 
-        raise InvalidBotTypeError
+        raise InvalidBotTypeError(self.target_bot)
 
     def get_first_arg(self, *, lowercase: bool = False) -> str | None:
         # Returns the first element from the argument list, all lowercase if lowercase=True
@@ -402,7 +455,7 @@ class UserCommand:
             args_list = self.context.message.content.split()[1:]
 
         else:
-            raise InvalidBotTypeError
+            raise InvalidBotTypeError(self.target_bot)
 
         try:
             if lowercase:
@@ -415,20 +468,25 @@ class UserCommand:
     def get_user_message(self) -> str:
         # Returns the message that this user sent with this UserCommand
         # Ex. /test a b c -> 'a b c'
-        if isinstance(self.context, TelegramContext) and self.context.args is not None:
-            return ' '.join(self.context.args)
+        if isinstance(self.target_bot, TelegramBot):
+            if self.context.args is not None:
+                return ' '.join(self.context.args)
 
-        if isinstance(self.update, TelegramUpdate) and self.update.message.text is not None:
+            if self.update is None or self.update.message is None or self.update.message.text is None:
+                raise MissingUpdateInfoError(self.update)
+
             return self.update.message.text
 
-        if isinstance(self.context, DiscordContext) and len(self.context.message.content) > 0:
-            return ' '.join(self.context.message.content.split()[1:])
+        if isinstance(self.context, DiscordContext) and self.context.message.content:
+            if self.context.message.content.startswith("/"):
+                return ' '.join(self.context.message.content.split()[1:])
+            return self.context.message.content
 
-        raise InvalidBotTypeError
+        raise InvalidBotTypeError(self.target_bot)
 
-    def get_user_prompt(self) -> str | None:
+    async def get_user_prompt(self) -> str | None:
         # This is used for prompting the GPT chat completion model
-        sender = self.get_user_name(map_name=True)
+        sender = await self.get_user_name(map_name=True)
 
         if self.response is not None:
             user_message = self.response.user_message
@@ -440,15 +498,63 @@ class UserCommand:
 
         return f'{sender}: {user_message}'
 
-    def is_admin(self) -> bool:
-        # Returns whether the message sender is on the bot's admin list
+    async def is_admin(self) -> bool:
+        # Returns whether the message sender is on the bot's admin list or superadmin list
         user_id = self.get_user_id()
-        admin_list = try_read_lines_list(PATH_ADMINS_LIST, [])
+        admin_dict: dict[str, dict[str, list[str]]] = await try_read_json(PATH_ADMIN_LIST, {})
+        platform_str = self.get_platform_string()
 
-        return user_id in admin_list
+        if platform_str not in admin_dict:
+            return False
+
+        if "admin" in admin_dict[platform_str] and user_id in admin_dict[platform_str]["admin"]:
+            return True
+
+        # Superadmin rights also give you normal admin rights
+        if "superadmin" in admin_dict[platform_str] and user_id in admin_dict[platform_str]["superadmin"]:
+            return True
+
+        return False
+
+    async def is_superadmin(self) -> bool:
+        # Returns whether the message sender is on the bot's superadmin list
+        # Normal admin rights are NOT sufficient for this to return True
+        user_id = self.get_user_id()
+        admin_dict: dict[str, dict[str, list[str]]] = await try_read_json(PATH_ADMIN_LIST, {})
+        platform_str = self.get_platform_string()
+
+        if platform_str not in admin_dict:
+            return False
+
+        if "superadmin" in admin_dict[platform_str] and user_id in admin_dict[platform_str]["superadmin"]:
+            return True
+
+        return False
+
+    async def assign_super_if_none(self) -> None:
+        # Gives the user the superadmin role if no superadmins are assigned
+        user_id = self.get_user_id()
+        user_name = await self.get_user_name()
+        admin_dict: dict[str, dict[str, list[str]]] = await try_read_json(PATH_ADMIN_LIST, {})
+        platform_str = self.get_platform_string()
+
+        message_str = f"Assigned vacant superadmin role for {platform_str} to {user_id} ({user_name})"
+        if platform_str not in admin_dict:
+            admin_dict[platform_str] = {"superadmin": [user_id]}
+            logger.warning(message_str)
+            await write_json_to_file(PATH_ADMIN_LIST, admin_dict)
+            return
+
+        if "superadmin" not in admin_dict[platform_str] or not admin_dict[platform_str]["superadmin"]:
+            admin_dict[platform_str]["superadmin"] = [user_id]
+            logger.warning(message_str)
+            await write_json_to_file(PATH_ADMIN_LIST, admin_dict)
+            return
 
     def get_chat_id(self) -> str | None:
-        if isinstance(self.update, TelegramUpdate) and self.update.message is not None:
+        if isinstance(self.target_bot, TelegramBot):
+            if self.update is None:
+                raise MissingUpdateInfoError(self.update)
             return str(self.update.message.chat.id)
 
         if isinstance(self.context, DiscordContext):
@@ -459,55 +565,57 @@ class UserCommand:
 
         return None
 
-    def is_whitelisted(self) -> bool:
-        # Returns whether the chat is on the bot's whitelist (telegram only)
-        if not Config().main.usewhitelist:
-            return True
+    async def is_whitelisted(self) -> bool:
+        # Returns whether the chat is on the bot's whitelist
+        chat_id = self.get_chat_id()
+        platform_str = self.get_platform_string()
+        whitelist: dict[str, list[str]] = await try_read_json(PATH_WHITELIST, {})
 
-        if isinstance(self.update, TelegramUpdate):
-            if self.update.message is None:
-                return False
+        if platform_str not in whitelist:
+            return False
 
-            chat_id = str(self.update.message.chat.id)
-            whitelist = try_read_lines_list(PATH_WHITELIST, [])
-
-            return chat_id in whitelist
-
-        return True
+        return chat_id in whitelist[platform_str]
 
     async def send_text_response(self, response: str | None) -> None:
-        if isinstance(self.update, TelegramUpdate):
+        if isinstance(self.target_bot, TelegramBot):
+            if self.update is None or self.update.effective_chat is None:
+                raise MissingUpdateInfoError(self.update)
+
             await self.context.bot.send_message(chat_id=self.update.effective_chat.id, text=response)
 
         elif isinstance(self.context, DiscordContext):
             await self.context.send(response)
 
         else:
-            raise InvalidBotTypeError
+            raise InvalidBotTypeError(self.target_bot)
 
     async def send_file_response(self, response: FileResponse, text: str | None) -> None:
-        if isinstance(self.update, TelegramUpdate):
+        if isinstance(self.target_bot, TelegramBot):
+            if self.update is None or self.update.effective_chat is None:
+                raise MissingUpdateInfoError(self.update)
             await self.context.bot.send_document(chat_id=self.update.effective_chat.id, document=response.file_path, caption=text)
 
         elif isinstance(self.context, DiscordContext):
             await self.context.send(content=text, file=discord.File(response.file_path))
 
         else:
-            raise InvalidBotTypeError
+            raise InvalidBotTypeError(self.target_bot)
 
         # Delete the file that was sent if it was a temporary file
         if response.temp:
             Path(response.file_path).unlink()
 
     async def send_sound_response(self, response: SoundResponse, text: str | None) -> None:
-        if isinstance(self.update, TelegramUpdate):
+        if isinstance(self.target_bot, TelegramBot):
+            if self.update is None or self.update.effective_chat is None:
+                raise MissingUpdateInfoError(self.update)
             await self.context.bot.send_voice(chat_id=self.update.effective_chat.id, voice=response.file_path, caption=text)
 
         elif isinstance(self.context, DiscordContext):
             await self.context.send(content=text, file=discord.File(response.file_path))
 
         else:
-            raise InvalidBotTypeError
+            raise InvalidBotTypeError(self.target_bot)
 
         # Delete the file that was sent if it was a temporary file
         if response.temp:
@@ -520,6 +628,13 @@ class UserCommand:
     def is_discord(self) -> bool:
         # Returns whether this UserCommand object was sent to a Discord bot or not
         return isinstance(self.target_bot, DiscordBot)
+
+    def get_platform_string(self) -> str:
+        if self.is_telegram():
+            return "telegram"
+        if self.is_discord():
+            return "discord"
+        raise InvalidBotTypeError(self.target_bot)
 
     def get_user_voice_channel(self) -> discord.VoiceChannel | None:
         # Returns the voice channel that the user who sent this UserCommand is currently in
@@ -548,8 +663,8 @@ class UserCommand:
 
         return self.context.voice_client
 
-    def map_username(self, username: str) -> str:
-        username_map = try_read_json(PATH_USERNAME_MAP, {})
+    async def map_username(self, username: str) -> str:
+        username_map = await try_read_json(PATH_USERNAME_MAP, {})
 
         try:
             corrected_name = username_map[username.lower()]
@@ -563,7 +678,8 @@ def requireadmin(function: Callable[[UserCommand], Awaitable[CommandResponse]]) 
     # Put this decorator on a function using @requireadmin to prevent its use without admin rights
     @wraps(function)
     async def admin_wrapper(user_command: UserCommand) -> CommandResponse:
-        if Config().main.requireadmin and not user_command.is_admin():
+        config = await Config.load()
+        if config.main.requireadmin and not await user_command.is_admin():
             return NoPermissionsResponse()
 
         return await function(user_command)
@@ -572,23 +688,34 @@ def requireadmin(function: Callable[[UserCommand], Awaitable[CommandResponse]]) 
     return admin_wrapper
 
 
+def requiresuper(function: Callable[[UserCommand], Awaitable[CommandResponse]]) -> Callable:
+    # Put this decorator on a functio using @requiresuper to prevent its use without superadmin rights
+    # This is strictly stronger than admin rights, normal admin rights are insufficent
+    @wraps(function)
+    async def superadmin_wrapper(user_command: UserCommand) -> CommandResponse:
+        config = await Config.load()
+        if config.main.requireadmin and not await user_command.is_superadmin():
+            return NoPermissionsResponse()
+
+        return await function(user_command)
+
+    superadmin_wrapper.requiresuper = True  # type: ignore | Used to flag whether a function requries superadmin rights or not
+    return superadmin_wrapper
+
+
 async def send_response(command_function: Callable[[UserCommand], Awaitable[CommandResponse]], user_command: UserCommand) -> None:
-    config = Config()
+    config = await Config.load()
+
+    # Send the command to the bot and await its response
     user_command.response = await command_function(user_command)
 
-    if user_command.response is None:
-        error_message = "Command did not return a CommandResponse object"
-        raise TypeError(error_message)
-
+    text_response = None
     if user_command.response.send_to_chat and user_command.response.bot_message:
         text_response = user_command.response.bot_message
 
-        if len(text_response) > config.main.maxmessagelength:
-            text_response = text_response[:config.main.maxmessagelength]
-            logger.info(f"Cut off bot response at {config.main.maxmessagelength} characters")
-
-    else:
-        text_response = None
+    if text_response is not None and len(text_response) > config.main.maxmessagelength:
+        text_response = text_response[:config.main.maxmessagelength]
+        logger.info(f"Cut off bot response at {config.main.maxmessagelength} characters")
 
     try:
         # Respond with a sound effect
@@ -606,29 +733,51 @@ async def send_response(command_function: Callable[[UserCommand], Awaitable[Comm
     except (BadRequest, TimedOut, NetworkError, HTTPException) as e:
         await user_command.send_text_response(TXT_BZZZT_ERROR)
 
+        command_name = await user_command.get_command_name()
+        user_message = user_command.get_user_message()
+        error_string = f"{type(e).__name__}: {e}"
+
+        if command_name is not None:
+            command_string = f"{command_name} {user_message}".strip()
+            logger.error(f"Command '/{command_string}' encountered an exception ({error_string})")
+        else:
+            logger.error(f"User message '{user_message}' encountered an exception ({error_string})")
+
         # Re-raise BadRequests, as these indicate a bug with the script that will need to be fixed
-        if e is BadRequest:
+        if isinstance(e, BadRequest):
             raise
 
     # Add the command and its response to memory if necessary
     if user_command.response.record_to_memory:
-        user_prompt = user_command.get_user_prompt()
-        append_to_gpt_memory(user_prompt=user_prompt, bot_prompt=user_command.response.bot_message)
+        user_prompt = await user_command.get_user_prompt()
+        await append_to_gpt_memory(user_prompt=user_prompt, bot_prompt=user_command.response.bot_message)
 
 
-def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable[[UserCommand], Awaitable[CommandResponse]]) -> Callable:
+async def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable[[UserCommand], Awaitable[CommandResponse]]) -> Callable:
+    config = await Config.load()
+
     if isinstance(bot, TelegramBot):
         async def telegram_wrapper(update: TelegramUpdate, context: TelegramContext) -> None:
             if update.message is None:
                 return
 
             user_command = UserCommand(bot, context, update=update)
-            if not user_command.is_whitelisted():
-                # Telegram doesn't allow you to make "private" bots, meaning anyone can add your bot to their chat
-                # and use up your CPU time. This check prevents the bot from responding to commands unless it comes
-                # from a whitelisted chat
-                logger.warning(f"whitelist rejected {update.message.chat.id}")
+
+            # Track this user's platform, name, and user ID
+            await user_command.track_user_id()
+
+            # If the whitelist is enforced, don't allow interacting with this bot unless on the list
+            if config.main.whitelisttelegram and not await user_command.is_whitelisted():
+                logger.warning(f"Whitelist rejected chat ID {user_command.get_chat_id()} for Telegram Bot")
                 return
+
+            # If there are no superadmins assigned to this bot, assign this user as the superadmin
+            if config.main.autosupertelegram:
+                await user_command.assign_super_if_none()
+
+                # Automatically disable this setting after checking for superadmins to prevent accidents
+                config.main.autosupertelegram = False
+                await config.save_config()
 
             await send_response(command, user_command)
 
@@ -637,6 +786,21 @@ def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable[[UserComman
     if isinstance(bot, DiscordBot):
         async def discord_wrapper(context: DiscordContext) -> None:
             user_command = UserCommand(bot, context)
+            await user_command.track_user_id()
+
+            # If the whitelist is enforced, don't allow interacting with this bot unless on the list
+            if config.main.whitelistdiscord and not await user_command.is_whitelisted():
+                logger.warning(f"Whitelist rejected chat ID {user_command.get_chat_id()} for Discord Bot")
+                return
+
+            # If there are no superadmins assigned to this bot, assign this user as the superadmin
+            if config.main.autosuperdiscord:
+                await user_command.assign_super_if_none()
+
+                # Automatically disable this setting after checking for superadmins to prevent accidents
+                config.main.autosuperdiscord = False
+                await config.save_config()
+
             await send_response(command, user_command)
 
         return discord_wrapper
@@ -646,13 +810,13 @@ def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable[[UserComman
 
 
 # region
-def append_to_gpt_memory(*, user_prompt: str | None = None, bot_prompt: str | None = None) -> None:
-    config = Config()
+async def append_to_gpt_memory(*, user_prompt: str | None = None, bot_prompt: str | None = None) -> None:
+    config = await Config.load()
 
     if not config.chat.usememory:
         return
 
-    memory = get_gpt_memory()
+    memory = await get_gpt_memory()
 
     if user_prompt is not None:
         memory.append({"role": "user", "content": user_prompt})
@@ -665,39 +829,25 @@ def append_to_gpt_memory(*, user_prompt: str | None = None, bot_prompt: str | No
         memory = memory[size - config.chat.memorysize:]
 
     # Write the AI's memory to a file so it can be retrieved later
-    write_json_to_file(PATH_MEMORY_LIST, memory)
+    await write_json_to_file(PATH_MEMORY_LIST, memory)
 
 
-def get_gpt_memory() -> list[dict]:
+async def get_gpt_memory() -> list[dict]:
     # Load the AI's memory (if it exists)
-    config = Config()
+    config = await Config.load()
 
     if config.chat.usememory:
-        return try_read_json(PATH_MEMORY_LIST, [])
+        return await try_read_json(PATH_MEMORY_LIST, [])
 
     return []
 
 
-def try_read_json[T](path: str | Path, default: T) -> T:
-    # Attempt to load a json object from the provided path and return it
-    # If this fails, return the provided default object instead
-    try:
-        with Path(path).open(encoding='utf-8') as f:
-            data = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return default
-
-    if data:
-        return data
-    return default
-
-
-def try_read_lines_list[T](path: str | Path, default: T) -> list | T:
+async def try_read_lines_list[T](path: str | Path, default: T) -> list | T:
     # Attempt to load the text data from the provided path, treating each line as a separate element in a list, and return it
     # If this fails, return the provided default object instead
     try:
-        with Path(path).open(encoding='utf-8') as f:
-            lines = [x.strip() for x in f]
+        async with aiofiles.open(path, encoding='utf-8') as f:
+            lines = [x.strip() for x in await f.readlines()]
     except OSError:
         return default
 
@@ -706,12 +856,12 @@ def try_read_lines_list[T](path: str | Path, default: T) -> list | T:
     return default
 
 
-def try_read_lines_str[T](path: str | Path, default: T) -> str | T:
+async def try_read_lines_str[T](path: str | Path, default: T) -> str | T:
     # Attempt to load the text data from the provided path, treating the entire text file as a single string, and return it
     # If this fails, return the provided default object instead
     try:
-        with Path(path).open(encoding='utf-8') as f:
-            string_lines = ''.join(f.readlines())
+        async with aiofiles.open(path, encoding='utf-8') as f:
+            string_lines = ''.join(await f.readlines())
     except OSError:
         return default
 
@@ -720,12 +870,12 @@ def try_read_lines_str[T](path: str | Path, default: T) -> str | T:
     return default
 
 
-def try_read_single_line[T](path: str | Path, default: T) -> str | T:
+async def try_read_single_line[T](path: str | Path, default: T) -> str | T:
     # Attempt to read only the first line of text data from the provided path and return it
     # If this fails, return the provided default object instead
     try:
-        with Path(path).open(encoding='utf-8') as f:
-            line = f.readline().strip()
+        async with aiofiles.open(path, encoding='utf-8') as f:
+            line = (await f.readline()).strip()
     except OSError:
         return default
 
@@ -734,20 +884,63 @@ def try_read_single_line[T](path: str | Path, default: T) -> str | T:
     return default
 
 
-def write_json_to_file(path: str | Path, data: Iterable) -> None:
+async def try_read_json[T](path: str | Path, default: T) -> T:
+    # Attempt to load a json object from the provided path and return it
+    # If this fails, return the provided default object instead
+    try:
+        async with aiofiles.open(path, encoding='utf-8') as f:
+            data = json.loads(await f.read())
+    except (OSError, json.JSONDecodeError) as e:
+        logger.error(e)
+        return default
+
+    if data:
+        return data
+    return default
+
+
+async def try_read_toml(path: str | Path, default: dict[str, Any]) -> dict[str, Any]:
+    try:
+        async with aiofiles.open(path, encoding='utf-8') as f:
+            data = toml.loads(await f.read())
+    except (OSError, toml.TomlDecodeError) as e:
+        logger.error(e)
+        return default
+
+    if data:
+        return data
+    return default
+
+
+async def write_lines_to_file(path: str | Path, lines: list) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    with Path(path).open('w', encoding='utf-8') as f:
-        json.dump(data, f, indent=4)
+    async with aiofiles.open(path, mode='w', encoding='utf-8') as f:
+        await f.writelines(f"{x}\n" for x in lines)
 
 
-def write_lines_to_file(path: str | Path, lines: list) -> None:
+async def write_text_to_file(path: str | Path, text: str) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    with Path(path).open('w', encoding='utf-8') as f:
-        f.writelines(f"{x}\n" for x in lines)
+    async with aiofiles.open(path, mode='w', encoding='utf-8') as f:
+        await f.write(text)
 
 
-def write_text_to_file(path: str | Path, text: str) -> None:
+async def write_bytes_to_file(path: str | Path, iter_bytes: AsyncIterator[bytes]) -> None:
+    async with aiofiles.open(path, "wb") as f:
+        async for chunk in iter_bytes:
+            await f.write(chunk)
+
+
+async def write_json_to_file(path: str | Path, data: Iterable) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    with Path(path).open('w', encoding='utf-8') as f:
-        f.write(text)
+    async with aiofiles.open(path, mode='w', encoding='utf-8') as f:
+        content = json.dumps(data, indent=4)
+        await f.write(content)
+
+
+async def write_toml_to_file(path: str | Path, data: dict[str, Any]) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    async with aiofiles.open(path, mode='w', encoding='utf-8') as f:
+        content = toml.dumps(data)
+        await f.write(content)
+
 # endregion

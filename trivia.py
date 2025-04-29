@@ -2,14 +2,10 @@ import math
 import string
 from html import unescape
 
-import requests
-from loguru import logger
+import aiohttp
 from unidecode import unidecode
 
 import common
-
-TRIVIA_MEMORY_SIZE = 100
-TRIVIA_NUM_QUESTIONS = 3
 
 TRIVIA_DIFFICULTY_POINTS = {
     "easy": 10,
@@ -41,8 +37,8 @@ class TriviaQuestion:
 
         self.guesses_left = len(self.answer_list) - 1
 
-    def save_as_current_question(self, user_command: common.UserCommand) -> None:
-        trivia_data = common.try_read_json(common.PATH_CURRENT_TRIVIA, {})
+    async def save_as_current_question(self, user_command: common.UserCommand) -> None:
+        trivia_data = await common.try_read_json(common.PATH_CURRENT_TRIVIA, {})
         trivia_data[user_command.get_chat_id()] = {
             'type': self.type,
             'difficulty': self.difficulty,
@@ -52,7 +48,7 @@ class TriviaQuestion:
             'incorrect_answers': self.incorrect_answers,
             'guesses_left': self.guesses_left,
         }
-        common.write_json_to_file(common.PATH_CURRENT_TRIVIA, trivia_data)
+        await common.write_json_to_file(common.PATH_CURRENT_TRIVIA, trivia_data)
 
     def get_question_string(self) -> str:
         alphabet = string.ascii_uppercase  # Should never need more than 4 letters
@@ -67,14 +63,14 @@ Type /guess [your answer] to answer!
 
         return question_string
 
-    def score_question(self, user_command: common.UserCommand, *, was_correct: bool) -> int:
+    async def score_question(self, user_command: common.UserCommand, *, was_correct: bool) -> int:
         if was_correct:
             potential_points = TRIVIA_DIFFICULTY_POINTS[self.difficulty]
             points_multiplier = self.guesses_left/(len(self.answer_list) - 1)
             points_gained = math.floor(potential_points*points_multiplier)
 
-            points_dict = common.try_read_json(common.PATH_TRIVIA_SCORES, {})
-            player_name = user_command.get_user_name()
+            points_dict = await common.try_read_json(common.PATH_TRIVIA_SCORES, {})
+            player_name = await user_command.get_user_name()
             player_id = user_command.get_user_id()
             chat_id = user_command.get_chat_id()
 
@@ -96,17 +92,17 @@ Type /guess [your answer] to answer!
                 points_dict[chat_id][player_id]['name'] = player_name  # Update player name in case it's changed
                 points_dict[chat_id][player_id]['score'] += points_gained
 
-            common.write_json_to_file(common.PATH_TRIVIA_SCORES, points_dict)
-            clear_current_question(user_command)
+            await common.write_json_to_file(common.PATH_TRIVIA_SCORES, points_dict)
+            await clear_current_question(user_command)
 
             return points_gained
 
         self.guesses_left -= 1
 
         if self.guesses_left > 0:
-            self.save_as_current_question(user_command)
+            await self.save_as_current_question(user_command)
         else:
-            clear_current_question(user_command)
+            await clear_current_question(user_command)
 
         return 0
 
@@ -132,42 +128,27 @@ Type /guess [your answer] to answer!
         return guess.lower() in (x.lower() for x in self.answer_list)
 
 
-def get_trivia_question(user_command: common.UserCommand) -> TriviaQuestion:
-    current_question = get_current_question(user_command)
+async def get_trivia_question(user_command: common.UserCommand) -> TriviaQuestion:
+    current_question = await get_current_question(user_command)
     if current_question is not None:
         return current_question
 
-    response = requests.post(f"{common.URL_TRIVIA}{TRIVIA_NUM_QUESTIONS}", timeout=10).json()['results']
+    new_question = await get_new_trivia_question()
+    await new_question.save_as_current_question(user_command)
 
-    # Check the list of the most recently asked trivia questions and attempt to pick a
-    # question that isn't on the list
-    previous_questions = common.try_read_lines_list(common.PATH_TRIVIA_MEMORY, [])
-
-    # We ask the trivia API for a few trivia questions and pick the first one that isn't
-    # in the trivia memory
-    for item in response:
-        if item["question"] not in previous_questions:
-            chosen = item
-            break
-        logger.info(f"skipped duplicate question: {item['question']}")
-    else:
-        chosen = response[0]
-
-    previous_questions.append(chosen["question"])
-    if (size := len(previous_questions)) > TRIVIA_MEMORY_SIZE:
-        previous_questions = previous_questions[size - TRIVIA_MEMORY_SIZE:]
-
-    # Keep track of which trivia questions have already been asked recently
-    common.write_lines_to_file(common.PATH_TRIVIA_MEMORY, previous_questions)
-
-    current_question = TriviaQuestion(chosen)
-    current_question.save_as_current_question(user_command)
-
-    return current_question
+    return new_question
 
 
-def get_current_question(user_command: common.UserCommand) -> TriviaQuestion | None:
-    trivia_data = common.try_read_json(common.PATH_CURRENT_TRIVIA, None)
+async def get_new_trivia_question() -> TriviaQuestion:
+    url = f"{common.URL_TRIVIA}1"
+    async with aiohttp.ClientSession() as session, session.post(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+        response_data = (await response.json())['results']
+
+    return TriviaQuestion(response_data[0])
+
+
+async def get_current_question(user_command: common.UserCommand) -> TriviaQuestion | None:
+    trivia_data = await common.try_read_json(common.PATH_CURRENT_TRIVIA, None)
     if trivia_data is None:
         return None
 
@@ -181,20 +162,20 @@ def get_current_question(user_command: common.UserCommand) -> TriviaQuestion | N
     return current_question
 
 
-def clear_current_question(user_command: common.UserCommand) -> None:
+async def clear_current_question(user_command: common.UserCommand) -> None:
     chat_id = user_command.get_chat_id()
 
     if chat_id is None:
         return
 
-    trivia_data = common.try_read_json(common.PATH_CURRENT_TRIVIA, {})
+    trivia_data = await common.try_read_json(common.PATH_CURRENT_TRIVIA, {})
     trivia_data[chat_id] = None
 
-    common.write_json_to_file(common.PATH_CURRENT_TRIVIA, trivia_data)
+    await common.write_json_to_file(common.PATH_CURRENT_TRIVIA, trivia_data)
 
 
-def get_trivia_rankings(user_command: common.UserCommand) -> list[tuple[str, int]] | None:
-    points_dict = common.try_read_json(common.PATH_TRIVIA_SCORES, {})
+async def get_trivia_rankings(user_command: common.UserCommand) -> list[tuple[str, int]] | None:
+    points_dict = await common.try_read_json(common.PATH_TRIVIA_SCORES, {})
     if not points_dict:
         return None
 

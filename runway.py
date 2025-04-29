@@ -1,9 +1,10 @@
 import logging
 import sys
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
 
 from loguru import logger
+from telegram.error import Conflict as TelegramConflict
 from telegram.error import NetworkError
 
 import common
@@ -20,7 +21,7 @@ directories = {
 text_files = {
     common.PATH_TELEGRAM_TOKEN,
     common.PATH_DISCORD_TOKEN,
-    common.PATH_ADMINS_LIST,
+    common.PATH_ADMIN_LIST,
     common.PATH_WHITELIST,
     common.PATH_CONFIG_FILE,
     common.PATH_OPENAI_KEY,
@@ -35,11 +36,10 @@ text_files = {
     common.PATH_RESPONSE_LIST,
     common.PATH_LOGGING_FILE,
     common.PATH_TRIVIA_SCORES,
-    common.PATH_TRIVIA_MEMORY,
     common.PATH_D10000_LIST,
     common.PATH_ACTIVE_EFFECTS,
     common.PATH_CURRENT_TRIVIA,
-    common.PATH_USERID_TRACK,
+    common.PATH_TRACK_USERID,
 }
 
 # Paths that we will not create, this is exclusions for the globals checking from common.py
@@ -52,6 +52,10 @@ class InterceptHandler(logging.Handler):
             exc_type = record.exc_info[0]
             if exc_type is NetworkError:
                 logger.warning("Suppressed transient NetworkError during polling")
+                return
+
+            if exc_type is TelegramConflict:
+                logger.critical("Multiple instances of Telegram bot are running! Bot will not work until this is resolved")
                 return
 
         # Convert LogRecord to Loguru format
@@ -90,7 +94,7 @@ def init_logging() -> None:
     sys.excepthook = log_exceptions
 
 
-def check_for_missing_paths() -> Generator[str]:
+def check_for_untracked_paths() -> Generator[str]:
     for obj in common.__dict__.values():
         if isinstance(obj, Path) and obj not in directories | text_files | do_not_create:
             yield f"Path '{obj}' is expected but was not checked for"
@@ -116,3 +120,15 @@ def clear_temp_folder() -> Generator[str]:
 
     if deleted_temp:
         yield f"Cleared temp directory '{common.PATH_TEMP_FOLDER}'"
+
+
+async def check_superadmins() -> AsyncGenerator[str]:
+    admin_dict = await common.try_read_json(common.PATH_ADMIN_LIST, {})
+    config = await common.Config.load()
+
+    platform_list = [("telegram", config.main.autosupertelegram), ("discord", config.main.autosuperdiscord)]
+    for platform_str, autoassign in platform_list:
+        if not autoassign:
+            continue
+        if platform_str not in admin_dict or "superadmin" not in admin_dict[platform_str] or not admin_dict[platform_str]["superadmin"]:
+            yield f"{platform_str.title()} has no superadmins, first interaction will get role"

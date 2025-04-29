@@ -16,7 +16,7 @@ import runway
 import sound_manager
 
 
-def prepare_runway() -> None:
+async def prepare_runway() -> None:
     # Initialize logging
     runway.init_logging()
     logger.info(f"Loaded {common.APPLICATION_NAME} {common.VERSION_NUMBER}, logging to {common.PATH_LOGGING_FILE}")
@@ -31,26 +31,29 @@ def prepare_runway() -> None:
 
     # Check for any paths defined in common.py that weren't included in the above check
     # (for debug purposes, this should never happen in production)
-    for warning in runway.check_for_missing_paths():
+    for warning in runway.check_for_untracked_paths():
         logger.warning(warning)
 
     # Check for common issues with sound aliases
-    for warning in sound_manager.verify_aliases():
+    async for warning in sound_manager.verify_aliases():
         logger.warning(warning)
 
     # Check for common issues with settings dataclasses
     # (for debug purposes, this should never happen in production)
-    for warning in common.verify_settings():
+    async for warning in common.verify_settings():
+        logger.warning(warning)
+
+    async for warning in runway.check_superadmins():
         logger.warning(warning)
 
 
 async def try_start_telegram_bot() -> TelegramBot | None:
-    config = common.Config()
+    config = await common.Config.load()
     if not config.main.runtelegram:
         logger.info(f"Telegram bot disabled in {common.PATH_CONFIG_FILE}, skipping")
         return None
 
-    telegram_token = common.try_read_single_line(common.PATH_TELEGRAM_TOKEN, None)
+    telegram_token = await common.try_read_single_line(common.PATH_TELEGRAM_TOKEN, None)
     if telegram_token is None:
         logger.error(f"Telegram bot is enabled but token not found at {common.PATH_TELEGRAM_TOKEN}, couldn't start bot")
         return None
@@ -66,7 +69,7 @@ async def try_start_telegram_bot() -> TelegramBot | None:
 
     logger.info("Starting telegram bot")
     await telegram_bot.start()
-    command_list.register_commands(telegram_bot)
+    await command_list.register_commands(telegram_bot)
 
     if telegram_bot.updater is not None:
         await telegram_bot.updater.start_polling(drop_pending_updates=True)
@@ -75,12 +78,12 @@ async def try_start_telegram_bot() -> TelegramBot | None:
 
 
 async def try_start_discord_bot() -> tuple[DiscordBot | None, asyncio.Task | None]:
-    config = common.Config()
+    config = await common.Config.load()
     if not config.main.rundiscord:
         logger.info(f"Discord bot disabled in {common.PATH_CONFIG_FILE}, skipping")
         return None, None
 
-    discord_token = common.try_read_single_line(common.PATH_DISCORD_TOKEN, None)
+    discord_token = await common.try_read_single_line(common.PATH_DISCORD_TOKEN, None)
     if discord_token is None:
         logger.error(f"Discord bot is enabled but token not found at {common.PATH_DISCORD_TOKEN}, couldn't start bot")
         return None, None
@@ -90,7 +93,7 @@ async def try_start_discord_bot() -> tuple[DiscordBot | None, asyncio.Task | Non
     intents.members = True
     intents.message_content = True
     discord_bot = DiscordBot(command_prefix='/', intents=intents, help_command=None)
-    command_list.register_commands(discord_bot)
+    await command_list.register_commands(discord_bot)
 
     try:
         await discord_bot.login(discord_token)
@@ -105,6 +108,8 @@ async def try_start_discord_bot() -> tuple[DiscordBot | None, asyncio.Task | Non
 
 async def shutdown_telegram_bot(telegram_bot: TelegramBot | None) -> None:
     if telegram_bot is not None:
+        logger.info("Shutting down telegram bot...")
+
         if telegram_bot.updater is not None:
             await telegram_bot.updater.stop()
 
@@ -135,6 +140,8 @@ async def main() -> None:
     telegram_bot = None
     discord_bot = None
     discord_task = None
+
+    await prepare_runway()
     try:
         telegram_bot = await try_start_telegram_bot()
         discord_bot, discord_task = await try_start_discord_bot()
@@ -153,8 +160,6 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    prepare_runway()
-
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
