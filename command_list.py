@@ -2,7 +2,7 @@ import io
 import os
 import random
 import sys
-from collections.abc import Callable, Iterator
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 
 import discord
@@ -532,12 +532,12 @@ async def vcsay_command(user_command: UserCommand) -> CommandResponse:
     except ValueError:
         return CommandResponse(user_message, "Failed to retrieve ElevenLabs key from file.")
 
-    if not isinstance(elevenlabs_response, Iterator):
+    if not isinstance(elevenlabs_response, AsyncIterator):
         error_message = f"ElevenLabs response was {type(elevenlabs_response)}, expected Iterator"
         raise TypeError(error_message)
 
     audio_buffer = io.BytesIO()
-    for chunk in elevenlabs_response:
+    async for chunk in elevenlabs_response:
         audio_buffer.write(chunk)
     audio_buffer.seek(0)
 

@@ -149,7 +149,7 @@ class ConfigChat:
     randreplychance: float = 0.05  # The chance for the bot to randomly reply to any message in a chat they're in (0 = no chance 1 = every message)
     gptmodel: str = "gpt-4o-mini"  # What GPT model to use for AI chatting
     gpttemp: float = 1.0  # Temperature for GPT chat completions (0 to 2, values outside this will break)
-    gptmaxtokens: int = 512  # Value to be passed for parameter max_completion_tokens for gpt chat completion
+    gptmaxtokens: int = 256  # Value to be passed for parameter max_completion_tokens for gpt chat completion (note 1 token = ~4 chars)
     usememory: bool = True  # Whether the bot will use the memory system for AI chatting
     memorysize: int = 24  # Maximum number of messages to record in memory for AI chatting (higher is probably more expensive)
     recordall: bool = False  # Whether the bot wil record ALL messages sent in chat to memory, or just messages directed towards it
@@ -846,11 +846,12 @@ async def try_read_lines_list[T](path: str | Path, default: T) -> list | T:
     try:
         async with aiofiles.open(path, encoding='utf-8') as f:
             lines = [x.strip() for x in await f.readlines()]
+            return lines or default
+    except FileNotFoundError:
+        logger.error(f"Tried to open file at {path}, but file did not exist")
     except OSError:
-        return default
+        logger.error(f"Tried to open file at {path}, but encountered an error")
 
-    if lines:
-        return lines
     return default
 
 
@@ -860,11 +861,12 @@ async def try_read_lines_str[T](path: str | Path, default: T) -> str | T:
     try:
         async with aiofiles.open(path, encoding='utf-8') as f:
             string_lines = ''.join(await f.readlines())
+            return string_lines or default
+    except FileNotFoundError:
+        logger.error(f"Tried to open file at {path}, but file did not exist")
     except OSError:
-        return default
+        logger.error(f"Tried to open file at {path}, but encountered an error")
 
-    if string_lines:
-        return string_lines
     return default
 
 
@@ -874,11 +876,12 @@ async def try_read_single_line[T](path: str | Path, default: T) -> str | T:
     try:
         async with aiofiles.open(path, encoding='utf-8') as f:
             line = (await f.readline()).strip()
+            return line or default
+    except FileNotFoundError:
+        logger.error(f"Tried to open file at {path}, but file did not exist")
     except OSError:
-        return default
+        logger.error(f"Tried to open file at {path}, but encountered an error")
 
-    if line:
-        return line
     return default
 
 
@@ -888,12 +891,14 @@ async def try_read_json[T](path: str | Path, default: T) -> T:
     try:
         async with aiofiles.open(path, encoding='utf-8') as f:
             data = json.loads(await f.read())
-    except (OSError, json.JSONDecodeError) as e:
-        logger.error(e)
-        return default
+            return data or default
+    except FileNotFoundError:
+        logger.error(f"Tried to open file at {path}, but file did not exist")
+    except json.JSONDecodeError:
+        logger.error(f"Tried to open file at {path}, but failed to decode json")
+    except OSError:
+        logger.error(f"Tried to open file at {path}, but encountered an error")
 
-    if data:
-        return data
     return default
 
 
@@ -901,12 +906,14 @@ async def try_read_toml(path: str | Path, default: dict[str, Any]) -> dict[str, 
     try:
         async with aiofiles.open(path, encoding='utf-8') as f:
             data = toml.loads(await f.read())
-    except (OSError, toml.TomlDecodeError) as e:
-        logger.error(e)
-        return default
+            return data or default
+    except FileNotFoundError:
+        logger.error(f"Tried to open file at {path}, but file did not exist")
+    except toml.TomlDecodeError:
+        logger.error(f"Tried to open file at {path}, but failed to decode toml")
+    except OSError:
+        logger.error(f"Tried to open file at {path}, but encountered an error")
 
-    if data:
-        return data
     return default
 
 
@@ -940,5 +947,4 @@ async def write_toml_to_file(path: str | Path, data: dict[str, Any]) -> None:
     async with aiofiles.open(path, mode='w', encoding='utf-8') as f:
         content = toml.dumps(data)
         await f.write(content)
-
 # endregion
