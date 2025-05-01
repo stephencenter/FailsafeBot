@@ -3,6 +3,8 @@ import sys
 from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
 
+from aiohttp import ClientConnectorDNSError, ClientConnectorError
+from discord.errors import ConnectionClosed
 from loguru import logger
 from telegram.error import Conflict as TelegramConflict
 from telegram.error import NetworkError
@@ -50,12 +52,16 @@ class InterceptHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         if record.exc_info is not None:
             exc_type = record.exc_info[0]
-            if exc_type is NetworkError:
-                logger.warning("Suppressed transient NetworkError during polling")
-                return
-
             if exc_type is TelegramConflict:
                 logger.critical("Multiple instances of Telegram bot are running! Bot will not work until this is resolved")
+                return
+
+            if exc_type is NetworkError:
+                logger.warning(f"Temporarily lost connection to telegram servers ({exc_type.__name__})")
+                return
+
+            if exc_type in {ConnectionClosed, ClientConnectorError, ClientConnectorDNSError}:
+                logger.warning(f"Temporarily lost connection to discord servers ({exc_type.__name__})")
                 return
 
         # Convert LogRecord to Loguru format
@@ -73,10 +79,10 @@ def init_logging() -> None:
 
     # Add console output
     info_format = "{message} <level>[{level}]</level> <green>{time:YYYY-MM-DD HH:mm:ss}</green> <cyan>{name}:{function}:{line}</cyan>"
-    logger.add(sys.stderr, level="INFO", backtrace=False, diagnose=False, format=info_format)
+    logger.add(sys.stderr, level="DEBUG", backtrace=False, diagnose=False, format=info_format)
 
     # Add file output with error logging
-    logger.add(common.PATH_LOGGING_FILE, level="WARNING", backtrace=False, diagnose=False)
+    logger.add(common.PATH_LOGGING_FILE, level="WARNING", backtrace=False, diagnose=False, format=info_format)
 
     logging.root.handlers = [InterceptHandler()]
     logging.root.setLevel(logging.INFO)
