@@ -58,7 +58,7 @@ class TriviaQuestion:
 [Category: {self.category} — {self.difficulty.title()}]
 Q. {self.question}
 {answer_string}
-Type /guess [your answer] to answer!
+Type /guess [your answer] to answer ({self.guesses_left} guess{'es' if self.guesses_left > 1 else ''} remaning)
 """
 
         return question_string

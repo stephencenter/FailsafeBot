@@ -9,6 +9,7 @@ import discord
 import psutil
 from discord.ext import commands as discord_commands
 from discord.ext.commands import Bot as DiscordBot
+from discord.ext.commands import CommandInvokeError, CommandNotFound
 from elevenlabs.core.api_error import ApiError as ElevenLabsApiError
 from httpx import TransportError
 from loguru import logger
@@ -660,7 +661,7 @@ async def guess_command(user_command: UserCommand) -> CommandResponse:
 
     current_question = await trivia.get_current_question(user_command)
     if current_question is None:
-        return CommandResponse(user_message, "Trivia is not active!")
+        return CommandResponse(user_message, "Trivia is not active, use /trivia to start")
 
     if not guess:
         return CommandResponse(user_message, "You need to provide an answer, like /guess abc")
@@ -1080,7 +1081,7 @@ async def getfile_command(user_command: UserCommand) -> CommandResponse:
 # EVENTS
 # ==========================
 # region
-async def discord_register_events(discord_bot: DiscordBot) -> None:
+async def discord_register_events(discord_bot: DiscordBot) -> None:  # noqa: C901
     # This function assigns all of the event handlers to the discord bot
 
     @discord_bot.event
@@ -1115,6 +1116,17 @@ async def discord_register_events(discord_bot: DiscordBot) -> None:
         message_handler = await common.command_wrapper(discord_bot, handle_message_event)
         context = await discord_bot.get_context(message)
         await message_handler(context)
+
+    @discord_bot.event
+    async def on_command_error(_, error: CommandInvokeError) -> None:  # noqa: ANN001
+        # Get the original error from the CommandInvokeError wrapper
+        error = getattr(error, "original", error)
+
+        # Suppress the error that happens if you try to use a command that doesn't exist
+        if isinstance(error, CommandNotFound):
+            return
+
+        raise error
 
 
 async def handle_message_event(user_command: UserCommand) -> CommandResponse:
