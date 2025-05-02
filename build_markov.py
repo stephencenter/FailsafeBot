@@ -1,26 +1,20 @@
-"""
-This file will create a markov chain from a telegram chat log (.json format).
-It is not directly used by Failsafe Bot but is a separate tool that can be used to
-enable additional functionality.
-"""
+import asyncio
+from collections import defaultdict
 
-import os
-import json
-import common
+from loguru import logger
 from tqdm import tqdm
+from unidecode import UnidecodeError, unidecode
+
+import common
 
 
 def fix_unicode(text: str) -> str:
-    # Some devices will use these characters instead of the standard ascii characters, which can mess up our data
-    text = text.replace('‘', "'")
-    text = text.replace('’', "'")
-    text = text.replace('“', '"')
-    text = text.replace('”', '"')
-    text = text.replace('…', '...')
-    text = text.replace('—', '-')
-    text = text.replace('é', 'e')
-
+    try:
+        text = unidecode(text, errors='strict')
+    except UnidecodeError:
+        return ''
     return text
+
 
 def clean_token(token: str) -> str:
     # Remove paired characters like () and {} if they don't have a match on the other end of the token
@@ -28,7 +22,7 @@ def clean_token(token: str) -> str:
         ('(', ')'),
         ('[', ']'),
         ('"', '"'),
-        ('{', '}')
+        ('{', '}'),
     ]
 
     for pair in pair_list:
@@ -43,13 +37,13 @@ def clean_token(token: str) -> str:
 
     return token
 
-def load_chat_logs() -> list[str]:
-    message_list: list[str] = []
-    for file in os.listdir(common.PATH_MARKOV_INPUT):
-        print(f"Processing {file}...")
 
-        with open(os.path.join(common.PATH_MARKOV_INPUT, file), 'r', encoding='utf-8') as f:
-            chat_data = json.load(f)
+async def load_chat_logs() -> list[str]:
+    message_list: list[str] = []
+    for file in common.PATH_MARKOV_INPUT.iterdir():
+        logger.info(f"Processing {file}...")
+
+        chat_data = await common.try_read_json(file, {})
 
         for message in tqdm(chat_data["messages"]):
             if "from" not in message:
@@ -57,68 +51,36 @@ def load_chat_logs() -> list[str]:
 
             for entity in message["text_entities"]:
                 text = entity["text"].strip()
-
-                if not text:
-                    continue
-
-                if any(x in text.lower() for x in ["https", "www.", ".com"]):
-                    continue
-
-                if text.startswith("/"):
-                    continue
-
-                if "\n" in text:
-                    continue
-
-                # Thanks apple
                 text = fix_unicode(text)
 
-                if not text.isascii():
+                if not text:
                     continue
 
                 message_list.append(text)
 
     return message_list
 
+
 def build_markov_chain(message_list: list[str]) -> dict[str, dict[str, float]]:
-    markov_chain: dict[str, dict[str, float]] = {}
+    markov_chain: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(int))
     null_token = "NULL_TOKEN"
 
-    print("Creating markov chain...")
+    logger.info("Creating markov chain...")
     for message in tqdm(message_list):
         token_list = [clean_token(token) for token in message.split()]
 
-        for index, token in enumerate(token_list):
-            if index == 0:
-                if null_token in markov_chain:
-                    if token in markov_chain[null_token]:
-                        markov_chain[null_token][token] += 1
-                    else:
-                        markov_chain[null_token][token] = 1
-                else:
-                    markov_chain[null_token] = {}
-                    markov_chain[null_token][token] = 1
+        if not token_list:
+            continue
 
-            if index + 1 == len(token_list):
-                if token in markov_chain:
-                    if null_token in markov_chain[token]:
-                        markov_chain[token][null_token] += 1
-                    else:
-                        markov_chain[token][null_token] = 1
-                else:
-                    markov_chain[token] = {}
-                    markov_chain[token][null_token] = 1
+        markov_chain[null_token][token_list[0]] += 1
 
-            else:
+        for index, current_token in enumerate(token_list):
+            if index + 1 < len(token_list):
                 next_token = token_list[index + 1]
-                if token in markov_chain:
-                    if next_token in markov_chain[token]:
-                        markov_chain[token][next_token] += 1
-                    else:
-                        markov_chain[token][next_token] = 1
-                else:
-                    markov_chain[token] = {}
-                    markov_chain[token][next_token] = 1
+            else:
+                next_token = null_token
+
+            markov_chain[current_token][next_token] += 1
 
     markov_chain = dict(sorted(markov_chain.items(), key=lambda item: sum(item[1].values()), reverse=True))
 
@@ -126,18 +88,16 @@ def build_markov_chain(message_list: list[str]) -> dict[str, dict[str, float]]:
         markov_chain[key] = dict(sorted(markov_chain[key].items(), key=lambda item: item[1], reverse=True))
         key_total = sum(markov_chain[key].values())
         for subkey in markov_chain[key]:
-            markov_chain[key][subkey] = markov_chain[key][subkey]/key_total
+            markov_chain[key][subkey] /= key_total
 
     return markov_chain
 
-def main():
-    chat_data = load_chat_logs()
+
+async def main() -> None:
+    chat_data = await load_chat_logs()
     markov_chain = build_markov_chain(chat_data)
+    await common.write_json_to_file(common.PATH_MARKOV_CHAIN, markov_chain)
+    logger.info(f"Markov chain written to file at '{common.PATH_MARKOV_CHAIN}'")
 
-    with open(common.PATH_MARKOV_CHAIN, 'w', encoding='utf8') as f:
-        json.dump(markov_chain, f, indent=4, ensure_ascii=False)
 
-    print(f"Markov chain written to file at '{common.PATH_MARKOV_CHAIN}'")
-    input()
-
-main()
+asyncio.run(main())
