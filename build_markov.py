@@ -1,20 +1,17 @@
 """
-This file will create a markov chain from a telegram chat log (.json format)
-It works, but it is ugly and could be improved in a number of ways
-This is provided with the source because otherwise the markov text generator is essentially
-unusable, but if you want to incorporate this into your project it's recommended that you
-rewrite this file
+This file will create a markov chain from a telegram chat log (.json format).
+It is not directly used by Failsafe Bot but is a separate tool that can be used to
+enable additional functionality.
 """
 
 import os
 import json
+import common
 from tqdm import tqdm
 
-INPUT_PATH = 'Data/chat_data/'
-OUTPUT_PATH = 'Data/markov_chain.json'
 
-def fix_apple(text: str) -> str:
-    # Apple devices have an awful feature called 'smart punctuation' that we need to account for
+def fix_unicode(text: str) -> str:
+    # Some devices will use these characters instead of the standard ascii characters, which can mess up our data
     text = text.replace('‘', "'")
     text = text.replace('’', "'")
     text = text.replace('“', '"')
@@ -26,6 +23,7 @@ def fix_apple(text: str) -> str:
     return text
 
 def clean_token(token: str) -> str:
+    # Remove paired characters like () and {} if they don't have a match on the other end of the token
     pair_list = [
         ('(', ')'),
         ('[', ']'),
@@ -46,15 +44,15 @@ def clean_token(token: str) -> str:
     return token
 
 def load_chat_logs() -> list[str]:
-    message_list = []
-    for file in os.listdir(INPUT_PATH):
+    message_list: list[str] = []
+    for file in os.listdir(common.PATH_MARKOV_INPUT):
         print(f"Processing {file}...")
 
-        with open(os.path.join(INPUT_PATH, file), 'r', encoding='utf-8') as f:
+        with open(os.path.join(common.PATH_MARKOV_INPUT, file), 'r', encoding='utf-8') as f:
             chat_data = json.load(f)
 
         for message in tqdm(chat_data["messages"]):
-            if "from" not in message or message["from"] == "Girth Bot":
+            if "from" not in message:
                 continue
 
             for entity in message["text_entities"]:
@@ -73,7 +71,7 @@ def load_chat_logs() -> list[str]:
                     continue
 
                 # Thanks apple
-                text = fix_apple(text)
+                text = fix_unicode(text)
 
                 if not text.isascii():
                     continue
@@ -83,7 +81,7 @@ def load_chat_logs() -> list[str]:
     return message_list
 
 def build_markov_chain(message_list: list[str]) -> dict[str, dict[str, float]]:
-    markov_chain = {}
+    markov_chain: dict[str, dict[str, float]] = {}
     null_token = "NULL_TOKEN"
 
     print("Creating markov chain...")
@@ -136,10 +134,10 @@ def main():
     chat_data = load_chat_logs()
     markov_chain = build_markov_chain(chat_data)
 
-    with open(OUTPUT_PATH, 'w', encoding='utf8') as f:
+    with open(common.PATH_MARKOV_CHAIN, 'w', encoding='utf8') as f:
         json.dump(markov_chain, f, indent=4, ensure_ascii=False)
 
-    print(f"Markov chain written to file at '{OUTPUT_PATH}'")
+    print(f"Markov chain written to file at '{common.PATH_MARKOV_CHAIN}'")
     input()
 
 main()

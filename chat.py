@@ -27,12 +27,12 @@ async def generate_markov_text() -> str:
         return "No markov chain data was found!"
 
     null_token = "NULL_TOKEN"
-    chosen_tokens = []
+    chosen_tokens: list[str] = []
     while True:
         if not chosen_tokens:
-            prev_token = null_token
+            prev_token: str = null_token
         else:
-            prev_token = chosen_tokens[-1]
+            prev_token: str = chosen_tokens[-1]
 
         new_token = np.random.choice(list(markov_chain[prev_token].keys()), 1, p=list(markov_chain[prev_token].values()))[0]
 
@@ -58,9 +58,13 @@ async def get_gpt_response(user_command: UserCommand) -> str:
     openai_api_key = await common.try_read_single_line(common.PATH_OPENAI_KEY, None)
     openai_client = AsyncOpenAI(api_key=openai_api_key)
 
+    # This is the message list we will send to OpenAI to get a response for
+    messages: list[dict[str, str]] = []
+
     # Load and place the system prompt before the loaded memory to instruct the AI how to act
     system_prompt = await common.try_read_lines_str(common.PATH_GPT_PROMPT, None)
-    messages: list[dict] = [{"role": "system", "content": system_prompt}]
+    if system_prompt is not None:
+        messages.append({"role": "system", "content": system_prompt})
 
     # Place an assistant message after the system prompt but before the loaded memory
     # This is useful specifically with fine-tuned models to set the tone for the bot's responses
@@ -69,7 +73,7 @@ async def get_gpt_response(user_command: UserCommand) -> str:
         messages.append({"role": "assistant", "content": prepend_message})
 
     # Load the current conversation so far and add it to the end of the message history
-    loaded_memory: list[dict] = await common.get_gpt_memory()
+    loaded_memory: list[dict[str, str]] = await common.get_gpt_memory()
     messages += loaded_memory
 
     user_prompt = await user_command.get_user_prompt()
@@ -110,7 +114,7 @@ async def get_gpt_response(user_command: UserCommand) -> str:
 
 
 async def get_most_recent_bot_message() -> str | None:
-    memory_list: list[dict] = await common.get_gpt_memory()
+    memory_list: list[dict[str, str]] = await common.get_gpt_memory()
 
     for memory in memory_list[::-1]:
         if memory["role"] == "assistant":

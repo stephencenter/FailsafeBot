@@ -88,7 +88,7 @@ async def download_audio_from_url(url: str) -> Path | None:
         return final_filename
 
 
-def get_sound_dict() -> dict[str, str]:
+def get_sound_dict() -> dict[str, Path]:
     # If any .mp3 files are in the main directory, move them to the Sounds directory
     for file in Path().iterdir():
         if file.suffix == ".mp3":
@@ -96,7 +96,7 @@ def get_sound_dict() -> dict[str, str]:
 
     # Create the sound dictionary. The keys will be the names of each sound, and the values will be the
     # path to that sound's file
-    sound_dict = {}
+    sound_dict: dict[str, Path] = {}
     for file in common.PATH_SOUNDS_FOLDER.iterdir():
         if file.suffix == ".mp3":
             sound_dict[file.stem] = file
@@ -167,7 +167,7 @@ async def sound_exists(sound_name: str) -> bool:
     return sound_name in await get_alias_dict()
 
 
-async def get_sound(sound_name: str) -> str | list[str] | None:
+async def get_sound(sound_name: str) -> Path | list[str] | None:
     # Get the dictionary of all sounds and the paths they're located at
     sound_dict = get_sound_dict()
 
@@ -193,7 +193,7 @@ async def get_sound(sound_name: str) -> str | list[str] | None:
     return candidates
 
 
-def get_random_sound() -> tuple[str, str]:
+def get_random_sound() -> tuple[str, Path]:
     # Get the dictionary of all sounds and the paths they're located at
     sound_dict = get_sound_dict()
     sound_name = random.choice(list(sound_dict.keys()))

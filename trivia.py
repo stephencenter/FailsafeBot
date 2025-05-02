@@ -21,21 +21,21 @@ def fix_string(text: str) -> str:
 
 
 class TriviaQuestion:
-    def __init__(self, question_dict: dict):
+    def __init__(self, question_dict: dict[str, str]):
         self.type: str = question_dict['type']
         self.difficulty: str = question_dict['difficulty']
         self.category: str = fix_string(question_dict['category'].split(':')[-1])
         self.question: str = fix_string(question_dict['question'])
         self.correct_answer: str = fix_string(question_dict['correct_answer'])
-        self.incorrect_answers = [fix_string(q) for q in question_dict['incorrect_answers']]
+        self.incorrect_answers: list[str] = [fix_string(q) for q in question_dict['incorrect_answers']]
 
         # Sort answers alphabetically, unless it's a true/false question
         if self.type == 'boolean':
-            self.answer_list = ['True', 'False']
+            self.answer_list: list[str] = ['True', 'False']
         else:
             self.answer_list: list[str] = sorted([*self.incorrect_answers, self.correct_answer])
 
-        self.guesses_left = len(self.answer_list) - 1
+        self.guesses_left: int = len(self.answer_list) - 1
 
     async def save_as_current_question(self, user_command: common.UserCommand) -> None:
         trivia_data = await common.try_read_json(common.PATH_CURRENT_TRIVIA, {})

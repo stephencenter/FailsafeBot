@@ -17,6 +17,7 @@ directories = {
     common.PATH_TEMP_FOLDER,
     common.PATH_SOUNDS_FOLDER,
     common.PATH_LOGGING_FOLDER,
+    common.PATH_MARKOV_INPUT,
 }
 
 # Text files (.txt, .json, etc) to check for and create if they don't exist
@@ -45,7 +46,7 @@ text_files = {
 }
 
 # Paths that we will not create, this is exclusions for the globals checking from common.py
-do_not_create = set()
+do_not_create: set[Path] = set()
 
 
 class InterceptHandler(logging.Handler):

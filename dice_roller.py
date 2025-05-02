@@ -48,7 +48,7 @@ async def get_d10000_roll(username: str) -> str:
     return chosen_effect
 
 
-async def get_active_effects(username: str) -> list:
+async def get_active_effects(username: str) -> list[str]:
     effects_dict = await common.try_read_json(common.PATH_ACTIVE_EFFECTS, {})
 
     try:

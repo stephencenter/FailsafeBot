@@ -22,9 +22,19 @@
       "**.bat": true
    },
    "python.analysis.diagnosticSeverityOverrides": {
-      "reportOptionalMemberAccess": "warning"
+      "reportOptionalMemberAccess": "warning",
+      "reportMissingTypeStubs": "none",
+      "reportUnknownMemberType": "none",
+      "reportUnknownParameterType": "none",
+      "reportMissingParameterType": "none",
+      "reportUnknownArgumentType": "none",
+      "reportMissingTypeArgument": "none",
+      "reportUnnecessaryIsInstance": "none",
+      "reportUnusedFunction": "none",
+      "reportUnknownVariableType": "none"
    },
    "editor.codeActionsOnSave": {
        "source.organizeImports.ruff": "explicit"
-   }
+   },
+   "python.analysis.typeCheckingMode": "strict"
 }

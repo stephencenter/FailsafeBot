@@ -2,7 +2,7 @@ import io
 import os
 import random
 import sys
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 import discord
@@ -28,13 +28,13 @@ from common import CommandResponse, FileResponse, InvalidBotTypeError, NoRespons
 async def register_commands(bot: TelegramBot | DiscordBot) -> None:
     if isinstance(bot, TelegramBot):
         for command in COMMAND_LIST:
-            bot.add_handler(CommandHandler(command[0], await common.command_wrapper(bot, command[1])))
+            bot.add_handler(CommandHandler(command[0], await common.wrap_telegram_command(bot, command[1])))
 
-        bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), await common.command_wrapper(bot, handle_message_event)))
+        bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), await common.wrap_telegram_command(bot, handle_message_event)))
 
     elif isinstance(bot, DiscordBot):
         for command in COMMAND_LIST:
-            new_command = discord_commands.Command(await common.command_wrapper(bot, command[1]))
+            new_command = discord_commands.Command(await common.wrap_discord_command(bot, command[1]))
             new_command.name = command[0]
             bot.add_command(new_command)
 
@@ -173,7 +173,7 @@ async def getalias_command(user_command: UserCommand) -> CommandResponse:
 
     user_prompt = f"How many aliases does the sound '{sound_name}' have?"
 
-    if not sound_manager.sound_exists(sound_name):
+    if not await sound_manager.sound_exists(sound_name):
         return CommandResponse(user_prompt, random.choice(common.TXT_SOUND_NOT_FOUND))
 
     aliases = await sound_manager.get_aliases(sound_name)
@@ -366,7 +366,7 @@ async def vcsound_command(user_command: UserCommand) -> CommandResponse:
     if bot_voice_client.is_playing():
         bot_voice_client.stop()
 
-    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_results))
+    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_results))   # type: ignore
 
     bot_voice_client.play(source, after=lambda e: logger.error(e) if e else None)
 
@@ -390,7 +390,7 @@ async def vcrandom_command(user_command: UserCommand) -> CommandResponse:
     if bot_voice_client.is_playing():
         bot_voice_client.stop()
 
-    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_path))
+    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_path))  # type: ignore
     bot_voice_client.play(source, after=lambda e: logger.error(e) if e else None)
 
     await sound_manager.increment_playcount(sound_name)
@@ -600,7 +600,7 @@ async def statroll_command(user_command: UserCommand) -> CommandResponse:
     error_response = f"Please provide a valid game name ({', '.join(game.game_aliases[0] for game in dice_roller.STATROLL_GAME_OPTIONS)})"
 
     user_string = ' '.join(user_command.get_args_list()).lower()
-    if user_string is None:
+    if user_string:
         return CommandResponse("Can you roll me a tabletop character?", error_response)
 
     for game in dice_roller.STATROLL_GAME_OPTIONS:
@@ -845,7 +845,7 @@ async def mycommands_command(user_command: UserCommand) -> CommandResponse:
     if not my_commands:
         return CommandResponse(user_message, "You don't have access to any commands!")
 
-    my_commands = sorted(my_commands)
+    my_commands: list[str] = sorted(my_commands)
     commandlist_string = ", ".join(f"/{command}" for command in my_commands)
     return CommandResponse(user_message, f"You have access to these commands: {commandlist_string}")
 
@@ -1113,13 +1113,12 @@ async def discord_register_events(discord_bot: DiscordBot) -> None:  # noqa: C90
             await discord_bot.process_commands(message)
             return
 
-        message_handler = await common.command_wrapper(discord_bot, handle_message_event)
+        message_handler = await common.wrap_discord_command(discord_bot, handle_message_event)
         context = await discord_bot.get_context(message)
         await message_handler(context)
 
     @discord_bot.event
     async def on_command_error(_, error: CommandInvokeError) -> None:  # noqa: ANN001
-        # Get the original error from the CommandInvokeError wrapper
         error = getattr(error, "original", error)
 
         # Suppress the error that happens if you try to use a command that doesn't exist
@@ -1166,7 +1165,7 @@ async def reply_event(user_command: UserCommand) -> CommandResponse:
 # List of all commands, add commands here to register them.
 # The first item in each tuple is the name of the command (/name), and the second is
 # the function that will be assigned to that name
-COMMAND_LIST: list[tuple[str, Callable]] = [
+COMMAND_LIST: list[tuple[str, common.CommandAnnotation]] = [
     ("sound", sound_command),
     ("random", randomsound_command),
     ("soundlist", soundlist_command),

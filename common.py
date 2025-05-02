@@ -1,9 +1,10 @@
 import json
 import random
-from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Iterable
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterable
 from dataclasses import asdict, dataclass, field
 from functools import wraps
 from pathlib import Path
+from types import CoroutineType
 from typing import Any
 
 import aiofiles
@@ -27,10 +28,11 @@ APPLICATION_NAME = "FailsafeBot"
 VERSION_NUMBER = "v1.1.11"
 
 # DIRECTORIES
-PATH_DATA_FOLDER = Path('Data')
-PATH_TEMP_FOLDER = PATH_DATA_FOLDER / '.temp'
-PATH_SOUNDS_FOLDER = PATH_DATA_FOLDER / 'Sounds'
-PATH_LOGGING_FOLDER = PATH_DATA_FOLDER / 'logging'
+PATH_DATA_FOLDER = Path("Data")
+PATH_TEMP_FOLDER = PATH_DATA_FOLDER / ".temp"
+PATH_SOUNDS_FOLDER = PATH_DATA_FOLDER / "Sounds"
+PATH_LOGGING_FOLDER = PATH_DATA_FOLDER / "logging"
+PATH_MARKOV_INPUT = PATH_DATA_FOLDER / "chat_data"  # Folder containing telegram chat logs (.json format)
 
 # CORE FILES
 PATH_TELEGRAM_TOKEN = PATH_DATA_FOLDER / "telegram_token.txt"
@@ -47,9 +49,9 @@ PATH_OPENAI_KEY = PATH_DATA_FOLDER / "openai_key.txt"
 PATH_ELEVENLABS_KEY = PATH_DATA_FOLDER / "eleven_key.txt"
 PATH_GPT_PREPEND = PATH_DATA_FOLDER / "prepend_message.txt"
 PATH_GPT_PROMPT = PATH_DATA_FOLDER / "gpt_prompt.txt"
-PATH_MARKOV_CHAIN = PATH_DATA_FOLDER / "markov_chain.json"
 PATH_MEMORY_LIST = PATH_DATA_FOLDER / "openai_memory.json"
 PATH_RESPONSE_LIST = PATH_DATA_FOLDER / "response_list.txt"
+PATH_MARKOV_CHAIN = PATH_DATA_FOLDER / "markov_chain.json"
 
 # SOUNDS FILES
 PATH_SOUND_ALIASES = PATH_DATA_FOLDER / "sound_aliases.json"
@@ -672,7 +674,17 @@ class UserCommand:
         return corrected_name
 
 
-def requireadmin(function: Callable[[UserCommand], Awaitable[CommandResponse]]) -> Callable:
+# ==========================
+# TYPE ANNOTATIONS
+# ==========================
+# region
+CommandAnnotation = Callable[[UserCommand], CoroutineType[Any, Any, CommandResponse]]
+TelegramAnnotation = Callable[[TelegramUpdate, TelegramContext[Any, Any, Any, Any]], CoroutineType[Any, Any, None]]
+DiscordAnnotation = Callable[[DiscordContext[Any]], CoroutineType[Any, Any, None]]
+# endregion
+
+
+def requireadmin(function: CommandAnnotation) -> CommandAnnotation:
     # Put this decorator on a function using @requireadmin to prevent its use without admin rights
     @wraps(function)
     async def admin_wrapper(user_command: UserCommand) -> CommandResponse:
@@ -686,7 +698,7 @@ def requireadmin(function: Callable[[UserCommand], Awaitable[CommandResponse]]) 
     return admin_wrapper
 
 
-def requiresuper(function: Callable[[UserCommand], Awaitable[CommandResponse]]) -> Callable:
+def requiresuper(function: CommandAnnotation) -> CommandAnnotation:
     # Put this decorator on a functio using @requiresuper to prevent its use without superadmin rights
     # This is strictly stronger than admin rights, normal admin rights are insufficent
     @wraps(function)
@@ -701,7 +713,7 @@ def requiresuper(function: Callable[[UserCommand], Awaitable[CommandResponse]]) 
     return superadmin_wrapper
 
 
-async def send_response(command_function: Callable[[UserCommand], Awaitable[CommandResponse]], user_command: UserCommand) -> None:
+async def send_response(command_function: CommandAnnotation, user_command: UserCommand) -> None:
     config = await Config.load()
 
     # Send the command to the bot and await its response
@@ -751,59 +763,60 @@ async def send_response(command_function: Callable[[UserCommand], Awaitable[Comm
         await append_to_gpt_memory(user_prompt=user_prompt, bot_prompt=user_command.response.bot_message)
 
 
-async def command_wrapper(bot: TelegramBot | DiscordBot, command: Callable[[UserCommand], Awaitable[CommandResponse]]) -> Callable:
-    config = await Config.load()
+async def wrap_telegram_command(bot: TelegramBot, command: CommandAnnotation) -> TelegramAnnotation:
+    @wraps(command)
+    async def telegram_wrapper(update: TelegramUpdate, context: TelegramContext[Any, Any, Any, Any]) -> None:
+        config = await Config.load()
 
-    if isinstance(bot, TelegramBot):
-        async def telegram_wrapper(update: TelegramUpdate, context: TelegramContext) -> None:
-            if update.message is None:
-                return
+        if update.message is None:
+            return
 
-            user_command = UserCommand(bot, context, update=update)
+        user_command = UserCommand(bot, context, update=update)
 
-            # Track this user's platform, name, and user ID
-            await user_command.track_user_id()
+        # Track this user's platform, name, and user ID
+        await user_command.track_user_id()
 
-            # If the whitelist is enforced, don't allow interacting with this bot unless on the list
-            if config.main.whitelisttelegram and not await user_command.is_whitelisted():
-                logger.warning(f"Whitelist rejected chat ID {user_command.get_chat_id()} for Telegram Bot")
-                return
+        # If the whitelist is enforced, don't allow interacting with this bot unless on the list
+        if config.main.whitelisttelegram and not await user_command.is_whitelisted():
+            logger.warning(f"Whitelist rejected chat ID {user_command.get_chat_id()} for Telegram Bot")
+            return
 
-            # If there are no superadmins assigned to this bot, assign this user as the superadmin
-            if config.main.autosupertelegram:
-                await user_command.assign_super_if_none()
+        # If there are no superadmins assigned to this bot, assign this user as the superadmin
+        if config.main.autosupertelegram:
+            await user_command.assign_super_if_none()
 
-                # Automatically disable this setting after checking for superadmins to prevent accidents
-                config.main.autosupertelegram = False
-                await config.save_config()
+            # Automatically disable this setting after checking for superadmins to prevent accidents
+            config.main.autosupertelegram = False
+            await config.save_config()
 
-            await send_response(command, user_command)
+        await send_response(command, user_command)
 
-        return telegram_wrapper
+    return telegram_wrapper
 
-    if isinstance(bot, DiscordBot):
-        async def discord_wrapper(context: DiscordContext) -> None:
-            user_command = UserCommand(bot, context)
-            await user_command.track_user_id()
 
-            # If the whitelist is enforced, don't allow interacting with this bot unless on the list
-            if config.main.whitelistdiscord and not await user_command.is_whitelisted():
-                logger.warning(f"Whitelist rejected chat ID {user_command.get_chat_id()} for Discord Bot")
-                return
+async def wrap_discord_command(bot: DiscordBot, command: CommandAnnotation) -> DiscordAnnotation:
+    @wraps(command)
+    async def discord_wrapper(context: DiscordContext[Any]) -> None:
+        config = await Config.load()
+        user_command = UserCommand(bot, context)
+        await user_command.track_user_id()
 
-            # If there are no superadmins assigned to this bot, assign this user as the superadmin
-            if config.main.autosuperdiscord:
-                await user_command.assign_super_if_none()
+        # If the whitelist is enforced, don't allow interacting with this bot unless on the list
+        if config.main.whitelistdiscord and not await user_command.is_whitelisted():
+            logger.warning(f"Whitelist rejected chat ID {user_command.get_chat_id()} for Discord Bot")
+            return
 
-                # Automatically disable this setting after checking for superadmins to prevent accidents
-                config.main.autosuperdiscord = False
-                await config.save_config()
+        # If there are no superadmins assigned to this bot, assign this user as the superadmin
+        if config.main.autosuperdiscord:
+            await user_command.assign_super_if_none()
 
-            await send_response(command, user_command)
+            # Automatically disable this setting after checking for superadmins to prevent accidents
+            config.main.autosuperdiscord = False
+            await config.save_config()
 
-        return discord_wrapper
+        await send_response(command, user_command)
 
-    raise InvalidBotTypeError
+    return discord_wrapper
 # endregion
 
 
@@ -830,7 +843,7 @@ async def append_to_gpt_memory(*, user_prompt: str | None = None, bot_prompt: st
     await write_json_to_file(PATH_MEMORY_LIST, memory)
 
 
-async def get_gpt_memory() -> list[dict]:
+async def get_gpt_memory() -> list[dict[str, str]]:
     # Load the AI's memory (if it exists)
     config = await Config.load()
 
@@ -840,7 +853,7 @@ async def get_gpt_memory() -> list[dict]:
     return []
 
 
-async def try_read_lines_list[T](path: str | Path, default: T) -> list | T:
+async def try_read_lines_list[T](path: str | Path, default: T) -> list[str] | T:
     # Attempt to load the text data from the provided path, treating each line as a separate element in a list, and return it
     # If this fails, return the provided default object instead
     try:
@@ -917,7 +930,7 @@ async def try_read_toml(path: str | Path, default: dict[str, Any]) -> dict[str, 
     return default
 
 
-async def write_lines_to_file(path: str | Path, lines: list) -> None:
+async def write_lines_to_file(path: str | Path, lines: list[str]) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     async with aiofiles.open(path, mode='w', encoding='utf-8') as f:
         await f.writelines(f"{x}\n" for x in lines)
@@ -935,7 +948,7 @@ async def write_bytes_to_file(path: str | Path, iter_bytes: AsyncIterator[bytes]
             await f.write(chunk)
 
 
-async def write_json_to_file(path: str | Path, data: Iterable) -> None:
+async def write_json_to_file(path: str | Path, data: Iterable[Any]) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     async with aiofiles.open(path, mode='w', encoding='utf-8') as f:
         content = json.dumps(data, indent=4)
