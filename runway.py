@@ -3,7 +3,7 @@ import sys
 from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
 
-from aiohttp import ClientConnectorDNSError, ClientConnectorError
+import aiohttp
 from discord.errors import ConnectionClosed
 from loguru import logger
 from telegram.error import Conflict as TelegramConflict
@@ -61,7 +61,7 @@ class InterceptHandler(logging.Handler):
                 logger.warning(f"Temporarily lost connection to telegram servers ({exc_type.__name__})")
                 return
 
-            if exc_type in {ConnectionClosed, ClientConnectorError, ClientConnectorDNSError}:
+            if exc_type in {ConnectionClosed, aiohttp.ClientConnectorError, aiohttp.ClientConnectorDNSError}:
                 logger.warning(f"Temporarily lost connection to discord servers ({exc_type.__name__})")
                 return
 

@@ -1,10 +1,11 @@
+import dataclasses
+import functools
 import json
 import random
+import types
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterable
-from dataclasses import asdict, dataclass, field
-from functools import wraps
+from dataclasses import dataclass
 from pathlib import Path
-from types import CoroutineType
 from typing import Any
 
 import aiofiles
@@ -25,7 +26,7 @@ from telegram.ext import CallbackContext as TelegramContext
 # region
 # PROJECT VARIABLES
 APPLICATION_NAME = "FailsafeBot"
-VERSION_NUMBER = "v1.1.11"
+VERSION_NUMBER = "v1.1.12"
 
 # DIRECTORIES
 PATH_DATA_FOLDER = Path("Data")
@@ -177,16 +178,16 @@ class ConfigMisc:
 
 @dataclass
 class Config:
-    main: ConfigMain = field(default_factory=ConfigMain)
-    chat: ConfigChat = field(default_factory=ConfigChat)
-    misc: ConfigMisc = field(default_factory=ConfigMisc)
+    main: ConfigMain = dataclasses.field(default_factory=ConfigMain)
+    chat: ConfigChat = dataclasses.field(default_factory=ConfigChat)
+    misc: ConfigMisc = dataclasses.field(default_factory=ConfigMisc)
 
     def __init__(self):
         error_msg = "Use `await Config.load()` instead of creating Config directly."
         raise RuntimeError(error_msg)
 
     @classmethod
-    async def load(cls) -> "Config":
+    async def load(cls) -> "Config":  # Python 3.14 will fix this!
         self = object.__new__(cls)
         self.main = ConfigMain()
         self.chat = ConfigChat()
@@ -240,7 +241,7 @@ class Config:
         return group_name, setting_name, value
 
     async def save_config(self) -> None:
-        await write_toml_to_file(PATH_CONFIG_FILE, asdict(self))
+        await write_toml_to_file(PATH_CONFIG_FILE, dataclasses.asdict(self))
 
     def update_setting(self, group_name: str, setting_name: str, value: str) -> None:
         lowercase = value.lower()
@@ -678,15 +679,15 @@ class UserCommand:
 # TYPE ANNOTATIONS
 # ==========================
 # region
-CommandAnnotation = Callable[[UserCommand], CoroutineType[Any, Any, CommandResponse]]
-TelegramAnnotation = Callable[[TelegramUpdate, TelegramContext[Any, Any, Any, Any]], CoroutineType[Any, Any, None]]
-DiscordAnnotation = Callable[[DiscordContext[Any]], CoroutineType[Any, Any, None]]
+CommandAnnotation = Callable[[UserCommand], types.CoroutineType[Any, Any, CommandResponse]]
+TelegramAnnotation = Callable[[TelegramUpdate, TelegramContext[Any, Any, Any, Any]], types.CoroutineType[Any, Any, None]]
+DiscordAnnotation = Callable[[DiscordContext[Any]], types.CoroutineType[Any, Any, None]]
 # endregion
 
 
 def requireadmin(function: CommandAnnotation) -> CommandAnnotation:
     # Put this decorator on a function using @requireadmin to prevent its use without admin rights
-    @wraps(function)
+    @functools.wraps(function)
     async def admin_wrapper(user_command: UserCommand) -> CommandResponse:
         config = await Config.load()
         if config.main.requireadmin and not await user_command.is_admin():
@@ -701,7 +702,7 @@ def requireadmin(function: CommandAnnotation) -> CommandAnnotation:
 def requiresuper(function: CommandAnnotation) -> CommandAnnotation:
     # Put this decorator on a functio using @requiresuper to prevent its use without superadmin rights
     # This is strictly stronger than admin rights, normal admin rights are insufficent
-    @wraps(function)
+    @functools.wraps(function)
     async def superadmin_wrapper(user_command: UserCommand) -> CommandResponse:
         config = await Config.load()
         if config.main.requireadmin and not await user_command.is_superadmin():
@@ -764,7 +765,7 @@ async def send_response(command_function: CommandAnnotation, user_command: UserC
 
 
 async def wrap_telegram_command(bot: TelegramBot, command: CommandAnnotation) -> TelegramAnnotation:
-    @wraps(command)
+    @functools.wraps(command)
     async def telegram_wrapper(update: TelegramUpdate, context: TelegramContext[Any, Any, Any, Any]) -> None:
         config = await Config.load()
 
@@ -795,7 +796,7 @@ async def wrap_telegram_command(bot: TelegramBot, command: CommandAnnotation) ->
 
 
 async def wrap_discord_command(bot: DiscordBot, command: CommandAnnotation) -> DiscordAnnotation:
-    @wraps(command)
+    @functools.wraps(command)
     async def discord_wrapper(context: DiscordContext[Any]) -> None:
         config = await Config.load()
         user_command = UserCommand(bot, context)

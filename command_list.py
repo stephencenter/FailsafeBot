@@ -6,12 +6,12 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 
 import discord
+import httpx
 import psutil
 from discord.ext import commands as discord_commands
 from discord.ext.commands import Bot as DiscordBot
 from discord.ext.commands import CommandInvokeError, CommandNotFound
 from elevenlabs.core.api_error import ApiError as ElevenLabsApiError
-from httpx import TransportError
 from loguru import logger
 from telegram.ext import Application as TelegramBot
 from telegram.ext import CommandHandler, MessageHandler, filters
@@ -274,7 +274,7 @@ async def wisdom_command(_: UserCommand) -> CommandResponse:
     config = await common.Config.load()
     user_message = f"O, wise and powerful {config.main.botname}, please grant me your wisdom!"
 
-    markov_chain = await chat.load_markov_chain()
+    markov_chain = await common.try_read_json(common.PATH_MARKOV_CHAIN, {})
     if not markov_chain:
         return CommandResponse(user_message, f"No markov chain found at {common.PATH_MARKOV_CHAIN}, use /buildmarkov to build!")
 
@@ -348,7 +348,7 @@ async def stream_command(user_command: UserCommand) -> CommandResponse:
     error_message = "Couldn't find a video with that URL or search string!"
     try:
         ytdl_response = await sound_manager.download_audio_from_url(yt_url)
-    except (YtdlDownloadError, TransportError):
+    except (YtdlDownloadError, httpx.TransportError):
         return CommandResponse(user_message, error_message)
     if ytdl_response is None:
         return CommandResponse(user_message, error_message)

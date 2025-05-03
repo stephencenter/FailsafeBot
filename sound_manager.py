@@ -2,8 +2,8 @@ import random
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
+import strsimpy
 import yt_dlp
-from strsimpy import Damerau
 
 import common
 
@@ -280,7 +280,7 @@ async def search_sounds(search_string: str) -> list[str]:
                 continue
 
             # Calculate the similarity between the search string and the current alias
-            calculator = Damerau()
+            calculator = strsimpy.Damerau()
             distance = calculator.distance(search_string, alias)
             larger_length = max(len(search_string), len(alias))
             similarity = (larger_length - distance)/larger_length

@@ -1,14 +1,14 @@
+import collections
 import datetime
-from collections import defaultdict
 from collections.abc import AsyncIterator
 from pathlib import Path
 
 import numpy as np
+import openai
+import unidecode
 from elevenlabs.client import AsyncElevenLabs
 from elevenlabs.core.api_error import ApiError as ElevenLabsApiError
 from loguru import logger
-from openai import AsyncOpenAI
-from unidecode import UnidecodeError, unidecode
 
 import common
 from common import UserCommand
@@ -21,7 +21,7 @@ async def get_gpt_response(user_command: UserCommand) -> str:
 
     # Load and set the OpenAI API key
     openai_api_key = await common.try_read_single_line(common.PATH_OPENAI_KEY, None)
-    openai_client = AsyncOpenAI(api_key=openai_api_key)
+    openai_client = openai.AsyncOpenAI(api_key=openai_api_key)
 
     # This is the message list we will send to OpenAI to get a response for
     messages: list[dict[str, str]] = []
@@ -150,10 +150,6 @@ async def handle_elevenlabs_error(error: ElevenLabsApiError) -> str:
         return "There was an issue with the ElevenLabs API, try again later."
 
 
-async def load_markov_chain() -> dict[str, dict[str, float]]:
-    return await common.try_read_json(common.PATH_MARKOV_CHAIN, {})
-
-
 async def generate_markov_text(markov_chain: dict[str, dict[str, float]]) -> str:
     # Markov-powered Text Generation Command
     config = await common.Config.load()
@@ -188,8 +184,8 @@ async def generate_markov_text(markov_chain: dict[str, dict[str, float]]) -> str
 
 def fix_unicode(text: str) -> str:
     try:
-        text = unidecode(text, errors='strict')
-    except UnidecodeError:
+        text = unidecode.unidecode(text, errors='strict')
+    except unidecode.UnidecodeError:
         return ''
     return text
 
@@ -252,7 +248,7 @@ async def load_message_list(chat_files: list[Path]) -> list[str]:
 
 
 def build_markov_chain(message_list: list[str]) -> dict[str, dict[str, float]]:
-    markov_chain: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(int))
+    markov_chain: dict[str, dict[str, float]] = collections.defaultdict(lambda: collections.defaultdict(int))
     null_token = "NULL_TOKEN"
 
     logger.info("Creating markov chain...")

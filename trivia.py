@@ -1,9 +1,9 @@
+import html
 import math
 import string
-from html import unescape
 
 import aiohttp
-from unidecode import unidecode
+import unidecode
 
 import common
 
@@ -15,8 +15,8 @@ TRIVIA_DIFFICULTY_POINTS = {
 
 
 def fix_string(text: str) -> str:
-    text = unescape(text)
-    text = unidecode(text)
+    text = html.unescape(text)
+    text = unidecode.unidecode(text)
     return text.strip()
 
 
