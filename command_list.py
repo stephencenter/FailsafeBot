@@ -270,10 +270,38 @@ async def chat_command(user_command: UserCommand) -> CommandResponse:
 
 
 async def wisdom_command(_: UserCommand) -> CommandResponse:
+    # Markov command
     config = await common.Config.load()
-    response = await chat.generate_markov_text()
-    bot_name = config.main.botname
-    return CommandResponse(f"O, wise and powerful {bot_name}, please grant me your wisdom!", response)
+    user_message = f"O, wise and powerful {config.main.botname}, please grant me your wisdom!"
+
+    markov_chain = await chat.load_markov_chain()
+    if not markov_chain:
+        return CommandResponse(user_message, f"No markov chain found at {common.PATH_MARKOV_CHAIN}, use /buildmarkov to build!")
+
+    response = await chat.generate_markov_text(markov_chain)
+    return CommandResponse(user_message, response)
+
+
+@requiresuper
+async def buildmarkov_command(_: UserCommand) -> CommandResponse:
+    user_message = "Can you build the markov chain for me?"
+
+    chat_files = chat.get_chat_data_files()
+    if not chat_files:
+        return CommandResponse(user_message, f"Couldn't find any Telegram chat history .json files in {common.PATH_MARKOV_INPUT}")
+
+    message_list = await chat.load_message_list(chat_files)
+    if not message_list:
+        return CommandResponse(user_message, f"Couldn't load message list from .json files in '{common.PATH_MARKOV_INPUT}'")
+
+    markov_chain = chat.build_markov_chain(message_list)
+    if not markov_chain:
+        return CommandResponse(user_message, f"Failed to build markov chain from .json files in '{common.PATH_MARKOV_INPUT}'")
+
+    await common.write_json_to_file(common.PATH_MARKOV_CHAIN, markov_chain)
+    success_msg = f"Markov chain written to file at '{common.PATH_MARKOV_CHAIN}'"
+    logger.info(success_msg)
+    return CommandResponse(user_message, success_msg)
 
 
 async def pressf_command(_: UserCommand) -> CommandResponse:
@@ -1181,6 +1209,7 @@ COMMAND_LIST: list[tuple[str, common.CommandAnnotation]] = [
     ("stream", stream_command),
     ("pressf", pressf_command),
     ("wisdom", wisdom_command),
+    ("buildmarkov", buildmarkov_command),
     ("help", help_command),
     ("chat", chat_command),
     ("test", test_command),

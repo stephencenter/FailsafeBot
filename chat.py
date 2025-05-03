@@ -1,4 +1,5 @@
 import datetime
+from collections import defaultdict
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -7,48 +8,12 @@ from elevenlabs.client import AsyncElevenLabs
 from elevenlabs.core.api_error import ApiError as ElevenLabsApiError
 from loguru import logger
 from openai import AsyncOpenAI
+from unidecode import UnidecodeError, unidecode
 
 import common
 from common import UserCommand
 
 MAX_GPT_ATTEMPTS = 3
-
-
-async def generate_markov_text() -> str:
-    # Markov-powered Text Generation Command
-    config = await common.Config.load()
-    if config.chat.minmarkov > config.chat.maxmarkov:
-        error_message = "Markov minimum length cannot be greater than maximum length (config issue)"
-        raise ValueError(error_message)
-
-    markov_chain = await common.try_read_json(common.PATH_MARKOV_CHAIN, {})
-
-    if not markov_chain:
-        return "No markov chain data was found!"
-
-    null_token = "NULL_TOKEN"
-    chosen_tokens: list[str] = []
-    while True:
-        if not chosen_tokens:
-            prev_token: str = null_token
-        else:
-            prev_token: str = chosen_tokens[-1]
-
-        new_token = np.random.choice(list(markov_chain[prev_token].keys()), 1, p=list(markov_chain[prev_token].values()))[0]
-
-        if new_token == null_token:
-            if len(chosen_tokens) < config.chat.minmarkov:
-                chosen_tokens = []
-                continue
-            break
-
-        chosen_tokens.append(new_token)
-        if len(chosen_tokens) >= config.chat.maxmarkov:
-            break
-
-    output_message = ' '.join(chosen_tokens)
-    output_message = output_message[0].upper() + output_message[1:]
-    return output_message
 
 
 async def get_gpt_response(user_command: UserCommand) -> str:
@@ -183,3 +148,136 @@ async def handle_elevenlabs_error(error: ElevenLabsApiError) -> str:
     except KeyError:
         logger.error(error)
         return "There was an issue with the ElevenLabs API, try again later."
+
+
+async def load_markov_chain() -> dict[str, dict[str, float]]:
+    return await common.try_read_json(common.PATH_MARKOV_CHAIN, {})
+
+
+async def generate_markov_text(markov_chain: dict[str, dict[str, float]]) -> str:
+    # Markov-powered Text Generation Command
+    config = await common.Config.load()
+    if config.chat.minmarkov > config.chat.maxmarkov:
+        error_message = "Markov minimum length cannot be greater than maximum length (config issue)"
+        raise ValueError(error_message)
+
+    null_token = "NULL_TOKEN"
+    chosen_tokens: list[str] = []
+    while True:
+        if not chosen_tokens:
+            prev_token: str = null_token
+        else:
+            prev_token: str = chosen_tokens[-1]
+
+        new_token = np.random.choice(list(markov_chain[prev_token].keys()), 1, p=list(markov_chain[prev_token].values()))[0]
+
+        if new_token == null_token:
+            if len(chosen_tokens) < config.chat.minmarkov:
+                chosen_tokens = []
+                continue
+            break
+
+        chosen_tokens.append(new_token)
+        if len(chosen_tokens) >= config.chat.maxmarkov:
+            break
+
+    output_message = ' '.join(chosen_tokens)
+    output_message = output_message[0].upper() + output_message[1:]
+    return output_message
+
+
+def fix_unicode(text: str) -> str:
+    try:
+        text = unidecode(text, errors='strict')
+    except UnidecodeError:
+        return ''
+    return text
+
+
+def clean_token(token: str) -> str:
+    # Remove paired characters like () and {} if they don't have a match on the other end of the token
+    pair_list = [
+        ('(', ')'),
+        ('[', ']'),
+        ('"', '"'),
+        ('{', '}'),
+    ]
+
+    for pair in pair_list:
+        if token.startswith(":") or token.endswith(":"):
+            continue
+
+        if token.startswith(pair[0]) and not token.endswith(pair[1]):
+            token = token[1:]
+
+        if token.endswith(pair[1]) and not token.startswith(pair[0]):
+            token = token[:-1]
+
+    return token
+
+
+def get_chat_data_files() -> list[Path]:
+    try:
+        return [path for path in common.PATH_MARKOV_INPUT.iterdir() if path.suffix == ".json"]
+    except FileNotFoundError:
+        return []
+
+
+async def load_message_list(chat_files: list[Path]) -> list[str]:
+    message_list: list[str] = []
+    for file in chat_files:
+        logger.info(f"Processing {file}...")
+
+        chat_data = await common.try_read_json(file, {})
+        if "messages" not in chat_data:
+            continue
+
+        for message in chat_data["messages"]:
+            if "from" not in message or "text_entities" not in message:
+                continue
+
+            for entity in message["text_entities"]:
+                if "text" not in entity:
+                    continue
+
+                text = entity["text"].strip()
+                text = fix_unicode(text)
+
+                if not text:
+                    continue
+
+                message_list.append(text)
+
+    return message_list
+
+
+def build_markov_chain(message_list: list[str]) -> dict[str, dict[str, float]]:
+    markov_chain: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(int))
+    null_token = "NULL_TOKEN"
+
+    logger.info("Creating markov chain...")
+    for message in message_list:
+        token_list = [clean_token(token) for token in message.split()]
+
+        if not token_list:
+            continue
+
+        markov_chain[null_token][token_list[0]] += 1
+
+        for index, current_token in enumerate(token_list):
+            if index + 1 < len(token_list):
+                next_token = token_list[index + 1]
+            else:
+                next_token = null_token
+
+            markov_chain[current_token][next_token] += 1
+
+    markov_chain = dict(sorted(markov_chain.items(), key=lambda item: sum(item[1].values()), reverse=True))
+
+    for key in markov_chain:
+        markov_chain[key] = dict(sorted(markov_chain[key].items(), key=lambda item: item[1], reverse=True))
+        key_total = sum(markov_chain[key].values())
+        for subkey in markov_chain[key]:
+            markov_chain[key][subkey] /= key_total
+
+    return markov_chain
