@@ -13,6 +13,7 @@ from discord.ext.commands import Bot as DiscordBot
 from discord.ext.commands import CommandInvokeError, CommandNotFound
 from elevenlabs.core.api_error import ApiError as ElevenLabsApiError
 from loguru import logger
+from telegram.error import BadRequest
 from telegram.ext import Application as TelegramBot
 from telegram.ext import CommandHandler, MessageHandler, filters
 from yt_dlp.utils import DownloadError as YtdlDownloadError
@@ -153,6 +154,9 @@ async def addsound_command(user_command: UserCommand) -> CommandResponse:
     if not sound_files:
         return CommandResponse(user_message, "You need to attach a file with your message!")
 
+    if isinstance(sound_files, BadRequest):
+        return CommandResponse(user_message, "Can't accept a file that big through chat (manual upload has no limit).")
+
     if len(sound_files) > 1:
         return CommandResponse(user_message, "One file at a time please!")
 
@@ -161,7 +165,7 @@ async def addsound_command(user_command: UserCommand) -> CommandResponse:
 
     # These byte patterns indicate that the file is an .mp3
     if not is_mp3:
-        return CommandResponse(user_message, "Sounds have to be in mp3 format (file name .mp3 is not enough!)")
+        return CommandResponse(user_message, "Sounds have to be in mp3 format (renaming to .mp3 is not enough)")
 
     await sound_manager.save_new_sound(sound_name, new_file)
     return CommandResponse(user_message, f"Added new sound '{sound_name}'.")

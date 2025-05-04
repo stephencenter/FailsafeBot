@@ -505,7 +505,7 @@ class UserCommand:
 
         raise InvalidBotTypeError(self.target_bot)
 
-    async def get_user_attachments(self) -> list[bytes] | None:
+    async def get_user_attachments(self) -> list[bytes] | BadRequest | None:
         if isinstance(self.update, TelegramUpdate):
             # NOTE: If this function is returning None for a TelegramBot when you're expecting files,
             # make sure that you have your command registered in FILE_COMMAND_LIST and not COMMAND_LIST!
@@ -515,7 +515,11 @@ class UserCommand:
             attachments = []
             for file in [self.update.message.document, self.update.message.audio, self.update.message.voice]:
                 if file is not None:
-                    telegram_file = await file.get_file()
+                    try:
+                        telegram_file = await file.get_file()
+                    except BadRequest as e:
+                        return e
+
                     byte_data = await telegram_file.download_as_bytearray()
                     attachments.append(byte_data)
 
@@ -949,6 +953,21 @@ async def try_read_single_line[T](path: str | Path, default: T) -> str | T:
         async with aiofiles.open(path, encoding='utf-8') as f:
             line = (await f.readline()).strip()
             return line or default
+    except FileNotFoundError:
+        logger.error(f"Tried to open file at {path}, but file did not exist")
+    except OSError:
+        logger.error(f"Tried to open file at {path}, but encountered an error")
+
+    return default
+
+
+async def try_read_bytes(path: str | Path, default: bytes) -> bytes:
+    # Attempt to load bytes from the provided path and return it
+    # If this fails, return the provided default bytes object instead
+    try:
+        async with aiofiles.open(path, mode='rb') as f:
+            data = await f.read()
+            return data or default
     except FileNotFoundError:
         logger.error(f"Tried to open file at {path}, but file did not exist")
     except OSError:
