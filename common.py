@@ -523,9 +523,7 @@ class UserCommand:
 
         if isinstance(self.context, DiscordContext):
             attachments = [await att.read() for att in self.context.message.attachments]
-
-            if attachments:
-                return attachments or None
+            return attachments or None
 
         raise InvalidBotTypeError(self.target_bot)
 
