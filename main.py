@@ -34,6 +34,9 @@ async def prepare_runway() -> None:
     for warning in runway.check_for_untracked_paths():
         logger.warning(warning)
 
+    for warning in command_list.check_unregistered_commands():
+        logger.warning(warning)
+
     # Check for common issues with sound aliases
     async for warning in sound_manager.verify_aliases():
         logger.warning(warning)

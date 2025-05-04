@@ -5,7 +5,6 @@ from pathlib import Path
 
 import numpy as np
 import openai
-import unidecode
 from elevenlabs.client import AsyncElevenLabs
 from elevenlabs.core.api_error import ApiError as ElevenLabsApiError
 from loguru import logger
@@ -182,14 +181,6 @@ async def generate_markov_text(markov_chain: dict[str, dict[str, float]]) -> str
     return output_message
 
 
-def fix_unicode(text: str) -> str:
-    try:
-        text = unidecode.unidecode(text, errors='strict')
-    except unidecode.UnidecodeError:
-        return ''
-    return text
-
-
 def clean_token(token: str) -> str:
     # Remove paired characters like () and {} if they don't have a match on the other end of the token
     pair_list = [
@@ -237,7 +228,7 @@ async def load_message_list(chat_files: list[Path]) -> list[str]:
                     continue
 
                 text = entity["text"].strip()
-                text = fix_unicode(text)
+                text = common.convert_to_ascii(text)
 
                 if not text:
                     continue

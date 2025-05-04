@@ -15,7 +15,7 @@ ignore = [  # Remove these at your own peril
     "NPY002",
     "PERF401",
     "PGH003",
-    "PLR0904", "PLR0912", "PLR0913", "PLR2004", "PLR6301",
+    "PLR0904", "PLR0911", "PLR0913", "PLR2004", "PLR6301",
     "PT019",
     "Q000",
     "RET503", "RET504",

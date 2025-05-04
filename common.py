@@ -1,7 +1,9 @@
 import dataclasses
 import functools
+import html
 import json
 import random
+import string
 import types
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterable
 from dataclasses import dataclass
@@ -11,6 +13,7 @@ from typing import Any
 import aiofiles
 import discord
 import toml
+import unidecode
 from discord.errors import HTTPException
 from discord.ext.commands import Bot as DiscordBot
 from discord.ext.commands import Context as DiscordContext
@@ -119,6 +122,9 @@ class MissingUpdateInfoError(ValueError):
 
         elif update.effective_chat is None:
             self.message = "Update.effective_chat cannot be None"
+
+        elif update.message.caption is None:
+            self.message = "Update.message.caption cannot be None"
 
         super().__init__(self.message)
 # endregion
@@ -452,6 +458,20 @@ class UserCommand:
         if isinstance(self.context, TelegramContext) and self.context.args is not None:
             args_list = self.context.args
 
+        elif isinstance(self.update, TelegramUpdate):
+            if self.update.message is None:
+                raise MissingUpdateInfoError(self.update)
+
+            if self.update.message.caption is not None:
+                args_list = self.update.message.caption.split()
+            elif self.update.message.text is not None:
+                args_list = self.update.message.text.split()
+
+            if len(args_list) > 1:
+                args_list = args_list[1:]
+            else:
+                args_list = []
+
         elif isinstance(self.context, DiscordContext) and len(self.context.message.content) > 0:
             args_list = self.context.message.content.split()[1:]
 
@@ -482,6 +502,30 @@ class UserCommand:
             if self.context.message.content.startswith("/"):
                 return ' '.join(self.context.message.content.split()[1:])
             return self.context.message.content
+
+        raise InvalidBotTypeError(self.target_bot)
+
+    async def get_user_attachments(self) -> list[bytes] | None:
+        if isinstance(self.update, TelegramUpdate):
+            # NOTE: If this function is returning None for a TelegramBot when you're expecting files,
+            # make sure that you have your command registered in FILE_COMMAND_LIST and not COMMAND_LIST!
+            if self.update.message is None:
+                raise MissingUpdateInfoError(self.update)
+
+            attachments = []
+            for file in [self.update.message.document, self.update.message.audio, self.update.message.voice]:
+                if file is not None:
+                    telegram_file = await file.get_file()
+                    byte_data = await telegram_file.download_as_bytearray()
+                    attachments.append(byte_data)
+
+            return attachments or None
+
+        if isinstance(self.context, DiscordContext):
+            attachments = [await att.read() for att in self.context.message.attachments]
+
+            if attachments:
+                return attachments or None
 
         raise InvalidBotTypeError(self.target_bot)
 
@@ -854,6 +898,22 @@ async def get_gpt_memory() -> list[dict[str, str]]:
     return []
 
 
+def convert_to_ascii(text: str) -> str:
+    text = html.unescape(text)
+    text = unidecode.unidecode(text, errors="replace", replace_str='')
+    return text
+
+
+def make_valid_filename(input_str: str, *, strict: bool = False) -> str:
+    input_str = convert_to_ascii(input_str)
+
+    if strict:
+        return ''.join(char for char in input_str if char.isalnum())
+
+    valid_chars = [*string.ascii_uppercase, *string.ascii_lowercase, *string.digits, *"-_()'"]
+    return ''.join(char for char in input_str if char in valid_chars)
+
+
 async def try_read_lines_list[T](path: str | Path, default: T) -> list[str] | T:
     # Attempt to load the text data from the provided path, treating each line as a separate element in a list, and return it
     # If this fails, return the provided default object instead
@@ -943,10 +1003,13 @@ async def write_text_to_file(path: str | Path, text: str) -> None:
         await f.write(text)
 
 
-async def write_bytes_to_file(path: str | Path, iter_bytes: AsyncIterator[bytes]) -> None:
+async def write_bytes_to_file(path: str | Path, byte_obj: AsyncIterator[bytes] | bytes) -> None:
     async with aiofiles.open(path, "wb") as f:
-        async for chunk in iter_bytes:
-            await f.write(chunk)
+        if isinstance(byte_obj, AsyncIterator):
+            async for chunk in byte_obj:
+                await f.write(chunk)
+        else:
+            await f.write(byte_obj)
 
 
 async def write_json_to_file(path: str | Path, data: Iterable[Any]) -> None:

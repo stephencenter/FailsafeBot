@@ -1,9 +1,7 @@
-import html
 import math
 import string
 
 import aiohttp
-import unidecode
 
 import common
 
@@ -14,20 +12,14 @@ TRIVIA_DIFFICULTY_POINTS = {
 }
 
 
-def fix_string(text: str) -> str:
-    text = html.unescape(text)
-    text = unidecode.unidecode(text)
-    return text.strip()
-
-
 class TriviaQuestion:
     def __init__(self, question_dict: dict[str, str]):
         self.type: str = question_dict['type']
         self.difficulty: str = question_dict['difficulty']
-        self.category: str = fix_string(question_dict['category'].split(':')[-1])
-        self.question: str = fix_string(question_dict['question'])
-        self.correct_answer: str = fix_string(question_dict['correct_answer'])
-        self.incorrect_answers: list[str] = [fix_string(q) for q in question_dict['incorrect_answers']]
+        self.category: str = common.convert_to_ascii(question_dict['category'].split(':')[-1])
+        self.question: str = common.convert_to_ascii(question_dict['question'])
+        self.correct_answer: str = common.convert_to_ascii(question_dict['correct_answer'])
+        self.incorrect_answers: list[str] = [common.convert_to_ascii(q) for q in question_dict['incorrect_answers']]
 
         # Sort answers alphabetically, unless it's a true/false question
         if self.type == 'boolean':

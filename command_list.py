@@ -2,7 +2,7 @@ import io
 import os
 import random
 import sys
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable, Generator
 from pathlib import Path
 
 import discord
@@ -30,10 +30,19 @@ async def register_commands(bot: TelegramBot | DiscordBot) -> None:
         for command in COMMAND_LIST:
             bot.add_handler(CommandHandler(command[0], await common.wrap_telegram_command(bot, command[1])))
 
+        for command in FILE_COMMAND_LIST:
+            regex = rf'^/{command[0]}'
+            bot.add_handler(
+                MessageHandler(
+                    (filters.ALL & filters.CaptionRegex(regex)) | (filters.TEXT & filters.Regex(regex)),
+                    await common.wrap_telegram_command(bot, command[1]),
+                ),
+            )
+
         bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), await common.wrap_telegram_command(bot, handle_message_event)))
 
     elif isinstance(bot, DiscordBot):
-        for command in COMMAND_LIST:
+        for command in [*COMMAND_LIST, *FILE_COMMAND_LIST]:
             new_command = discord_commands.Command(await common.wrap_discord_command(bot, command[1]))
             new_command.name = command[0]
             bot.add_command(new_command)
@@ -121,6 +130,38 @@ async def soundlist_command(_: UserCommand) -> CommandResponse:
         response = f"There are {num_sounds} sounds available to use:\n{', '.join(sound_list)}"
 
     return CommandResponse(user_message, response)
+
+
+@requiresuper
+async def addsound_command(user_command: UserCommand) -> CommandResponse:
+    user_message = "Can you add these files to your soundboard?"
+
+    # Determine the name for the new sound
+    sound_name = user_command.get_first_arg(lowercase=True)
+    if sound_name is None:
+        return CommandResponse(user_message, "You need to provide a name for the sound, e.g. /addsound wilhelm")
+
+    sound_name = common.make_valid_filename(sound_name, strict=True)
+    if not sound_name:
+        return CommandResponse(user_message, "That is not a valid sound name (only A-Z and 0-9 are allowed)")
+
+    if await sound_manager.sound_exists(sound_name):
+        return CommandResponse(user_message, "A sound or alias with that name already exists!")
+
+    # Determine the file for the new sound
+    sound_files = await user_command.get_user_attachments()
+    if not sound_files:
+        return CommandResponse(user_message, "You need to attach a file with your message!")
+
+    if len(sound_files) > 1:
+        return CommandResponse(user_message, "One file at a time please!")
+
+    new_file = sound_files[0]
+    if not new_file.startswith((b'\xff\xfb', b'ID3')):
+        return CommandResponse(user_message, "Sounds have to be in mp3 format (file name .mp3 is not enough!)")
+
+    await sound_manager.save_new_sound(sound_name, new_file)
+    return CommandResponse(user_message, f"Added new sound '{sound_name}'.")
 
 
 async def newsounds_command(_: UserCommand) -> CommandResponse:
@@ -1192,7 +1233,9 @@ async def reply_event(user_command: UserCommand) -> CommandResponse:
 
 # List of all commands, add commands here to register them.
 # The first item in each tuple is the name of the command (/name), and the second is
-# the function that will be assigned to that name
+# the function that will be assigned to that name.
+# Do NOT register any commands to this list that take a user file attachment as an input,
+# those must be registered in FILE_COMMAND_LIST below or they won't work in Telegram
 COMMAND_LIST: list[tuple[str, common.CommandAnnotation]] = [
     ("sound", sound_command),
     ("random", randomsound_command),
@@ -1250,3 +1293,20 @@ COMMAND_LIST: list[tuple[str, common.CommandAnnotation]] = [
     ("getfile", getfile_command),
     ("mycommands", mycommands_command),
 ]
+
+# For the Telegram API, normal commands cannot accept a file as an input for some reason,
+# so we have to register them differently
+FILE_COMMAND_LIST: list[tuple[str, common.CommandAnnotation]] = [
+    ("addsound", addsound_command),
+]
+
+
+def check_unregistered_commands() -> Generator[str]:
+    cmd_list = [*(cmd[1] for cmd in COMMAND_LIST), *(cmd[1] for cmd in FILE_COMMAND_LIST)]
+    for obj in globals().values():
+        if not isinstance(obj, Callable):
+            continue
+
+        obj_name = obj.__name__
+        if obj_name.endswith("_command") and obj not in cmd_list:
+            yield f"Function '{obj_name}' is not registered in COMMAND_LIST or FILE_COMMAND_LIST"
