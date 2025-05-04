@@ -135,7 +135,7 @@ async def soundlist_command(_: UserCommand) -> CommandResponse:
 
 @requiresuper
 async def addsound_command(user_command: UserCommand) -> CommandResponse:
-    user_message = "Can you add these files to your soundboard?"
+    user_message = "Can you add this file to your soundboard?"
 
     # Determine the name for the new sound
     sound_name = user_command.get_first_arg(lowercase=True)
@@ -152,7 +152,7 @@ async def addsound_command(user_command: UserCommand) -> CommandResponse:
     # Determine the file for the new sound
     sound_files = await user_command.get_user_attachments()
     if not sound_files:
-        return CommandResponse(user_message, "You need to attach a file with your message!")
+        return CommandResponse(user_message, "You need to attach an mp3, wav, or ogg file with your message!")
 
     if isinstance(sound_files, BadRequest):
         return CommandResponse(user_message, "Can't accept a file that big through chat (manual upload has no limit).")
@@ -161,11 +161,11 @@ async def addsound_command(user_command: UserCommand) -> CommandResponse:
         return CommandResponse(user_message, "One file at a time please!")
 
     new_file = sound_files[0]
-    is_mp3 = sound_manager.is_valid_mp3(new_file)
+    is_audio = sound_manager.is_valid_audio(new_file)
 
     # These byte patterns indicate that the file is an .mp3
-    if not is_mp3:
-        return CommandResponse(user_message, "Sounds have to be in mp3 format (renaming to .mp3 is not enough)")
+    if not is_audio:
+        return CommandResponse(user_message, "Sounds have to be in mp3, wav, or ogg format (renaming the file is not enough)")
 
     await sound_manager.save_new_sound(sound_name, new_file)
     return CommandResponse(user_message, f"Added new sound '{sound_name}'.")

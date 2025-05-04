@@ -2,6 +2,7 @@ import random
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
+import magic as libmagic
 import strsimpy
 import yt_dlp
 
@@ -297,22 +298,11 @@ async def search_sounds(search_string: str) -> list[str]:
 
     return sorted(search_results)
 
-def is_valid_mp3(data: bytes) -> bool:
-    if data.startswith(b'ID3'):
-        return True
 
-    max_search = min(2048, int(len(data)**0.5) + 1)
-    for index in range(max_search):
-        # The `& 0xE0` operation zeroes the lower 5 bits and leaves the top 3 unchanged
-        if data[index] == 0xFF and (data[index + 1] & 0xE0) == 0xE0:
-            version_id = (data[index + 1] >> 3) & 0x03
-            layer_index = (data[index + 1] >> 1) & 0x03
-            bitrate_index = (data[index + 2] >> 4) & 0x0F
-            sample_rate_index = (data[index + 2] >> 2) & 0x03
-            if version_id != 0b01 and layer_index != 0b00 and bitrate_index != 0b1111 and sample_rate_index != 0b11:
-                return True
-
-    return False
+def is_valid_audio(data: bytes) -> bool:
+    mime_type = libmagic.from_buffer(data, mime=True)
+    valid_types = {'audio/mpeg', 'audio/ogg', 'audio/wave', 'audio/x-wav'}
+    return mime_type in valid_types
 
 
 async def verify_aliases() -> AsyncGenerator[str]:
