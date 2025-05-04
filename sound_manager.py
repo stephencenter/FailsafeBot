@@ -297,6 +297,18 @@ async def search_sounds(search_string: str) -> list[str]:
 
     return sorted(search_results)
 
+def is_valid_mp3(data: bytes) -> bool:
+    if data.startswith(b'ID3'):
+        return True
+
+    max_search = int(len(data)**0.5) + 1
+    for index in range(max_search):
+        # The `& 0xE0` operation zeroes the lower 5 bits and leaves the top 3 unchanged
+        if data[index] == 0xFF and (data[index + 1] & 0xE0) == 0xE0:
+            return True
+
+    return False
+
 
 async def verify_aliases() -> AsyncGenerator[str]:
     sound_list = get_sound_list()

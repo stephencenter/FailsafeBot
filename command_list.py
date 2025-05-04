@@ -157,7 +157,10 @@ async def addsound_command(user_command: UserCommand) -> CommandResponse:
         return CommandResponse(user_message, "One file at a time please!")
 
     new_file = sound_files[0]
-    if not new_file.startswith((b'\xff\xfb', b'ID3')):
+    is_mp3 = sound_manager.is_valid_mp3(new_file)
+
+    # These byte patterns indicate that the file is an .mp3
+    if not is_mp3:
         return CommandResponse(user_message, "Sounds have to be in mp3 format (file name .mp3 is not enough!)")
 
     await sound_manager.save_new_sound(sound_name, new_file)
