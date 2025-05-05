@@ -29,7 +29,7 @@ from telegram.ext import CallbackContext as TelegramContext
 # region
 # PROJECT VARIABLES
 APPLICATION_NAME = "FailsafeBot"
-VERSION_NUMBER = "v1.1.12"
+VERSION_NUMBER = "v1.1.13"
 
 # DIRECTORIES
 PATH_DATA_FOLDER = Path("Data")

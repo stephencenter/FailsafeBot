@@ -15,14 +15,14 @@
       "**/.DS_Store": true,
       "**/Thumbs.db": true,
       "**/.venv": true,
-      "**/Sounds": true,
       "**/__pycache__": true,
+      "**/Sounds": true,
       "**.exe": true,
-      "Test/": true,
-      "**.bat": true
+      "**.bat": true,
+      "**desktop.ini": true,
+      "Test/": true
    },
    "python.analysis.diagnosticSeverityOverrides": {
-      "reportOptionalMemberAccess": "warning",
       "reportMissingTypeStubs": "none",
       "reportUnknownMemberType": "none",
       "reportUnknownParameterType": "none",

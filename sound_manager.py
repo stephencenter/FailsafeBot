@@ -2,7 +2,7 @@ import random
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
-import magic as libmagic
+import filetype
 import strsimpy
 import yt_dlp
 
@@ -300,9 +300,12 @@ async def search_sounds(search_string: str) -> list[str]:
 
 
 def is_valid_audio(data: bytes) -> bool:
-    mime_type = libmagic.from_buffer(data, mime=True)
-    valid_types = {'audio/mpeg', 'audio/ogg', 'audio/wave', 'audio/x-wav'}
-    return mime_type in valid_types
+    file_type = filetype.guess(data)
+    if file_type is None:
+        return None
+
+    valid_types = {'audio/mpeg', 'audio/ogg', 'audio/x-wav'}
+    return file_type.mime in valid_types
 
 
 async def verify_aliases() -> AsyncGenerator[str]:

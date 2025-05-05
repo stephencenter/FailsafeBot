@@ -5,6 +5,5 @@ Sounds/
 Data/
 Test/
 verify.py
-fix_d10000.py
 *.exe
 *.bat

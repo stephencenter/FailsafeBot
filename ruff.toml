@@ -1,4 +1,4 @@
-extend-exclude = ["Test", "verify.py"]
+extend-exclude = ["Test"]
 line-length = 150
 
 [lint]
