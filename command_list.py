@@ -1,3 +1,10 @@
+"""Module for defining and registering commands.
+
+This module is where all commands registered to the Telegram and Discord bots are defined.
+Only the final command functions should be defined here, any necessary helper functions
+should be defined in and imported from other modules like `common` or `sound_manager`.
+"""
+
 import io
 import os
 import random
@@ -133,7 +140,7 @@ async def soundlist_command(_: UserCommand) -> CommandResponse:
     return CommandResponse(user_message, response)
 
 
-@requiresuper
+@requireadmin
 async def addsound_command(user_command: UserCommand) -> CommandResponse:
     user_message = "Can you add this file to your soundboard?"
 
@@ -990,12 +997,12 @@ async def system_command(_: UserCommand) -> CommandResponse:
         divisor = 1024**3
         label = "GB"
 
-    mem_percent = round(mem_usage.used/mem_usage.total*100, 2)
+    mem_percent = round((mem_usage.used / mem_usage.total) * 100, 2)
 
     system_string = f"""SYSTEM RESOURCES
 CPU: {psutil.cpu_percent(interval=0.5)}%
-Memory: {mem_percent}% - {round(mem_usage.used/divisor, 2)} / {round(mem_usage.total/divisor, 2):,} {label}
-Disk: {disk_usage.percent}% - {round(disk_usage.used/divisor, 2):,} / {round(disk_usage.total/divisor, 2):,} {label}
+Memory: {mem_percent}% - {round(mem_usage.used / divisor, 2)} / {round(mem_usage.total / divisor, 2):,} {label}
+Disk: {disk_usage.percent}% - {round(disk_usage.used / divisor, 2):,} / {round(disk_usage.total / divisor, 2):,} {label}
 """
     return CommandResponse("Can you show me your resource usage?", system_string)
 

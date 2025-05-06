@@ -1,3 +1,9 @@
+"""Sound utilities.
+
+This module contains constants, classes, and functions used by Sound commands like
+/sound, /stream, and /random.
+"""
+
 import random
 from collections.abc import AsyncGenerator
 from pathlib import Path
@@ -89,7 +95,7 @@ async def download_audio_from_url(url: str) -> Path | None:
         return final_filename
 
 
-async def save_new_sound(sound_name:str , sound_file: bytes) -> None:
+async def save_new_sound(sound_name: str, sound_file: bytes) -> None:
     sound_path = (common.PATH_SOUNDS_FOLDER / sound_name).with_suffix(".mp3")
 
     await common.write_bytes_to_file(sound_path, sound_file)
@@ -290,7 +296,7 @@ async def search_sounds(search_string: str) -> list[str]:
             calculator = strsimpy.Damerau()
             distance = calculator.distance(search_string, alias)
             larger_length = max(len(search_string), len(alias))
-            similarity = (larger_length - distance)/larger_length
+            similarity = (larger_length - distance) / larger_length
 
             if similarity >= config.misc.minsimilarity:
                 search_results.append(alias)
@@ -302,7 +308,7 @@ async def search_sounds(search_string: str) -> list[str]:
 def is_valid_audio(data: bytes) -> bool:
     file_type = filetype.guess(data)
     if file_type is None:
-        return None
+        return False
 
     valid_types = {'audio/mpeg', 'audio/ogg', 'audio/x-wav'}
     return file_type.mime in valid_types

@@ -1,3 +1,12 @@
+"""Runway for starting the script.
+
+This module defines functions for building the project structure,
+as well as checking for common data problems.
+
+The functions in this module are called from the `main` module upon script
+startup.
+"""
+
 import logging
 import sys
 from collections.abc import AsyncGenerator, Generator

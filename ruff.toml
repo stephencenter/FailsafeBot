@@ -5,22 +5,18 @@ line-length = 150
 preview = true
 select = ["ALL"]
 ignore = [  # Remove these at your own peril
-    "ANN204", "ANN401",
     "B903",
     "CPY001",
-    "D100", "D101", "D102", "D103", "D105", "D107",
+    "D101", "D102", "D103", "D105", "D107",
     "DTZ005",
-    "E226",
     "FURB118",
-    "NPY002",
     "PERF401",
     "PGH003",
     "PLR0904", "PLR0911", "PLR0913", "PLR2004", "PLR6301",
-    "PT019",
     "Q000",
-    "RET503", "RET504",
+    "RET504",
     "RUF029",
-    "S102", "S104", "S105", "S311", "S307", "S602", "S606",  # Yes yes I know
-    "SIM103", "SIM108",
+    "S102", "S105", "S311", "S602", "S606",  # Yes yes I know
+    "SIM108",
     "W291", "W292", "W293" # These ones are trailing whitespace, I have them disabled because vscode removes trailing whitespace when I save files
 ]

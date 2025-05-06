@@ -1,3 +1,9 @@
+"""Chat utilities.
+
+This module contains constants, classes, and functions used by Chat commands like
+/chat, /say, and /wisdom.
+"""
+
 import collections
 import datetime
 from collections.abc import AsyncIterator
@@ -13,6 +19,7 @@ import common
 from common import UserCommand
 
 MAX_GPT_ATTEMPTS = 3
+NULL_TOKEN = "NULL_TOKEN"
 
 
 async def get_gpt_response(user_command: UserCommand) -> str:
@@ -156,17 +163,17 @@ async def generate_markov_text(markov_chain: dict[str, dict[str, float]]) -> str
         error_message = "Markov minimum length cannot be greater than maximum length (config issue)"
         raise ValueError(error_message)
 
-    null_token = "NULL_TOKEN"
     chosen_tokens: list[str] = []
+    rng = np.random.default_rng()
     while True:
         if not chosen_tokens:
-            prev_token: str = null_token
+            prev_token: str = NULL_TOKEN
         else:
             prev_token: str = chosen_tokens[-1]
 
-        new_token = np.random.choice(list(markov_chain[prev_token].keys()), 1, p=list(markov_chain[prev_token].values()))[0]
+        new_token = rng.choice(list(markov_chain[prev_token].keys()), 1, p=list(markov_chain[prev_token].values()))[0]
 
-        if new_token == null_token:
+        if new_token == NULL_TOKEN:
             if len(chosen_tokens) < config.chat.minmarkov:
                 chosen_tokens = []
                 continue
@@ -240,7 +247,6 @@ async def load_message_list(chat_files: list[Path]) -> list[str]:
 
 def build_markov_chain(message_list: list[str]) -> dict[str, dict[str, float]]:
     markov_chain: dict[str, dict[str, float]] = collections.defaultdict(lambda: collections.defaultdict(int))
-    null_token = "NULL_TOKEN"
 
     logger.info("Creating markov chain...")
     for message in message_list:
@@ -249,13 +255,13 @@ def build_markov_chain(message_list: list[str]) -> dict[str, dict[str, float]]:
         if not token_list:
             continue
 
-        markov_chain[null_token][token_list[0]] += 1
+        markov_chain[NULL_TOKEN][token_list[0]] += 1
 
         for index, current_token in enumerate(token_list):
             if index + 1 < len(token_list):
                 next_token = token_list[index + 1]
             else:
-                next_token = null_token
+                next_token = NULL_TOKEN
 
             markov_chain[current_token][next_token] += 1
 

@@ -1,3 +1,5 @@
+"""Main module, do not import. Run this module to start the bots."""
+
 import asyncio
 import contextlib
 import sys

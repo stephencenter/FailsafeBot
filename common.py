@@ -1,3 +1,10 @@
+"""Common utilities.
+
+This module contains a large number of constants, classes, and functions used throughout
+the rest of this script. This includes important file paths, UserCommand/CommandResponse classes,
+and file IO functions.
+"""
+
 import dataclasses
 import functools
 import html
@@ -22,6 +29,8 @@ from telegram import Update as TelegramUpdate
 from telegram.error import BadRequest, NetworkError, TimedOut
 from telegram.ext import Application as TelegramBot
 from telegram.ext import CallbackContext as TelegramContext
+
+# Do not import any internal modules, this will cause circular imports
 
 # ==========================
 # CONSTANTS
@@ -95,7 +104,7 @@ TXT_SOUND_NOT_FOUND = (
 # region
 class InvalidBotTypeError(TypeError):
     # This exception type should be raised if a function expects a TelegramBot or DiscordBot but gets something else instead
-    def __init__(self, bot: Any, message: str | None = None):
+    def __init__(self, bot: object, message: str | None = None) -> None:
         self.message = f"{APPLICATION_NAME} currently supports only Telegram and Discord bots (got type {type(bot).__name__})"
         if message is not None:
             self.message = message
@@ -104,7 +113,7 @@ class InvalidBotTypeError(TypeError):
 
 class MissingUpdateInfoError(ValueError):
     # This exception type should be raised if a function is passed a Telegram Update but it is missing information
-    def __init__(self, update: TelegramUpdate | None, message: str | None = None):
+    def __init__(self, update: TelegramUpdate | None, message: str | None = None) -> None:
         if message is not None:
             self.message = message
 
@@ -188,7 +197,7 @@ class Config:
     chat: ConfigChat = dataclasses.field(default_factory=ConfigChat)
     misc: ConfigMisc = dataclasses.field(default_factory=ConfigMisc)
 
-    def __init__(self):
+    def __init__(self) -> None:
         error_msg = "Use `await Config.load()` instead of creating Config directly."
         raise RuntimeError(error_msg)
 
@@ -286,7 +295,8 @@ async def verify_settings() -> AsyncGenerator[str]:
 # ==========================
 # region
 class CommandResponse:
-    def __init__(self, user_message: str, bot_message: str, *, record_to_memory: bool = True, send_to_chat: bool = True):
+    def __init__(self, user_message: str, bot_message: str,
+                 *, record_to_memory: bool = True, send_to_chat: bool = True) -> None:
         self.user_message: str = user_message
         self.bot_message: str = bot_message
         self.record_to_memory: bool = record_to_memory  # Whether user_message and bot_message should be recorded to memory
@@ -294,21 +304,21 @@ class CommandResponse:
 
 
 class FileResponse(CommandResponse):
-    def __init__(self, user_message: str, bot_message: str, file_path: str | Path, *, record_to_memory: bool = True, temp: bool = False,
-                 send_to_chat: bool = False):
+    def __init__(self, user_message: str, bot_message: str, file_path: str | Path,
+                 *, record_to_memory: bool = True, temp: bool = False, send_to_chat: bool = False) -> None:
         super().__init__(user_message, bot_message, record_to_memory=record_to_memory, send_to_chat=send_to_chat)
         self.file_path: str | Path = file_path  # The path of the file to send
         self.temp: bool = temp  # Whether the file should be deleted after being sent
 
 
 class SoundResponse(FileResponse):
-    def __init__(self, user_message: str, bot_message: str, file_path: str | Path, *, record_to_memory: bool = True, temp: bool = False,
-                 send_to_chat: bool = False):
+    def __init__(self, user_message: str, bot_message: str, file_path: str | Path,
+                 *, record_to_memory: bool = True, temp: bool = False, send_to_chat: bool = False) -> None:
         super().__init__(user_message, bot_message, file_path, record_to_memory=record_to_memory, temp=temp, send_to_chat=send_to_chat)
 
 
 class NoPermissionsResponse(CommandResponse):
-    def __init__(self):
+    def __init__(self) -> None:
         chosen_response = random.choice([
             "You don't have the right, O you don't have the right.",
             "You think I'd let just anyone do this?",
@@ -317,12 +327,12 @@ class NoPermissionsResponse(CommandResponse):
 
 
 class NoResponse(CommandResponse):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__('', '', record_to_memory=False, send_to_chat=False)
 
 
 class UserCommand:
-    def __init__(self, target_bot: TelegramBot | DiscordBot, context: TelegramContext | DiscordContext, update: TelegramUpdate | None = None):
+    def __init__(self, target_bot: TelegramBot | DiscordBot, context: TelegramContext | DiscordContext, update: TelegramUpdate | None = None) -> None:
         if isinstance(target_bot, TelegramBot) and update is None:
             error_msg = "Update cannot be None when sending message to telegram bot"
             raise ValueError(error_msg)
@@ -558,10 +568,7 @@ class UserCommand:
             return True
 
         # Superadmin rights also give you normal admin rights
-        if "superadmin" in admin_dict[platform_str] and user_id in admin_dict[platform_str]["superadmin"]:
-            return True
-
-        return False
+        return "superadmin" in admin_dict[platform_str] and user_id in admin_dict[platform_str]["superadmin"]
 
     async def is_superadmin(self) -> bool:
         # Returns whether the message sender is on the bot's superadmin list
@@ -573,10 +580,7 @@ class UserCommand:
         if platform_str not in admin_dict:
             return False
 
-        if "superadmin" in admin_dict[platform_str] and user_id in admin_dict[platform_str]["superadmin"]:
-            return True
-
-        return False
+        return "superadmin" in admin_dict[platform_str] and user_id in admin_dict[platform_str]["superadmin"]
 
     async def assign_super_if_none(self) -> None:
         # Gives the user the superadmin role if no superadmins are assigned

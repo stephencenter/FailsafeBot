@@ -1,3 +1,9 @@
+"""Trivia utilities.
+
+This module contains constants, classes, and functions used by Trivia commands like
+/trivia, /guess, and /triviarank.
+"""
+
 import math
 import string
 
@@ -13,7 +19,7 @@ TRIVIA_DIFFICULTY_POINTS = {
 
 
 class TriviaQuestion:
-    def __init__(self, question_dict: dict[str, str]):
+    def __init__(self, question_dict: dict[str, str]) -> None:
         self.type: str = question_dict['type']
         self.difficulty: str = question_dict['difficulty']
         self.category: str = common.convert_to_ascii(question_dict['category'].split(':')[-1])
@@ -58,8 +64,8 @@ Type /guess [your answer] to answer ({self.guesses_left} guess{'es' if self.gues
     async def score_question(self, user_command: common.UserCommand, *, was_correct: bool) -> int:
         if was_correct:
             potential_points = TRIVIA_DIFFICULTY_POINTS[self.difficulty]
-            points_multiplier = self.guesses_left/(len(self.answer_list) - 1)
-            points_gained = math.floor(potential_points*points_multiplier)
+            points_multiplier = self.guesses_left / (len(self.answer_list) - 1)
+            points_gained = math.floor(potential_points * points_multiplier)
 
             points_dict = await common.try_read_json(common.PATH_TRIVIA_SCORES, {})
             player_name = await user_command.get_user_name()
