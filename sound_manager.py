@@ -7,6 +7,7 @@ This module contains constants, classes, and functions used by Sound commands li
 import random
 from collections.abc import AsyncGenerator
 from pathlib import Path
+from typing import Any
 
 import filetype
 import strsimpy
@@ -24,7 +25,7 @@ class SilenceYTDL:
     def error(self) -> None: pass
 
 
-def stream_audio_from_url(url: str) -> dict | None:
+def stream_audio_from_url(url: str) -> dict[str, Any] | None:
     ytdl_parameters = {
         'format': 'bestaudio/best',
         'prefer_ffmpeg': True,

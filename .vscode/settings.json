@@ -24,11 +24,10 @@
    },
    "python.analysis.diagnosticSeverityOverrides": {
       "reportMissingTypeStubs": "none",
+      "reportMissingTypeArgument": "none",
       "reportUnknownMemberType": "none",
       "reportUnknownParameterType": "none",
-      "reportMissingParameterType": "none",
       "reportUnknownArgumentType": "none",
-      "reportMissingTypeArgument": "none",
       "reportUnnecessaryIsInstance": "none",
       "reportUnusedFunction": "none",
       "reportUnknownVariableType": "none"

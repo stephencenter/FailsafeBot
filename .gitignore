@@ -4,6 +4,6 @@ __pycache__/
 Sounds/
 Data/
 Test/
-verify.py
+sync.py
 *.exe
 *.bat

@@ -477,7 +477,7 @@ async def vcrandom_command(user_command: UserCommand) -> CommandResponse:
     bot_voice_client.play(source, after=lambda e: logger.error(e) if e else None)
 
     await sound_manager.increment_playcount(sound_name)
-    return CommandResponse(user_message, f"Sure, I chose the sound '{sound_name}", send_to_chat=False)
+    return CommandResponse(user_message, f"Sure, I chose the sound '{sound_name}'.", send_to_chat=False)
 
 
 async def vcstop_command(user_command: UserCommand) -> CommandResponse:
@@ -580,7 +580,7 @@ async def vcleave_command(user_command: UserCommand) -> CommandResponse:
         await bot_voice_client.disconnect()
         bot_voice_client.cleanup()
 
-    return CommandResponse(user_message, "If you insist", send_to_chat=False)
+    return CommandResponse(user_message, "If you insist.", send_to_chat=False)
 
 
 async def vcsay_command(user_command: UserCommand) -> CommandResponse:
@@ -744,7 +744,7 @@ async def guess_command(user_command: UserCommand) -> CommandResponse:
 
     current_question = await trivia.get_current_question(user_command)
     if current_question is None:
-        return CommandResponse(user_message, "Trivia is not active, use /trivia to start")
+        return CommandResponse(user_message, "Trivia is not active, use /trivia to start.")
 
     if not guess:
         return CommandResponse(user_message, "You need to provide an answer, like /guess abc")
@@ -796,16 +796,6 @@ async def lobotomize_command(_: UserCommand) -> CommandResponse:
 
 @requireadmin
 async def memory_command(_: UserCommand) -> CommandResponse:
-    user_message = "Can you send me your memory file?"
-
-    if not common.PATH_MEMORY_LIST.exists():
-        return CommandResponse(user_message, "My mind is a blank slate.")
-
-    return FileResponse(user_message, "Sure, here's my memory file.", common.PATH_MEMORY_LIST)
-
-
-@requireadmin
-async def memorylist_command(_: UserCommand) -> CommandResponse:
     user_message = "Can you send me your memory as a list?"
 
     memory_list = await common.get_gpt_memory()
@@ -963,7 +953,7 @@ async def test_command(user_command: UserCommand) -> CommandResponse:
 
     # Note that because we're using exec, this command is capable of executing arbitrary code.
     # This is EXTREMELY DANGEROUS, be very sure that you know what lines are inside of the response list file!
-    async def evaluate_fstring(fstring: str, local_vars: dict) -> str:
+    async def evaluate_fstring(fstring: str, local_vars: dict[str, object]) -> str:
         code = f"async def _f(): return {fstring}"
         namespace = {}
         exec(code, local_vars, namespace)
@@ -1168,7 +1158,7 @@ async def discord_register_events(discord_bot: DiscordBot) -> None:  # noqa: C90
     # This function assigns all of the event handlers to the discord bot
 
     @discord_bot.event
-    async def on_voice_state_update(member, before, after) -> None:  # noqa: ANN001, ARG001
+    async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState) -> None:  # noqa: ARG001
         # This function automatically disconnects the bot if it's the only
         # member remaining in a voice channel
         config = await common.Config.load()
@@ -1272,7 +1262,6 @@ COMMAND_LIST: list[tuple[str, common.CommandAnnotation]] = [
     ("test", test_command),
     ("lobotomize", lobotomize_command),
     ("memory", memory_command),
-    ("memorylist", memorylist_command),
     ("logs", logs_command),
     ("clearlogs", clearlogs_command),
     ("vcsound", vcsound_command),
