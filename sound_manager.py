@@ -36,7 +36,7 @@ def stream_audio_from_url(url: str) -> dict[str, Any] | None:
     }
 
     with yt_dlp.YoutubeDL(ytdl_parameters) as ytdl:
-        data = ytdl.extract_info(url, download=False)
+        data = ytdl.extract_info(url, download=False)  # type: ignore
 
         if data is None:
             return None
@@ -44,14 +44,14 @@ def stream_audio_from_url(url: str) -> dict[str, Any] | None:
         # If a playlist was provided, take the first entry
         if 'entries' in data:
             if data['entries']:
-                data = data['entries'][0]
+                data = data['entries'][0]  # type: ignore
             else:
                 return None
 
         if not isinstance(data, dict):
             return None
 
-        return data
+        return data  # type: ignore
 
 
 async def download_audio_from_url(url: str) -> Path | None:
@@ -76,7 +76,7 @@ async def download_audio_from_url(url: str) -> Path | None:
     }
 
     with yt_dlp.YoutubeDL(ytdl_parameters) as ytdl:
-        data = ytdl.extract_info(url, download=True)
+        data = ytdl.extract_info(url, download=True)  # type: ignore
 
         if data is None:
             return None
@@ -84,19 +84,19 @@ async def download_audio_from_url(url: str) -> Path | None:
         # If a playlist was provided, take the first entry
         if 'entries' in data:
             if data['entries']:
-                data = data['entries'][0]
+                data = data['entries'][0]  # type: ignore
             else:
                 return None
 
         if not isinstance(data, dict):
             return None
 
-        original_filename = Path(ytdl.prepare_filename(data))
+        original_filename = Path(ytdl.prepare_filename(data))  # type: ignore
         final_filename = original_filename.with_suffix('.mp3')
         return final_filename
 
 
-async def save_new_sound(sound_name: str, sound_file: bytes) -> None:
+async def save_new_sound(sound_name: str, sound_file: bytearray) -> None:
     sound_path = (common.PATH_SOUNDS_FOLDER / sound_name).with_suffix(".mp3")
 
     await common.write_bytes_to_file(sound_path, sound_file)
@@ -306,7 +306,7 @@ async def search_sounds(search_string: str) -> list[str]:
     return sorted(search_results)
 
 
-def is_valid_audio(data: bytes) -> bool:
+def is_valid_audio(data: bytearray) -> bool:
     file_type = filetype.guess(data)
     if file_type is None:
         return False

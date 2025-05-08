@@ -11,18 +11,15 @@ import random
 import sys
 from collections.abc import AsyncIterator, Callable, Generator
 from pathlib import Path
+from typing import Any
 
 import discord
 import httpx
 import psutil
-from discord.ext import commands as discord_commands
-from discord.ext.commands import Bot as DiscordBot
 from discord.ext.commands import CommandInvokeError, CommandNotFound
 from elevenlabs.core.api_error import ApiError as ElevenLabsApiError
 from loguru import logger
 from telegram.error import BadRequest
-from telegram.ext import Application as TelegramBot
-from telegram.ext import CommandHandler, MessageHandler, filters
 from yt_dlp.utils import DownloadError as YtdlDownloadError
 
 import chat
@@ -30,35 +27,7 @@ import common
 import dice_roller
 import sound_manager
 import trivia
-from common import CommandResponse, FileResponse, InvalidBotTypeError, NoResponse, SoundResponse, UserCommand, requireadmin, requiresuper
-
-
-async def register_commands(bot: TelegramBot | DiscordBot) -> None:
-    if isinstance(bot, TelegramBot):
-        for command in COMMAND_LIST:
-            bot.add_handler(CommandHandler(command[0], await common.wrap_telegram_command(bot, command[1])))
-
-        for command in FILE_COMMAND_LIST:
-            regex = rf'^/{command[0]}'
-            bot.add_handler(
-                MessageHandler(
-                    (filters.ALL & filters.CaptionRegex(regex)) | (filters.TEXT & filters.Regex(regex)),
-                    await common.wrap_telegram_command(bot, command[1]),
-                ),
-            )
-
-        bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), await common.wrap_telegram_command(bot, handle_message_event)))
-
-    elif isinstance(bot, DiscordBot):
-        for command in [*COMMAND_LIST, *FILE_COMMAND_LIST]:
-            new_command = discord_commands.Command(await common.wrap_discord_command(bot, command[1]))
-            new_command.name = command[0]
-            bot.add_command(new_command)
-
-        await discord_register_events(bot)
-
-    else:
-        raise InvalidBotTypeError
+from common import CommandResponse, FileResponse, NoResponse, SoundResponse, UserCommand, requireadmin, requiresuper
 
 
 # ==========================
@@ -866,14 +835,14 @@ async def setconfig_command(user_command: UserCommand) -> CommandResponse:
 async def configlist_command(_: UserCommand) -> CommandResponse:
     config = await common.Config.load()
 
-    setting_list = []
+    setting_list: list[str] = []
     for g in config.__dict__:
         for s in getattr(config, g).__dict__:
             group_name, setting_name, value = config.find_setting(f"{g}.{s}")
             setting_list.append(f"{group_name}.{setting_name}: {value}")
 
-    setting_list = '\n-- '.join(setting_list)
-    return CommandResponse('', f"Here is a list of all available settings: \n-- {setting_list}")
+    setting_string = '\n-- '.join(setting_list)
+    return CommandResponse('', f"Here is a list of all available settings: \n-- {setting_string}")
 # endregion
 
 
@@ -955,7 +924,7 @@ async def test_command(user_command: UserCommand) -> CommandResponse:
     # This is EXTREMELY DANGEROUS, be very sure that you know what lines are inside of the response list file!
     async def evaluate_fstring(fstring: str, local_vars: dict[str, object]) -> str:
         code = f"async def _f(): return {fstring}"
-        namespace = {}
+        namespace: dict[str, Any] = {}
         exec(code, local_vars, namespace)
         return await namespace["_f"]()
 
@@ -1154,7 +1123,7 @@ async def getfile_command(user_command: UserCommand) -> CommandResponse:
 # EVENTS
 # ==========================
 # region
-async def discord_register_events(discord_bot: DiscordBot) -> None:  # noqa: C901
+async def discord_register_events(discord_bot: common.DiscordBotAnnotation) -> None:  # noqa: C901
     # This function assigns all of the event handlers to the discord bot
 
     @discord_bot.event
@@ -1182,7 +1151,10 @@ async def discord_register_events(discord_bot: DiscordBot) -> None:  # noqa: C90
         if message.author.bot:
             return
 
-        if message.content.startswith(str(discord_bot.command_prefix)):
+        if not isinstance(discord_bot.command_prefix, str):
+            return
+
+        if message.content.startswith(discord_bot.command_prefix):
             await discord_bot.process_commands(message)
             return
 

@@ -24,13 +24,9 @@
    },
    "python.analysis.diagnosticSeverityOverrides": {
       "reportMissingTypeStubs": "none",
-      "reportMissingTypeArgument": "none",
-      "reportUnknownMemberType": "none",
-      "reportUnknownParameterType": "none",
-      "reportUnknownArgumentType": "none",
-      "reportUnnecessaryIsInstance": "none",
       "reportUnusedFunction": "none",
-      "reportUnknownVariableType": "none"
+      "reportUnnecessaryIsInstance": "none",
+      "reportUnknownMemberType": "none",
    },
    "editor.codeActionsOnSave": {
        "source.organizeImports.ruff": "explicit"

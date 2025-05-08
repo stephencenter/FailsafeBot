@@ -38,7 +38,7 @@ from telegram.ext import CallbackContext as TelegramContext
 # region
 # PROJECT VARIABLES
 APPLICATION_NAME = "FailsafeBot"
-VERSION_NUMBER = "v1.1.13"
+VERSION_NUMBER = "v1.1.14"
 
 # DIRECTORIES
 PATH_DATA_FOLDER = Path("Data")
@@ -332,7 +332,7 @@ class NoResponse(CommandResponse):
 
 
 class UserCommand:
-    def __init__(self, target_bot: TelegramBot | DiscordBot, context: TelegramContext | DiscordContext, update: TelegramUpdate | None = None) -> None:
+    def __init__(self, target_bot: "AnyBotAnnotation", context: "AnyContextAnnotation", update: TelegramUpdate | None = None) -> None:
         if isinstance(target_bot, TelegramBot) and update is None:
             error_msg = "Update cannot be None when sending message to telegram bot"
             raise ValueError(error_msg)
@@ -515,14 +515,14 @@ class UserCommand:
 
         raise InvalidBotTypeError(self.target_bot)
 
-    async def get_user_attachments(self) -> list[bytes] | BadRequest | None:
+    async def get_user_attachments(self) -> list[bytearray] | BadRequest | None:
         if isinstance(self.update, TelegramUpdate):
             # NOTE: If this function is returning None for a TelegramBot when you're expecting files,
             # make sure that you have your command registered in FILE_COMMAND_LIST and not COMMAND_LIST!
             if self.update.message is None:
                 raise MissingUpdateInfoError(self.update)
 
-            attachments = []
+            attachments: list[bytearray] = []
             for file in [self.update.message.document, self.update.message.audio, self.update.message.voice]:
                 if file is not None:
                     try:
@@ -536,7 +536,7 @@ class UserCommand:
             return attachments or None
 
         if isinstance(self.context, DiscordContext):
-            attachments = [await att.read() for att in self.context.message.attachments]
+            attachments = [bytearray(await att.read()) for att in self.context.message.attachments]
             return attachments or None
 
         raise InvalidBotTypeError(self.target_bot)
@@ -723,6 +723,7 @@ class UserCommand:
             return username
 
         return corrected_name
+# endregion
 
 
 # ==========================
@@ -730,8 +731,14 @@ class UserCommand:
 # ==========================
 # region
 CommandAnnotation = Callable[[UserCommand], types.CoroutineType[Any, Any, CommandResponse]]
-TelegramAnnotation = Callable[[TelegramUpdate, TelegramContext[Any, Any, Any, Any]], types.CoroutineType[Any, Any, None]]
-DiscordAnnotation = Callable[[DiscordContext[Any]], types.CoroutineType[Any, Any, None]]
+TelegramBotAnnotation = TelegramBot[Any, Any, Any, Any, Any, Any]
+DiscordBotAnnotation = DiscordBot
+AnyBotAnnotation = TelegramBotAnnotation | DiscordBotAnnotation
+TelegramContextAnnotation = TelegramContext[Any, Any, Any, Any]
+DiscordContextAnnotation = DiscordContext[Any]
+AnyContextAnnotation = TelegramContextAnnotation | DiscordContextAnnotation
+TelegramFunctionAnnotation = Callable[[TelegramUpdate, TelegramContextAnnotation], types.CoroutineType[Any, Any, None]]
+DiscordFunctionAnnotation = Callable[[DiscordContextAnnotation], types.CoroutineType[Any, Any, None]]
 # endregion
 
 
@@ -814,9 +821,9 @@ async def send_response(command_function: CommandAnnotation, user_command: UserC
         await append_to_gpt_memory(user_prompt=user_prompt, bot_prompt=user_command.response.bot_message)
 
 
-async def wrap_telegram_command(bot: TelegramBot, command: CommandAnnotation) -> TelegramAnnotation:
+async def wrap_telegram_command(bot: TelegramBotAnnotation, command: CommandAnnotation) -> TelegramFunctionAnnotation:
     @functools.wraps(command)
-    async def telegram_wrapper(update: TelegramUpdate, context: TelegramContext[Any, Any, Any, Any]) -> None:
+    async def telegram_wrapper(update: TelegramUpdate, context: TelegramContextAnnotation) -> None:
         config = await Config.load()
 
         if update.message is None:
@@ -845,9 +852,9 @@ async def wrap_telegram_command(bot: TelegramBot, command: CommandAnnotation) ->
     return telegram_wrapper
 
 
-async def wrap_discord_command(bot: DiscordBot, command: CommandAnnotation) -> DiscordAnnotation:
+async def wrap_discord_command(bot: DiscordBotAnnotation, command: CommandAnnotation) -> DiscordFunctionAnnotation:
     @functools.wraps(command)
-    async def discord_wrapper(context: DiscordContext[Any]) -> None:
+    async def discord_wrapper(context: DiscordContextAnnotation) -> None:
         config = await Config.load()
         user_command = UserCommand(bot, context)
         await user_command.track_user_id()
@@ -1020,11 +1027,11 @@ async def write_lines_to_file(path: str | Path, lines: list[str]) -> None:
 
 async def write_text_to_file(path: str | Path, text: str) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    async with aiofiles.open(path, mode='w', encoding='utf-8') as f:
+    async with aiofiles.open(path, mode='w', encoding='u tf-8') as f:
         await f.write(text)
 
 
-async def write_bytes_to_file(path: str | Path, byte_obj: AsyncIterator[bytes] | bytes) -> None:
+async def write_bytes_to_file(path: str | Path, byte_obj: AsyncIterator[bytes] | bytes | bytearray) -> None:
     async with aiofiles.open(path, "wb") as f:
         if isinstance(byte_obj, AsyncIterator):
             async for chunk in byte_obj:
