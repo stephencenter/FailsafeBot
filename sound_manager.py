@@ -102,6 +102,11 @@ async def save_new_sound(sound_name: str, sound_file: bytearray) -> None:
     await common.write_bytes_to_file(sound_path, sound_file)
 
 
+def del_sound_file(sound_name: str) -> None:
+    sound_path = (common.PATH_SOUNDS_FOLDER / sound_name).with_suffix(".mp3")
+    sound_path.unlink()
+
+
 def get_sound_dict() -> dict[str, Path]:
     # If any .mp3 files are in the main directory, move them to the Sounds directory
     for file in Path().iterdir():

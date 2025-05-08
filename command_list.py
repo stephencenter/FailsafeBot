@@ -147,6 +147,21 @@ async def addsound_command(user_command: UserCommand) -> CommandResponse:
     return CommandResponse(user_message, f"Added new sound '{sound_name}'.")
 
 
+@requiresuper
+async def delsound_command(user_command: UserCommand) -> CommandResponse:
+    sound_to_delete = user_command.get_first_arg(lowercase=True)
+    if sound_to_delete is None:
+        return CommandResponse("Can you delete a sound for me?", random.choice(common.TXT_SOUND_NOT_PROVIDED))
+
+    user_message = f"Can you delete the sound '{sound_to_delete} for me?"
+    if not await sound_manager.sound_exists(sound_to_delete):
+        return CommandResponse(user_message, random.choice(common.TXT_SOUND_NOT_FOUND))
+
+    sound_manager.del_sound_file(sound_to_delete)
+
+    return CommandResponse(user_message, f"The sound '{sound_to_delete}' has been banished to oblivion.")
+
+
 async def newsounds_command(_: UserCommand) -> CommandResponse:
     playcount_dict = await sound_manager.get_playcount_dict()
     new_sounds = [sound for sound in playcount_dict if playcount_dict[sound] == 0]
@@ -1220,6 +1235,7 @@ COMMAND_LIST: list[tuple[str, common.CommandAnnotation]] = [
     ("topsounds", topsounds_command),
     ("botsounds", botsounds_command),
     ("newsounds", newsounds_command),
+    ("delsound", delsound_command),
     ("addalias", addalias_command),
     ("delalias", delalias_command),
     ("getalias", getalias_command),
