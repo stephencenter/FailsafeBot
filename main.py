@@ -8,7 +8,6 @@ from typing import Any
 import discord
 from discord.errors import LoginFailure as DiscordInvalidToken
 from discord.ext import commands as discord_commands
-from discord.ext.commands import Bot as DiscordBot
 from loguru import logger
 from telegram.error import InvalidToken as TelegramInvalidToken
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
@@ -65,7 +64,7 @@ async def try_start_telegram_bot() -> common.TelegramBotAnnotation | None:
         logger.error(f"Telegram bot is enabled but token not found at {common.PATH_TELEGRAM_TOKEN}, couldn't start bot")
         return None
 
-    telegram_bot = ApplicationBuilder().token(telegram_token).build()
+    telegram_bot: common.TelegramBotAnnotation = ApplicationBuilder().token(telegram_token).build()
 
     try:
         await telegram_bot.initialize()
@@ -117,7 +116,7 @@ async def try_start_discord_bot() -> tuple[common.DiscordBotAnnotation | None, a
     intents = discord.Intents.default()
     intents.members = True
     intents.message_content = True
-    discord_bot = DiscordBot(command_prefix='/', intents=intents, help_command=None)
+    discord_bot = common.DiscordBotAnnotation(command_prefix='/', intents=intents, help_command=None)
 
     # Register commands
     for command in [*command_list.COMMAND_LIST, *command_list.FILE_COMMAND_LIST]:
