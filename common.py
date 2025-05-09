@@ -40,7 +40,7 @@ from telegram.ext import CallbackContext as TelegramContext
 # region
 # PROJECT VARIABLES
 APPLICATION_NAME = "FailsafeBot"
-VERSION_NUMBER = "v1.1.14"
+VERSION_NUMBER = "v1.1.15"
 
 # DIRECTORIES
 PATH_DATA_FOLDER = Path("Data")
@@ -290,6 +290,11 @@ class NoResponse(CommandResponse):
 
 class UserCommand:
     def __init__(self, target_bot: AnyBotAnnotation, context: AnyContextAnnotation, update: TelegramUpdate | None = None) -> None:
+        self.target_bot = target_bot
+        self.context = context
+        self.update = update
+        self.response: CommandResponse | None = None
+
         if isinstance(target_bot, TelegramBot) and update is None:
             error_msg = "Update cannot be None when sending message to telegram bot"
             raise ValueError(error_msg)
@@ -303,12 +308,7 @@ class UserCommand:
             raise TypeError(error_msg)
 
         if not isinstance(target_bot, TelegramBot) and not isinstance(target_bot, DiscordBot):
-            raise InvalidBotTypeError
-
-        self.target_bot = target_bot
-        self.context = context
-        self.update = update
-        self.response: CommandResponse | None = None
+            raise InvalidBotTypeError(self)
 
     async def get_command_name(self) -> str | None:
         if isinstance(self.update, TelegramUpdate):
@@ -414,6 +414,8 @@ class UserCommand:
                 if caption.startswith('/'):
                     return caption.split()[1:]
                 return caption.split()
+
+            raise MissingUpdateInfoError(self.update)
 
         if isinstance(self.context, DiscordContext):
             if (caption := self.context.message.content).startswith('/'):
