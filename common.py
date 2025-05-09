@@ -5,6 +5,8 @@ the rest of this script. This includes important file paths, UserCommand/Command
 and file IO functions.
 """
 
+from __future__ import annotations
+
 import dataclasses
 import functools
 import html
@@ -95,6 +97,11 @@ TXT_SOUND_NOT_FOUND = (
     "I wouldn't be caught dead with a sound like that on my list.",
     "No dice. Someone probably forgot to upload it, what a fool.",
 )
+
+TXT_NO_PERMISSIONS = (
+    "You don't have the right, O you don't have the right.",
+    "You think I'd let just anyone do this?",
+)
 # endregion
 
 
@@ -161,7 +168,7 @@ class Config:
         raise RuntimeError(error_msg)
 
     @classmethod
-    async def load(cls) -> "Config":  # Python 3.14 will fix this!
+    async def load(cls) -> Config:
         self = object.__new__(cls)
         self.main = ConfigMain()
         self.chat = ConfigChat()
@@ -276,22 +283,13 @@ class SoundResponse(FileResponse):
         super().__init__(user_message, bot_message, file_path, record_to_memory=record_to_memory, temp=temp, send_to_chat=send_to_chat)
 
 
-class NoPermissionsResponse(CommandResponse):
-    def __init__(self) -> None:
-        chosen_response = random.choice([
-            "You don't have the right, O you don't have the right.",
-            "You think I'd let just anyone do this?",
-        ])
-        super().__init__("Can I do that sensitive thing that requires admin rights?", chosen_response, record_to_memory=True, send_to_chat=True)
-
-
 class NoResponse(CommandResponse):
     def __init__(self) -> None:
         super().__init__('', '', record_to_memory=False, send_to_chat=False)
 
 
 class UserCommand:
-    def __init__(self, target_bot: "AnyBotAnnotation", context: "AnyContextAnnotation", update: TelegramUpdate | None = None) -> None:
+    def __init__(self, target_bot: AnyBotAnnotation, context: AnyContextAnnotation, update: TelegramUpdate | None = None) -> None:
         if isinstance(target_bot, TelegramBot) and update is None:
             error_msg = "Update cannot be None when sending message to telegram bot"
             raise ValueError(error_msg)
@@ -313,22 +311,21 @@ class UserCommand:
         self.response: CommandResponse | None = None
 
     async def get_command_name(self) -> str | None:
-        command_name = None
         if isinstance(self.update, TelegramUpdate):
-            if self.update.message is None or self.update.message.text is None:
+            if self.update.message is None:
                 raise MissingUpdateInfoError(self.update)
 
-            if self.update.message.text.startswith("/"):
-                command_name = self.update.message.text.split()[0][1:]
+            if (text := self.update.message.text) is not None and text.startswith('/'):
+                return text.split()[0][1:]
+
+            if (caption := self.update.message.caption) is not None and caption.startswith('/'):
+                return caption.split()[0][1:]
 
         elif isinstance(self.context, DiscordContext):
             if self.context.command is not None:
-                command_name = self.context.command.name
+                return self.context.command.name
 
-        else:
-            raise InvalidBotTypeError(self)
-
-        return command_name
+        return None
 
     async def track_user_id(self) -> None:
         id_dict: dict[str, dict[str, str]] = await try_read_json(PATH_TRACK_USERID, {})
@@ -356,12 +353,8 @@ class UserCommand:
         elif isinstance(self.context, DiscordContext):
             username = self.context.author.name
 
-        else:
-            raise InvalidBotTypeError(self)
-
         if username is None:
-            error_msg = f"Failed to obtain username for bot type {type(self.target_bot).__name__}"
-            raise ValueError(error_msg)
+            raise InvalidBotTypeError(self)
 
         if map_name:
             return await self.map_username(username)
@@ -374,15 +367,12 @@ class UserCommand:
             if self.update.message is None or self.update.message.from_user is None:
                 raise MissingUpdateInfoError(self.update)
 
-            user_id = str(self.update.message.from_user.id)
+            return str(self.update.message.from_user.id)
 
-        elif isinstance(self.context, DiscordContext):
-            user_id = str(self.context.author.id)
+        if isinstance(self.context, DiscordContext):
+            return str(self.context.author.id)
 
-        else:
-            raise InvalidBotTypeError(self)
-
-        return user_id
+        raise InvalidBotTypeError(self)
 
     async def get_id_by_username(self, username: str) -> str | None:
         # Attempt to retrieve the ID belonging to the provided username
@@ -411,69 +401,43 @@ class UserCommand:
     def get_args_list(self) -> list[str]:
         # Returns the list of arguments provided with the command
         # Ex. /test a b c -> ['a', 'b', 'c']
-        if isinstance(self.context, TelegramContext) and self.context.args is not None:
-            return self.context.args
+        if isinstance(self.update, TelegramUpdate):
+            if self.update.message is None:
+                raise MissingUpdateInfoError(self.update)
 
-        if isinstance(self.context, DiscordContext) and len(self.context.message.content) > 0:
-            return self.context.message.content.split()[1:]
+            if (text := self.update.message.text) is not None:
+                if text.startswith('/'):
+                    return text.split()[1:]
+                return text.split()
+
+            if (caption := self.update.message.caption) is not None:
+                if caption.startswith('/'):
+                    return caption.split()[1:]
+                return caption.split()
+
+        if isinstance(self.context, DiscordContext):
+            if (caption := self.context.message.content).startswith('/'):
+                return caption.split()[1:]
+            return caption.split()
 
         raise InvalidBotTypeError(self)
 
     def get_first_arg(self, *, lowercase: bool = False) -> str | None:
         # Returns the first element from the argument list, all lowercase if lowercase=True
         # Ex. /test a b c -> 'a'
-        args_list = []
+        args_list = self.get_args_list()
 
-        if isinstance(self.context, TelegramContext) and self.context.args is not None:
-            args_list = self.context.args
-
-        elif isinstance(self.update, TelegramUpdate):
-            if self.update.message is None:
-                raise MissingUpdateInfoError(self.update)
-
-            if self.update.message.caption is not None:
-                args_list = self.update.message.caption.split()
-            elif self.update.message.text is not None:
-                args_list = self.update.message.text.split()
-
-            if len(args_list) > 1:
-                args_list = args_list[1:]
-            else:
-                args_list = []
-
-        elif isinstance(self.context, DiscordContext) and len(self.context.message.content) > 0:
-            args_list = self.context.message.content.split()[1:]
-
-        else:
-            raise InvalidBotTypeError(self)
-
-        try:
+        if args_list:
             if lowercase:
                 return args_list[0].lower()
             return args_list[0]
 
-        except IndexError:
-            return None
+        return None
 
     def get_user_message(self) -> str:
         # Returns the message that this user sent with this UserCommand
-        # Ex. /test a b c -> 'a b c'
-        if isinstance(self.context, TelegramContext):
-            if self.context.args is not None:
-                return ' '.join(self.context.args)
-
-        elif isinstance(self.update, TelegramUpdate):
-            if self.update.message is None or self.update.message.text is None:
-                raise MissingUpdateInfoError(self.update)
-
-            return self.update.message.text
-
-        elif isinstance(self.context, DiscordContext) and self.context.message.content:
-            if self.context.message.content.startswith("/"):
-                return ' '.join(self.context.message.content.split()[1:])
-            return self.context.message.content
-
-        raise InvalidBotTypeError(self)
+        # Ex. /test a b c -> 'a b c', Hello world! -> 'Hello world!'
+        return ' '.join(self.get_args_list())
 
     async def get_user_attachments(self) -> list[bytearray] | BadRequest | None:
         if isinstance(self.update, TelegramUpdate):
@@ -694,11 +658,14 @@ class UserCommand:
 # region
 class InvalidBotTypeError(TypeError):
     # This exception type should be raised if a function expects a TelegramBot or DiscordBot but gets something else instead
-    def __init__(self, user_command: UserCommand) -> None:
-        bot_type = type(user_command.target_bot).__name__
-        context_type = type(user_command.context).__name__
-        update_type = type(user_command.update).__name__
-        self.message = f"Bot property types are invalid (Bot: {bot_type}, Context: {context_type}, Update: {update_type})"
+    def __init__(self, user_command: UserCommand, message: str | None = None) -> None:
+        self.message = message
+        if message is None:
+            bot_type = type(user_command.target_bot).__name__
+            context_type = type(user_command.context).__name__
+            update_type = type(user_command.update).__name__
+            self.message = f"Function failed for provided bot type (Bot: {bot_type}, Context: {context_type}, Update: {update_type})"
+
         super().__init__(self.message)
 
 
@@ -714,8 +681,8 @@ class MissingUpdateInfoError(ValueError):
         elif update.message is None:
             self.message = "Update.message cannot be None"
 
-        elif update.message.text is None:
-            self.message = "Update.message.text cannot be None"
+        elif (update.message.text is None and update.message.caption is None):
+            self.message = "Update.message.text and Update.message.caption cannot both be None"
 
         elif update.message.from_user is None:
             self.message = "Update.message.from_user cannot be None"
@@ -723,13 +690,10 @@ class MissingUpdateInfoError(ValueError):
         elif update.effective_chat is None:
             self.message = "Update.effective_chat cannot be None"
 
-        elif update.message.caption is None:
-            self.message = "Update.message.caption cannot be None"
-
         super().__init__(self.message)
-
-
 # endregion
+
+
 # ==========================
 # TYPE ANNOTATIONS
 # ==========================
@@ -752,7 +716,7 @@ def requireadmin(function: CommandAnnotation) -> CommandAnnotation:
     async def admin_wrapper(user_command: UserCommand) -> CommandResponse:
         config = await Config.load()
         if config.main.requireadmin and not await user_command.is_admin():
-            return NoPermissionsResponse()
+            return CommandResponse("Can I do that sensitive thing that requires admin rights?", random.choice(TXT_NO_PERMISSIONS))
 
         return await function(user_command)
 
@@ -767,7 +731,7 @@ def requiresuper(function: CommandAnnotation) -> CommandAnnotation:
     async def superadmin_wrapper(user_command: UserCommand) -> CommandResponse:
         config = await Config.load()
         if config.main.requireadmin and not await user_command.is_superadmin():
-            return NoPermissionsResponse()
+            return CommandResponse("Can I do that sensitive thing that requires superadmin rights?", random.choice(TXT_NO_PERMISSIONS))
 
         return await function(user_command)
 
