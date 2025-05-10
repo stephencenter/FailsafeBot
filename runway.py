@@ -144,8 +144,8 @@ async def check_superadmins() -> AsyncGenerator[str]:
     config = await common.Config.load()
 
     platform_list = [("telegram", config.main.autosupertelegram), ("discord", config.main.autosuperdiscord)]
-    for platform_str, autoassign in platform_list:
+    for plat_str, autoassign in platform_list:
         if not autoassign:
             continue
-        if platform_str not in admin_dict or "superadmin" not in admin_dict[platform_str] or not admin_dict[platform_str]["superadmin"]:
-            yield f"{platform_str.title()} has no superadmins, first interaction will get role"
+        if plat_str not in admin_dict or "superadmin" not in admin_dict[plat_str] or not admin_dict[plat_str]["superadmin"]:
+            yield f"{plat_str.title()} has no superadmins, first interaction will get role"

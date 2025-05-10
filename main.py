@@ -81,17 +81,12 @@ async def try_start_telegram_bot() -> common.TelegramBotAnnotation | None:
         telegram_bot.add_handler(CommandHandler(command[0], await common.wrap_telegram_command(telegram_bot, command[1])))
 
     for command in command_list.FILE_COMMAND_LIST:
-        regex = rf'^/{command[0]}'
-        telegram_bot.add_handler(
-            MessageHandler(
-                (filters.ALL & filters.CaptionRegex(regex)) | (filters.TEXT & filters.Regex(regex)),
-                await common.wrap_telegram_command(telegram_bot, command[1]),
-            ),
-        )
+        r_string = rf'^/{command[0]}'
+        regex = (filters.ALL & filters.CaptionRegex(r_string)) | (filters.TEXT & filters.Regex(r_string))
+        telegram_bot.add_handler(MessageHandler(regex, await common.wrap_telegram_command(telegram_bot, command[1])))
 
-    telegram_bot.add_handler(
-        MessageHandler(filters.TEXT & (~filters.COMMAND), await common.wrap_telegram_command(telegram_bot, command_list.handle_message_event)),
-    )
+    wrapped = await common.wrap_telegram_command(telegram_bot, command_list.handle_message_event)
+    telegram_bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), wrapped))
 
     # Begin polling
     if telegram_bot.updater is not None:
@@ -120,7 +115,8 @@ async def try_start_discord_bot() -> tuple[common.DiscordBotAnnotation | None, a
 
     # Register commands
     for command in [*command_list.COMMAND_LIST, *command_list.FILE_COMMAND_LIST]:
-        new_command: discord_commands.Command[Any, Any, Any] = discord_commands.Command(await common.wrap_discord_command(discord_bot, command[1]))
+        wrapped = await common.wrap_discord_command(discord_bot, command[1])
+        new_command: discord_commands.Command[Any, Any, Any] = discord_commands.Command(wrapped)
         new_command.name = command[0]
         discord_bot.add_command(new_command)
 

@@ -90,7 +90,7 @@ async def soundlist_command(_: UserCommand) -> CommandResponse:
 
     user_message = "How many sounds are available to use? Can you list them for me?"
     if not sound_list:
-        return CommandResponse(user_message, f"You have no sounds available to play! Put some .mp3s in {common.PATH_SOUNDS_FOLDER}.")
+        return CommandResponse(user_message, "You have no sounds available to play, use /addsounds to add some!")
 
     if num_sounds > 100:
         txt_path = common.PATH_TEMP_FOLDER / "soundlist.txt"
@@ -252,8 +252,10 @@ async def search_command(user_command: UserCommand) -> CommandResponse:
     if num_matches == 1:
         return CommandResponse(user_prompt, f"There is one sound matching '{search_string}': {results_string}")
 
-    if num_matches > 100:
-        return CommandResponse(user_prompt, f"There are more than 100 sounds matching '{search_string}', try a more specific search")
+    max_matches = 100
+    if num_matches > max_matches:
+        response_str = f"There are more than {max_matches} sounds matching '{search_string}', try a more specific search"
+        return CommandResponse(user_prompt, response_str)
 
     return CommandResponse(user_prompt, f"There are {num_matches} sounds matching '{search_string}': \n\n{results_string}")
 
@@ -664,7 +666,8 @@ async def roll_command(user_command: UserCommand) -> CommandResponse:
 
 
 async def statroll_command(user_command: UserCommand) -> CommandResponse:
-    error_response = f"Please provide a valid game name ({', '.join(game.game_aliases[0] for game in dice_roller.STATROLL_GAME_OPTIONS)})"
+    valid_options = ', '.join(game.game_aliases[0] for game in dice_roller.STATROLL_GAME_OPTIONS)
+    error_response = f"Please provide a valid game name ({valid_options})"
 
     user_string = ' '.join(user_command.get_args_list()).lower()
     if user_string:

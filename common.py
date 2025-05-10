@@ -129,8 +129,8 @@ class ConfigChat:
     """Config dataclass for chatting functionality (text, voice, and general memory)."""
 
     replytoname: bool = True  # Whether the bot should respond when their name is said
-    replytomonkey: bool = False  # Whether the bot should play a monkey sound when the word monkey is said (Discworld adventure game reference)
-    randreplychance: float = 0.05  # The chance for the bot to randomly reply to any message in a chat they're in (0 = no chance 1 = every message)
+    replytomonkey: bool = False  # Whether the bot should play a sound when the word monkey is said (Discworld adv game reference)
+    randreplychance: float = 0.05  # Chance for the bot to randomly reply to any message in a chat they're in (0 -> 0%, 1.0 -> 100%)
     gptmodel: str = "gpt-4o-mini"  # What GPT model to use for AI chatting
     gpttemp: float = 1.0  # Temperature for GPT chat completions (0 to 2, values outside this will break)
     gptmaxtokens: int = 256  # Value to be passed for parameter max_completion_tokens for gpt chat completion (note 1 token = ~4 chars)
@@ -153,7 +153,7 @@ class ConfigMisc:
     usemegabytes: bool = True  # Whether the /system command should use megabytes (will use gigabytes if false)
     minsimilarity: float = 0.75  # The minimum similarity threshold when searching for sound names (1.0 = exact matches on
     maxstreamtime: int = 30  # How much of a video the /stream command will download (does not apply to /vcstream)
-    maxdice: int = 100  # Maximum number of dice in one command for dice roller (bigger numbers might make messages too large for telegram)
+    maxdice: int = 100  # Maximum number of dice in one command for dice roller (bigger numbers might reach message length cap)
     maxfaces: int = 10000  # Maximum number of faces for the dice for dice roller
 
 

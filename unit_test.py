@@ -140,7 +140,7 @@ def discord_create_usercommand(test_input: TestInput) -> UserCommand:
     return UserCommand(bot, context, None)  # type: ignore
 
 
-@dataclass
+@dataclass(kw_only=True)
 class TestInput:
     text_input: str
     user_name: str
@@ -196,40 +196,72 @@ TEST_LIST = [
     test_user_prompt,
 ]
 
+INPUT_LIST: list[TestInput] = [
+    TestInput(
+        text_input="test 123 abc 456",
+        user_name="test_user",
+        user_id="11234",
+        chat_id="321",
+        args_list=["test", "123", "abc", "456"],
+        first_arg="test",
+        user_msg="test 123 abc 456",
+        user_prompt="test_user: test 123 abc 456",
+        is_private=True,
+    ),
+    TestInput(
+        text_input="/test test 123 abc 456",
+        user_name="test_user",
+        user_id="11234",
+        chat_id="321",
+        args_list=["test", "123", "abc", "456"],
+        first_arg="test",
+        user_msg="test 123 abc 456",
+        user_prompt="test_user: test 123 abc 456",
+        is_private=False,
+    ),
+    TestInput(
+        text_input="/test",
+        user_name="test_user",
+        user_id="11234",
+        chat_id="321",
+        args_list=[],
+        first_arg=None,
+        user_msg="",
+        user_prompt=None, is_private=True,
+    ),
+    TestInput(
+        text_input="/",
+        user_name="test_user",
+        user_id="11234",
+        chat_id="321",
+        args_list=[],
+        first_arg=None,
+        user_msg="",
+        user_prompt=None, is_private=False,
+    ),
+    TestInput(
+        text_input="",
+        user_name="test_user",
+        user_id="11234",
+        chat_id="321",
+        args_list=[],
+        first_arg=None,
+        user_msg="",
+        user_prompt=None, is_private=True,
+    ),
+]
+
 
 async def perform_tests() -> None:
-    input_list: list[TestInput] = [
-        TestInput(
-            "test 123 abc 456", "test_user", "11234", "321",
-            ["test", "123", "abc", "456"], "test", "test 123 abc 456", "test_user: test 123 abc 456", is_private=True,
-        ),
-        TestInput(
-            "/test test 123 abc 456", "test_user", "11234", "321",
-            ["test", "123", "abc", "456"], "test", "test 123 abc 456", "test_user: test 123 abc 456", is_private=False,
-        ),
-        TestInput(
-            "/test", "test_user", "11234", "321",
-            [], None, "", None, is_private=True,
-        ),
-        TestInput(
-            "/", "test_user", "11234", "321",
-            [], None, "", None, is_private=False,
-        ),
-        TestInput(
-            "", "test_user", "11234", "321",
-            [], None, "", None, is_private=True,
-        ),
-    ]
+    for test in TEST_LIST:
+        for index, item in enumerate(INPUT_LIST):
+            # We create two telegram UserCommands, one where the user message is in message.text and
+            # another where the user message is in message.caption, as both are possible and need to be tested.
+            # We only need to create one discord UserCommand because it doesn't have this quirk
+            command_list = [*telegram_create_usercommands(item), discord_create_usercommand(item)]
 
-    for index, item in enumerate(input_list):
-        # We create two telegram UserCommands, one where the user message is in message.text and
-        # another where the user message is in message.caption, as both are possible and need to be tested.
-        # We only need to create one discord UserCommand because it doesn't have this quirk
-        command_list = [*telegram_create_usercommands(item), discord_create_usercommand(item)]
-
-        # This zip pairs each UserCommand in command_list with a letter of the alphabet
-        for command, letter in zip(command_list, string.ascii_lowercase, strict=False):
-            for test in TEST_LIST:
+            # This zip pairs each UserCommand in command_list with a letter of the alphabet
+            for command, letter in zip(command_list, string.ascii_lowercase, strict=False):
                 result = await test(command, item)
                 if result:
                     logger.info(f"Item {index}{letter} passed {test.__name__}()")
@@ -239,3 +271,4 @@ async def perform_tests() -> None:
 
 if __name__ == "__main__":
     asyncio.run(perform_tests())
+    input("Tests complete. Press enter/return to close ")

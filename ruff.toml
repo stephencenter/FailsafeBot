@@ -1,5 +1,5 @@
 extend-exclude = ["Test"]
-line-length = 150
+line-length = 135
 
 [lint]
 preview = true
