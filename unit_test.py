@@ -1,10 +1,17 @@
-"""Module for simulating UserCommands and testing its methods."""
+"""Module for testing UserCommands and its methods.
+
+This module simulates Telegram and Discord bots and their contexts to unit
+test the various methods belonging to the UserCommand class.
+"""
 
 from __future__ import annotations
 
 import asyncio
+import string
 from dataclasses import dataclass
 
+from discord.ext.commands import Bot as DiscordBotType
+from discord.ext.commands import Context as DiscordContextType
 from loguru import logger
 from telegram import Update as TelegramUpdateType
 from telegram.ext import Application as TelegramBotType
@@ -18,35 +25,18 @@ from common import UserCommand
 # ==========================
 # region
 class FakeTelegramApplication:
-    def __init(self) -> None:
-        pass
-
     @property
     def __class__(self) -> type:  # type: ignore
         return TelegramBotType
 
 
-class FakeTelegramUser:
-    def __init__(self, username: str, id: str) -> None:  # noqa: A002
-        self.username = username
-        self.id = id
-
-
+@dataclass
 class FakeTelegramUpdate:
-    def __init__(self, message: FakeTelegramMessage | None) -> None:
-        self.message = message
+    message: FakeTelegramMessage | None
 
     @property
     def __class__(self) -> type:  # type: ignore
         return TelegramUpdateType
-
-
-class FakeTelegramMessage:
-    def __init__(self, text: str | None, caption: str | None, chat: FakeTelegramChat, from_user: FakeTelegramUser) -> None:
-        self.text = text
-        self.caption = caption
-        self.chat = chat
-        self.from_user = from_user
 
 
 class FakeTelegramContext:
@@ -55,50 +45,76 @@ class FakeTelegramContext:
         return TelegramContextType
 
 
+@dataclass
+class FakeTelegramUser:
+    username: str
+    id: str
+
+
+@dataclass
+class FakeTelegramMessage:
+    text: str | None
+    caption: str | None
+    chat: FakeTelegramChat
+    from_user: FakeTelegramUser
+
+
+@dataclass
 class FakeTelegramChat:
-    def __init__(self, id: str, type: str) -> None:  # noqa: A002
-        self.id = id
-        self.type = type
+    id: str
+    type: str
+# endregion
 
 
 # ==========================
 # DISCORD CLASSES
 # ==========================
 # region
-"""
-class FakeDiscordUser:
-    def __init__(self, id, name) -> None:
-        self.id = id
-        self.name = name
-
-
-class FakeDiscordAttachment:
-    def __init__(self, url, filename) -> None:
-        self.url = url
-        self.filename = filename
-
-
-class FakeDiscordMessage:
-    def __init__(self, content, author, attachments=None) -> None:
-        self.content = content
-        self.author = author
-        self.attachments = attachments or []
-
-
-class FakeDiscordContext:
-    def __init__(self, message) -> None:
-        self.message = message
-
-
 class FakeDiscordBot:
-    pass
-"""
+    @property
+    def __class__(self) -> type:  # type: ignore
+        return DiscordBotType
 
 
-def telegram_create_usercommand(test_input: TestInput) -> tuple[UserCommand, UserCommand]:
+@dataclass
+class FakeDiscordContext:
+    message: FakeDiscordMessage
+    author: FakeDiscordUser
+    guild: FakeDiscordGuild | None
+    channel: FakeDiscordChannel | None
+
+    @property
+    def __class__(self) -> type:  # type: ignore
+        return DiscordContextType
+
+
+@dataclass
+class FakeDiscordUser:
+    name: str
+    id: str
+
+
+@dataclass
+class FakeDiscordMessage:
+    content: str
+    author: FakeDiscordUser
+
+
+@dataclass
+class FakeDiscordGuild:
+    id: str
+
+
+@dataclass
+class FakeDiscordChannel:
+    id: str
+# endregion
+
+
+def telegram_create_usercommands(test_input: TestInput) -> tuple[UserCommand, UserCommand]:
     bot = FakeTelegramApplication()
     context = FakeTelegramContext()
-    chat = FakeTelegramChat(test_input.chat_id, test_input.chat_type_str)
+    chat = FakeTelegramChat(test_input.chat_id, "private" if test_input.is_private else "public")
     user = FakeTelegramUser(test_input.user_name, test_input.user_id)
     message_a = FakeTelegramMessage(test_input.text_input, None, chat, user)
     message_b = FakeTelegramMessage(None, test_input.text_input, chat, user)
@@ -108,17 +124,33 @@ def telegram_create_usercommand(test_input: TestInput) -> tuple[UserCommand, Use
     return UserCommand(bot, context, update_a), UserCommand(bot, context, update_b)  # type: ignore
 
 
+def discord_create_usercommand(test_input: TestInput) -> UserCommand:
+    bot = FakeDiscordBot()
+    author = FakeDiscordUser(test_input.user_name, test_input.user_id)
+    if test_input.is_private:
+        guild = None
+        channel = FakeDiscordChannel(test_input.chat_id)
+    else:
+        guild = FakeDiscordGuild(test_input.chat_id)
+        channel = None
+
+    message = FakeDiscordMessage(test_input.text_input, author)
+    context = FakeDiscordContext(message, author, guild, channel)
+
+    return UserCommand(bot, context, None)  # type: ignore
+
+
 @dataclass
 class TestInput:
     text_input: str
     user_name: str
     user_id: str
     chat_id: str
-    chat_type_str: str
     args_list: list[str]
     first_arg: str | None
     user_msg: str
-    chat_type_bool: bool
+    user_prompt: str | None
+    is_private: bool
 
 
 async def test_args_list(user_command: UserCommand, item: TestInput) -> bool:
@@ -146,36 +178,63 @@ async def test_chat_id(user_command: UserCommand, item: TestInput) -> bool:
 
 
 async def test_chat_type(user_command: UserCommand, item: TestInput) -> bool:
-    return user_command.is_private() == item.chat_type_bool
+    return user_command.is_private() == item.is_private
+
+
+async def test_user_prompt(user_command: UserCommand, item: TestInput) -> bool:
+    return await user_command.get_user_prompt() == item.user_prompt
+
+
+TEST_LIST = [
+    test_args_list,
+    test_first_arg,
+    test_user_message,
+    test_user_name,
+    test_user_id,
+    test_chat_id,
+    test_chat_type,
+    test_user_prompt,
+]
 
 
 async def perform_tests() -> None:
     input_list: list[TestInput] = [
-        TestInput("test 123 abc 456", "test_user", "11234", "321", "private",
-            ["test", "123", "abc", "456"], "test", "test 123 abc 456", chat_type_bool=True,
+        TestInput(
+            "test 123 abc 456", "test_user", "11234", "321",
+            ["test", "123", "abc", "456"], "test", "test 123 abc 456", "test_user: test 123 abc 456", is_private=True,
         ),
-        TestInput("/test test 123 abc 456", "test_user", "11234", "321", "public",
-            ["test", "123", "abc", "456"], "test", "test 123 abc 456", chat_type_bool=False,
+        TestInput(
+            "/test test 123 abc 456", "test_user", "11234", "321",
+            ["test", "123", "abc", "456"], "test", "test 123 abc 456", "test_user: test 123 abc 456", is_private=False,
         ),
-        TestInput("/test", "test_user", "11234", "321", "private",
-            [], None, "", chat_type_bool=True,
+        TestInput(
+            "/test", "test_user", "11234", "321",
+            [], None, "", None, is_private=True,
         ),
-        TestInput("/", "test_user", "11234", "321", "public",
-            [], None, "", chat_type_bool=False,
+        TestInput(
+            "/", "test_user", "11234", "321",
+            [], None, "", None, is_private=False,
         ),
-        TestInput("", "test_user", "11234", "321", "private",
-            [], None, "", chat_type_bool=True,
+        TestInput(
+            "", "test_user", "11234", "321",
+            [], None, "", None, is_private=True,
         ),
     ]
 
     for index, item in enumerate(input_list):
-        for command in zip(telegram_create_usercommand(item), ["a", "b"], strict=True):
-            for test in [test_args_list, test_first_arg, test_user_message, test_user_name, test_user_id, test_chat_id, test_chat_type]:
-                result = await test(command[0], item)
+        # We create two telegram UserCommands, one where the user message is in message.text and
+        # another where the user message is in message.caption, as both are possible and need to be tested.
+        # We only need to create one discord UserCommand because it doesn't have this quirk
+        command_list = [*telegram_create_usercommands(item), discord_create_usercommand(item)]
+
+        # This zip pairs each UserCommand in command_list with a letter of the alphabet
+        for command, letter in zip(command_list, string.ascii_lowercase, strict=False):
+            for test in TEST_LIST:
+                result = await test(command, item)
                 if result:
-                    logger.info(f"Item {index}{command[1]} passed {test.__name__}()")
+                    logger.info(f"Item {index}{letter} passed {test.__name__}()")
                 else:
-                    logger.error(f"Item {index}{command[1]} failed {test.__name__}()")
+                    logger.error(f"Item {index}{letter} failed {test.__name__}()")
 
 
 if __name__ == "__main__":
