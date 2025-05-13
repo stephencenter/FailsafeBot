@@ -18,5 +18,6 @@ ignore = [  # Remove these at your own peril
     "RUF029",
     "S102", "S105", "S311", "S602", "S603", "S606",  # Yes yes I know
     "SIM108",
+    "TC003",
     "W291", "W292", "W293" # These ones are trailing whitespace, I have them disabled because vscode removes trailing whitespace when I save files
 ]

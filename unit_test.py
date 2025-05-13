@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import string
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 
 from discord.ext.commands import Bot as DiscordBotType
@@ -140,19 +141,10 @@ def discord_create_usercommand(test_input: TestInput) -> UserCommand:
     return UserCommand(bot, context, None)  # type: ignore
 
 
-@dataclass(kw_only=True)
-class TestInput:
-    text_input: str
-    user_name: str
-    user_id: str
-    chat_id: str
-    args_list: list[str]
-    first_arg: str | None
-    user_msg: str
-    user_prompt: str | None
-    is_private: bool
-
-
+# ==========================
+# TESTS
+# ==========================
+# region
 async def test_args_list(user_command: UserCommand, item: TestInput) -> bool:
     return user_command.get_args_list() == item.args_list
 
@@ -195,6 +187,25 @@ TEST_LIST = [
     test_chat_type,
     test_user_prompt,
 ]
+# endregion
+
+
+# ==========================
+# INPUTS
+# ==========================
+# region
+@dataclass(kw_only=True)
+class TestInput:
+    text_input: str
+    user_name: str
+    user_id: str
+    chat_id: str
+    args_list: list[str]
+    first_arg: str | None
+    user_msg: str
+    user_prompt: str | None
+    is_private: bool
+
 
 INPUT_LIST: list[TestInput] = [
     TestInput(
@@ -250,9 +261,19 @@ INPUT_LIST: list[TestInput] = [
         user_prompt=None, is_private=True,
     ),
 ]
+# endregion
 
 
-async def perform_tests() -> None:
+class TestResult:
+    def __init__(self, *, passed: bool, test_name: str, index: int, subindex: str) -> None:
+        self.passed = passed
+        self.test_name = test_name
+        self.index = index
+        self.subindex = subindex
+        self.result_string = f"Item {index}{subindex} {'passed' if passed else 'failed'} {test_name}()"
+
+
+async def perform_tests() -> AsyncGenerator[TestResult]:
     for test in TEST_LIST:
         for index, item in enumerate(INPUT_LIST):
             # We create two telegram UserCommands, one where the user message is in message.text and
@@ -263,12 +284,19 @@ async def perform_tests() -> None:
             # This zip pairs each UserCommand in command_list with a letter of the alphabet
             for command, letter in zip(command_list, string.ascii_lowercase, strict=False):
                 result = await test(command, item)
-                if result:
-                    logger.info(f"Item {index}{letter} passed {test.__name__}()")
-                else:
-                    logger.error(f"Item {index}{letter} failed {test.__name__}()")
+                yield TestResult(passed=result, test_name=test.__name__, index=index, subindex=letter)
+
+
+async def main() -> None:
+    async for test_result in perform_tests():
+        if test_result.passed:
+            logger.info(test_result.result_string)
+        else:
+            logger.error(test_result.result_string)
+
+    logger.info("Tests complete.")
 
 
 if __name__ == "__main__":
-    asyncio.run(perform_tests())
-    input("Tests complete. Press enter/return to close ")
+    asyncio.run(main())
+    input("Press enter/return to exit ")
