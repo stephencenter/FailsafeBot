@@ -1,5 +1,5 @@
 extend-exclude = ["Test"]
-line-length = 130
+line-length = 118
 
 [lint]
 preview = true
@@ -28,9 +28,6 @@ ignore = [
 
     # Stupid rule about preferring double quotes over single quotes
     "Q000",
-
-    # Unnecessary assignment to variable before returning, stupid rule
-    "RET504",
 
     # Function is declared async but doesn't await or use async features, almost 100% false positives!
     "RUF029",

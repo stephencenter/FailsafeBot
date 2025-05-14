@@ -104,7 +104,7 @@ def get_dnd_statroll() -> dict[str, int]:
 
 def get_coc_statroll() -> dict[str, int]:
     # Based on CoC 7e
-    statroll = {
+    return {
         # These characteristics use the formula 5*3d6
         "STR": 5 * roll_dice(3, 6, 0),
         "CON": 5 * roll_dice(3, 6, 0),
@@ -121,8 +121,6 @@ def get_coc_statroll() -> dict[str, int]:
         # This stat uses a single d10
         "Bonus": random.randint(1, 10),
     }
-
-    return statroll
 
 
 def get_pf_statroll() -> dict[str, int]:

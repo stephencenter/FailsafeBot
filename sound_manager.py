@@ -92,8 +92,7 @@ async def download_audio_from_url(url: str) -> Path | None:
             return None
 
         original_filename = Path(ytdl.prepare_filename(data))  # type: ignore
-        final_filename = original_filename.with_suffix('.mp3')
-        return final_filename
+        return original_filename.with_suffix('.mp3')
 
 
 async def save_new_sound(sound_name: str, sound_file: bytearray) -> None:
