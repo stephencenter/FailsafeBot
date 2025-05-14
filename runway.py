@@ -88,12 +88,19 @@ def init_logging() -> None:
     # Clear default logger
     logger.remove()
 
+    # Define format for logging
+    msg_format = "{message}"
+    level_format = "<level>[{level}]</level>"
+    time_format = "<green>{time:YYYY-MM-DD HH:mm:ss}</green>"
+    func_format = "<cyan>{name}:{function}:{line}</cyan>"
+
+    logger_format = f"{msg_format} {level_format} {time_format} {func_format}"
+
     # Add console output
-    info_format = "{message} <level>[{level}]</level> <green>{time:YYYY-MM-DD HH:mm:ss}</green> <cyan>{name}:{function}:{line}</cyan>"
-    logger.add(sys.stderr, level="DEBUG", backtrace=False, diagnose=False, format=info_format)
+    logger.add(sys.stderr, level="DEBUG", backtrace=False, diagnose=False, format=logger_format)
 
     # Add file output with error logging
-    logger.add(common.PATH_LOGGING_FILE, level="WARNING", backtrace=False, diagnose=False, format=info_format)
+    logger.add(common.PATH_LOGGING_FILE, level="WARNING", backtrace=False, diagnose=False, format=logger_format)
 
     logging.root.handlers = [InterceptHandler()]
     logging.root.setLevel(logging.INFO)

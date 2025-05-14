@@ -139,7 +139,7 @@ async def get_trivia_question(user_command: common.UserCommand) -> TriviaQuestio
 
 async def get_new_trivia_question() -> TriviaQuestion:
     url = f"{common.URL_TRIVIA}1"
-    async with aiohttp.ClientSession() as session, session.post(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+    async with (aiohttp.ClientSession() as session, session.post(url, timeout=aiohttp.ClientTimeout(total=10)) as response):
         response_data = (await response.json())['results']
 
     return TriviaQuestion(response_data[0])

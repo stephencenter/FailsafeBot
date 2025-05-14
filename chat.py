@@ -113,7 +113,7 @@ async def get_elevenlabs_response(input_text: str, *, save_to_file: bool = False
 
     # Save sound to temp file
     if save_to_file:
-        temp_path = common.PATH_TEMP_FOLDER / f"{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.mp3"
+        temp_path = common.PATH_TEMP_FOLDER / f"{datetime.datetime.now(tz=datetime.UTC).strftime("%Y-%m-%d_%H-%M-%S")}.mp3"
         await common.write_bytes_to_file(temp_path, audio_stream)
         return temp_path
 

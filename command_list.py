@@ -92,7 +92,8 @@ async def soundlist_command(_: UserCommand) -> CommandResponse:
     if not sound_list:
         return CommandResponse(user_message, "You have no sounds available to play, use /addsounds to add some!")
 
-    if num_sounds > 100:
+    max_sounds = 100
+    if num_sounds > max_sounds:
         txt_path = common.PATH_TEMP_FOLDER / "soundlist.txt"
         response = f"There are {num_sounds} sounds available to use. Here's a text file with all of them listed out."
 
@@ -630,7 +631,8 @@ async def roll_command(user_command: UserCommand) -> CommandResponse:
     parsed_roll = dice_roller.parse_diceroll(user_command.get_user_message())
 
     if parsed_roll is None:
-        return CommandResponse("Can you roll some dice for me?", "Please use dice notation like a civilized humanoid, e.g. '3d6 + 2'")
+        error_msg = "Please use dice notation like a civilized humanoid, e.g. '3d6 + 2'"
+        return CommandResponse("Can you roll some dice for me?", error_msg)
 
     # Extract the 3-tuple returned from the parser into three variables
     num_dice, num_faces, modifier = parsed_roll
@@ -739,7 +741,8 @@ async def guess_command(user_command: UserCommand) -> CommandResponse:
     if current_question.is_guess_correct(guess):
         points_gained = await current_question.score_question(user_command, was_correct=True)
         player_name = await user_command.get_user_name()
-        send_str = f"That is correct, the answer was '{current_question.correct_answer}'. {player_name} earned {points_gained} points!"
+        correct_answer = current_question.correct_answer
+        response_str = f"That is correct, the answer was '{correct_answer}'. {player_name} earned {points_gained} points!"
         return CommandResponse(user_message, send_str)
 
     if current_question.is_guess_on_list(guess):
@@ -747,7 +750,8 @@ async def guess_command(user_command: UserCommand) -> CommandResponse:
         if current_question.guesses_left > 0:
             return CommandResponse(user_message, f"That is incorrect, {current_question.guesses_left} guesses remaining.")
 
-        return CommandResponse(user_message, f"That is incorrect! Out of guesses, the answer was {current_question.correct_answer}!")
+        response_str = f"That is incorrect! Out of guesses, the answer was {current_question.correct_answer}!"
+        return CommandResponse(user_message, response_str)
 
     return CommandResponse(user_message, "That isn't an option for this question!")
 

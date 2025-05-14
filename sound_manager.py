@@ -237,9 +237,7 @@ async def get_aliases(sound_name: str) -> list[str]:
     else:
         real_name = sound_name
 
-    for alias in alias_dict:
-        if alias_dict[alias] == real_name and alias != sound_name:
-            alias_list.append(alias)
+    alias_list.extend(alias for alias in alias_dict if alias_dict[alias] == real_name and alias != sound_name)
 
     return sorted(alias_list)
 

@@ -15,7 +15,7 @@ import random
 import string
 import types
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -113,48 +113,99 @@ TXT_NO_PERMISSIONS = (
 class ConfigMain:
     """Config dataclass for core application functionality."""
 
-    botname: str = "Failsafe"  # Name of the bot, if replytoname is True then the bot will respond to this string
-    runtelegram: bool = True  # Whether to run the telegram bot or skip it
-    rundiscord: bool = True  # Whether to run the discord bot or skip it
-    requireadmin: bool = True  # Whether certain commands require admin rights to perform
-    maxmessagelength: int = 1024  # Maximum amount of characters to allow in a CommandResponse object's bot_message property
-    whitelistdiscord: bool = False  # Whether a Discord chat ID needs to be on the whitelist for commands to function
-    whitelisttelegram: bool = False  # Whether a Telegram chat ID needs to be on the whitelist for commands to function
-    autosuperdiscord: bool = True  # Whether Discord superadmin rights will be auto-assigned if none exist (disabled after first use)
-    autosupertelegram: bool = True  # Whether Telegram superadmin rights will be auto-assigned if none exist (disabled after first use)
+    # Name of the bot, if replytoname is True then the bot will respond to this string
+    botname: str = "Failsafe"
+
+    # Whether to run the Telegram/Discord bot or skip it
+    runtelegram: bool = True
+    rundiscord: bool = True
+
+    # Whether certain commands require admin rights to perform
+    requireadmin: bool = True
+
+    # Maximum amount of characters to allow in a CommandResponse object's bot_message property
+    maxmessagelength: int = 1024
+
+    # Whether a Telegram/Discord chat ID needs to be on the whitelist for commands to function
+    whitelisttelegram: bool = False
+    whitelistdiscord: bool = False
+
+    # Whether Telegram/Discord superadmin rights will be auto-assigned if none exist (disabled after first use)
+    autosupertelegram: bool = True
+    autosuperdiscord: bool = True
 
 
 @dataclass
 class ConfigChat:
     """Config dataclass for chatting functionality (text, voice, and general memory)."""
 
-    replytoname: bool = True  # Whether the bot should respond when their name is said
-    replytomonkey: bool = False  # Whether the bot should play a sound when the word monkey is said (Discworld adv game reference)
-    randreplychance: float = 0.05  # Chance for the bot to randomly reply to any message in a chat they're in (0 -> 0%, 1.0 -> 100%)
-    gptmodel: str = "gpt-4o-mini"  # What GPT model to use for AI chatting
-    gpttemp: float = 1.0  # Temperature for GPT chat completions (0 to 2, values outside this will break)
-    gptmaxtokens: int = 256  # Value to be passed for parameter max_completion_tokens for gpt chat completion (note 1 token = ~4 chars)
-    usememory: bool = True  # Whether the bot will use the memory system for AI chatting
-    memorysize: int = 24  # Maximum number of messages to record in memory for AI chatting (higher is probably more expensive)
-    recordall: bool = False  # Whether the bot wil record ALL messages sent in chat to memory, or just messages directed towards it
-    minmarkov: int = 2  # Minimum number of tokens for the markov chain command /wisdom (higher takes longer exponentially)
-    maxmarkov: int = 256  # Maximum number of tokens for the markov chain command /wisdomly)
-    saysoftcap: int = 224  # The "soft cap" for elevenlabs text-to-speech input length (soft cap only breaks on punctuation)
-    sayhardcap: int = 256  # The "hard cap" for elevenlabs text-to-speech input length (hard cap breaks no matter what)
-    sayvoiceid: str = "XB0fDUnXU5powFXDhCwa"  # The voice to use for elevenlabs (defaults to Charlotte)
-    saymodelid: str = "eleven_multilingual_v2"  # The base model to use for elevenlabs
-    vcautodc: bool = True  # Whether the bot will automatically disconnect if they're the only ones in a voice call
+    # Whether the bot should respond when their name is said
+    replytoname: bool = True
+
+    # Whether the bot should play a sound when the word monkey is said (Discworld adventure game reference)
+    replytomonkey: bool = False
+
+    # Chance for the bot to randomly reply to any message in a chat they're in (0 -> 0%, 1.0 -> 100%)
+    randreplychance: float = 0.05
+
+    # What GPT model to use for AI chatting
+    gptmodel: str = "gpt-4o-mini"
+
+    # Temperature for GPT chat completions (0 to 2, values outside this will break)
+    gpttemp: float = 1.0
+
+    # Value to be passed for parameter max_completion_tokens for gpt chat completion (note 1 token = ~4 chars)
+    gptmaxtokens: int = 256
+
+    # Whether the bot will use the memory system for AI chatting
+    usememory: bool = True
+
+    # Maximum number of messages to record in memory for AI chatting (higher is probably more expensive)
+    memorysize: int = 24
+
+    # Whether the bot wil record ALL messages sent in chat to memory, or just messages directed towards it
+    recordall: bool = False
+
+    # Minimum number of tokens for the markov chain command /wisdom (higher takes longer exponentially)
+    minmarkov: int = 2
+
+    # Maximum number of tokens for the markov chain command /wisdom)
+    maxmarkov: int = 256
+
+    # The "soft cap" for elevenlabs text-to-speech input length (soft cap only breaks on punctuation)
+    saysoftcap: int = 224
+
+    # The "hard cap" for elevenlabs text-to-speech input length (hard cap breaks no matter what)
+    sayhardcap: int = 256
+
+    # The voice to use for elevenlabs (defaults to Charlotte)
+    sayvoiceid: str = "XB0fDUnXU5powFXDhCwa"
+
+    # The base model to use for elevenlabs
+    saymodelid: str = "eleven_multilingual_v2"
+
+    # Whether the bot will automatically disconnect if they're the only ones in a voice call
+    vcautodc: bool = True
 
 
 @dataclass
 class ConfigMisc:
     """Config dataclass for command functionality that isn't covered by other dataclasses."""
 
-    usemegabytes: bool = True  # Whether the /system command should use megabytes (will use gigabytes if false)
-    minsimilarity: float = 0.75  # The minimum similarity threshold when searching for sound names (1.0 = exact matches on
-    maxstreamtime: int = 30  # How much of a video the /stream command will download (does not apply to /vcstream)
-    maxdice: int = 100  # Maximum number of dice in one command for dice roller (bigger numbers might reach message length cap)
-    maxfaces: int = 10000  # Maximum number of faces for the dice for dice roller
+    # Whether the /system command should use megabytes (will use gigabytes if false)
+    usemegabytes: bool = True
+
+    # The minimum similarity threshold when searching for sound names (1.0 = exact matches on
+    minsimilarity: float = 0.75
+
+    # How much of a video the /stream command will download (does not apply to /vcstream)
+    maxstreamtime: int = 30
+
+    # Maximum number of dice in one command for dice roller (bigger numbers might reach message length cap)
+    maxdice: int = 100
+
+    # Maximum number of faces for the dice for dice roller
+    maxfaces: int = 10000
 
 
 @dataclass
@@ -260,29 +311,33 @@ async def verify_settings() -> AsyncGenerator[str]:
 # COMMANDS & RESPONSES
 # ==========================
 # region
+@dataclass
 class CommandResponse:
-    def __init__(self, user_message: str, bot_message: str,
-                 *, record_to_memory: bool = True, send_to_chat: bool = True) -> None:
-        self.user_message: str = user_message
-        self.bot_message: str = bot_message
-        self.record_to_memory: bool = record_to_memory  # Whether user_message and bot_message should be recorded to memory
-        self.send_to_chat: bool = send_to_chat  # Whether bot_message should be sent to chat
+    user_message: str
+    bot_message: str
+
+    # Whether user_message and bot_message should be recorded to memory
+    record_to_memory: bool = field(default=True, kw_only=True)
+
+    # Whether bot_message should be sent to chat
+    send_to_chat: bool = field(default=True, kw_only=True)
 
 
+@dataclass
 class FileResponse(CommandResponse):
-    def __init__(self, user_message: str, bot_message: str, file_path: str | Path,
-                 *, record_to_memory: bool = True, temp: bool = False, send_to_chat: bool = False) -> None:
-        super().__init__(user_message, bot_message, record_to_memory=record_to_memory, send_to_chat=send_to_chat)
-        self.file_path: str | Path = file_path  # The path of the file to send
-        self.temp: bool = temp  # Whether the file should be deleted after being sent
+    file_path: str | Path
+    temp: bool = field(default=False, kw_only=True)
+    # record_to_memory stays the same so we don't redeclare it
+    send_to_chat: bool = field(default=False, kw_only=True)
 
 
+@dataclass
 class SoundResponse(FileResponse):
-    def __init__(self, user_message: str, bot_message: str, file_path: str | Path,
-                 *, record_to_memory: bool = True, temp: bool = False, send_to_chat: bool = False) -> None:
-        super().__init__(user_message, bot_message, file_path, record_to_memory=record_to_memory, temp=temp, send_to_chat=send_to_chat)
+    # Doesn't change anything from superclass, used for isinstance() purposes
+    pass
 
 
+@dataclass
 class NoResponse(CommandResponse):
     def __init__(self) -> None:
         super().__init__('', '', record_to_memory=False, send_to_chat=False)
@@ -376,7 +431,8 @@ class UserCommand:
 
     async def get_id_by_username(self, username: str) -> str | None:
         # Attempt to retrieve the ID belonging to the provided username
-        # This ID is platform-specific (Discord, Telegram) and can only be retrieved if the user has interacted with this bot before
+        # This ID is platform-specific (Discord, Telegram) and can only be retrieved if the
+        # user has interacted with this bot before
         id_dict = await try_read_json(PATH_TRACK_USERID, {})
         platform_str = self.get_platform_string()
 
@@ -666,7 +722,7 @@ class InvalidBotTypeError(TypeError):
             bot_type = type(user_command.target_bot).__name__
             context_type = type(user_command.context).__name__
             update_type = type(user_command.update).__name__
-            self.message = f"Function failed for provided bot type (Bot: {bot_type}, Context: {context_type}, Update: {update_type})"
+            self.message = f"Function failed for provided types (Bot: {bot_type}, Context: {context_type}, Update: {update_type})"
 
         super().__init__(self.message)
 
@@ -718,7 +774,8 @@ def requireadmin(function: CommandAnnotation) -> CommandAnnotation:
     async def admin_wrapper(user_command: UserCommand) -> CommandResponse:
         config = await Config.load()
         if config.main.requireadmin and not await user_command.is_admin():
-            return CommandResponse("Can I do that sensitive thing that requires admin rights?", random.choice(TXT_NO_PERMISSIONS))
+            user_message = "Can I do that sensitive thing that requires superadmin rights?"
+            return CommandResponse(user_message, random.choice(TXT_NO_PERMISSIONS))
 
         return await function(user_command)
 
@@ -733,7 +790,8 @@ def requiresuper(function: CommandAnnotation) -> CommandAnnotation:
     async def superadmin_wrapper(user_command: UserCommand) -> CommandResponse:
         config = await Config.load()
         if config.main.requireadmin and not await user_command.is_superadmin():
-            return CommandResponse("Can I do that sensitive thing that requires superadmin rights?", random.choice(TXT_NO_PERMISSIONS))
+            user_message = "Can I do that sensitive thing that requires superadmin rights?"
+            return CommandResponse(user_message, random.choice(TXT_NO_PERMISSIONS))
 
         return await function(user_command)
 
