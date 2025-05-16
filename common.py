@@ -861,7 +861,7 @@ async def wrap_telegram_command(bot: TelegramBotAnn, command: CommandAnn) -> Tel
         config = await Config.load()
 
         if update.message is None:
-            return
+            raise MissingUpdateInfoError(update)
 
         user_command = UserCommand(bot, context, update)
 
@@ -947,11 +947,10 @@ async def get_gpt_memory() -> list[dict[str, str]]:
 
 def convert_to_ascii(text: str) -> str:
     text = html.unescape(text)
-    text = unidecode.unidecode(text, errors="replace", replace_str='')
-    return text
+    return unidecode.unidecode(text, errors="replace", replace_str='')
 
 
-def make_valid_filename(input_str: str, *, strict: bool = False) -> str:
+def make_valid_filename(input_str: str, *, strict: bool) -> str:
     input_str = convert_to_ascii(input_str)
 
     if strict:

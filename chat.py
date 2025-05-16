@@ -130,7 +130,7 @@ async def cap_elevenlabs_prompt(text_prompt: str) -> str:
 
     # Soft cap cuts off the text gently, only at certain punctuation marks
     for index, char in enumerate(text_prompt):
-        if index >= config.chat.saysoftcap and char in {'.', '?', '!'}:
+        if index >= config.chat.saysoftcap and char in {'.', '?', '!', ','}:
             text_prompt = text_prompt[:index]
             break
 
@@ -184,7 +184,8 @@ async def generate_markov_text(markov_chain: dict[str, dict[str, float]]) -> str
         else:
             prev_token: str = chosen_tokens[-1]
 
-        new_token = rng.choice(list(markov_chain[prev_token].keys()), 1, p=list(markov_chain[prev_token].values()))[0]
+        new_token = rng.choice(list(markov_chain[prev_token].keys()), 1, p=list(markov_chain[prev_token].values()))
+        new_token = new_token[0]
 
         if new_token == NULL_TOKEN:
             if len(chosen_tokens) < config.chat.minmarkov:

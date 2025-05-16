@@ -16,6 +16,7 @@ import yt_dlp
 import common
 
 
+# region
 class SilenceYTDL:
     # This is disgusting but I don't know how else to stop YTDL from printing stuff to console
     # when provided with bad URLs
@@ -93,6 +94,7 @@ async def download_audio_from_url(url: str) -> Path | None:
 
         original_filename = Path(ytdl.prepare_filename(data))  # type: ignore
         return original_filename.with_suffix('.mp3')
+# endregion
 
 
 async def save_new_sound(sound_name: str, sound_file: bytearray) -> None:
@@ -178,14 +180,19 @@ async def increment_playcount(sound_name: str) -> None:
     await common.write_json_to_file(common.PATH_PLAYCOUNTS, play_counts)
 
 
-async def sound_exists(sound_name: str) -> bool:
-    if sound_name in get_sound_dict():
-        return True
-
-    return sound_name in await get_alias_dict()
+async def is_existing_sound(sound_name: str) -> bool:
+    return sound_name in get_sound_dict()
 
 
-async def get_sound(sound_name: str) -> Path | list[str] | None:
+async def is_existing_alias(alias: str) -> bool:
+    return alias in await get_alias_dict()
+
+
+async def is_sound_or_alias(name: str) -> bool:
+    return await is_existing_sound(name) or await is_existing_alias(name)
+
+
+async def get_sound_by_name(sound_name: str, *, strict: bool) -> Path | list[str] | None:
     # Get the dictionary of all sounds and the paths they're located at
     sound_dict = get_sound_dict()
 
@@ -201,12 +208,21 @@ async def get_sound(sound_name: str) -> Path | list[str] | None:
         if sound_name in sound_aliases:
             return sound_dict[sound_aliases[sound_name]]
 
-    candidates = await search_sounds(sound_name)
-    if not candidates or len(candidates) > 5:
+    # If strict = True, then we require an exact match for sound/alias name
+    if strict:
         return None
 
+    # Find sounds/aliases that are close matches to the provided string
+    candidates = await search_sounds(sound_name)
+
+    # If there's more than 5 matches, then the search term is too general and we reject it
+    max_candidates = 5
+    if not candidates or len(candidates) > max_candidates:
+        return None
+
+    # If there's only 1 match, then we assume that's the intended sound and return it
     if len(candidates) == 1:
-        return await get_sound(candidates[0])
+        return await get_sound_by_name(candidates[0], strict=True)  # Call recursively to handle aliases
 
     return candidates
 
@@ -224,13 +240,11 @@ def get_sound_list() -> list[str]:
 
 
 async def get_aliases(sound_name: str) -> list[str]:
-    # Get a list of every alias for the provided sound
-    sound_dict = get_sound_dict()
+    # Get a list of every alias for the provided sound or alias
     alias_dict = await get_alias_dict()
-
     alias_list: list[str] = []
 
-    if sound_name not in sound_dict:
+    if sound_name in alias_dict:
         real_name = alias_dict[sound_name]
         alias_list.append(real_name)
     else:
@@ -242,48 +256,44 @@ async def get_aliases(sound_name: str) -> list[str]:
 
 
 async def add_sound_alias(new_alias: str, sound_name: str) -> str:
-    # Get the list of all sounds
-    sound_dict = get_sound_dict()
+    if not await is_sound_or_alias(sound_name):
+        return f"'{sound_name}' is not an existing sound or alias."
 
-    if new_alias in sound_dict:
-        return f"There is already a sound called '{new_alias}'"
+    if await is_existing_sound(new_alias):
+        return f"There is already a sound called '{new_alias}'."
 
     alias_dict = await get_alias_dict()
 
-    # Avoid redirecting existing aliases to new sounds
     if new_alias in alias_dict:
-        return f"'{new_alias}' is already an alias for '{alias_dict[new_alias]}'"
+        return f"'{new_alias}' is already an alias for '{alias_dict[new_alias]}'."
 
-    if sound_name not in sound_dict:
-        try:
-            sound_name = alias_dict[sound_name]
+    try:
+        alias_dict[new_alias] = alias_dict[sound_name]
+    except KeyError:
+        alias_dict[new_alias] = sound_name
 
-        except KeyError:
-            return f"'{sound_name}' is not an existing sound or alias"
-
-    alias_dict[new_alias] = sound_name
     await common.write_json_to_file(common.PATH_SOUND_ALIASES, alias_dict)
 
-    return f"'{new_alias}' has been added as an alias for '{sound_name}'"
+    return f"'{new_alias}' has been added as an alias for '{sound_name}'."
 
 
 async def del_sound_alias(alias_to_delete: str) -> str:
     alias_dict = await get_alias_dict()
 
-    try:
-        prev_sound = alias_dict[alias_to_delete]
-        del alias_dict[alias_to_delete]
+    if not await is_existing_alias(alias_to_delete):
+        return f"{alias_to_delete} isn't an alias for anything."
 
-    except KeyError:
-        return f"{alias_to_delete} isn't an alias for anything"
+    prev_sound = alias_dict[alias_to_delete]
+    del alias_dict[alias_to_delete]
 
     await common.write_json_to_file(common.PATH_SOUND_ALIASES, alias_dict)
 
-    return f"'{alias_to_delete}' is no longer an alias for '{prev_sound}'"
+    return f"'{alias_to_delete}' is no longer an alias for '{prev_sound}'."
 
 
 async def search_sounds(search_string: str) -> list[str]:
     config = await common.Config.load()
+    calculator = strsimpy.Damerau()
 
     search_results: list[str] = []
     for sound_name in get_sound_list():
@@ -292,13 +302,15 @@ async def search_sounds(search_string: str) -> list[str]:
                 search_results.append(alias)
                 break
 
-            if len(search_string) > len(alias):
+            search_length = len(search_string)
+            alias_length = len(alias)
+
+            if search_length > alias_length:
                 continue
 
             # Calculate the similarity between the search string and the current alias
-            calculator = strsimpy.Damerau()
             distance = calculator.distance(search_string, alias)
-            larger_length = max(len(search_string), len(alias))
+            larger_length = max(search_length, alias_length)
             similarity = (larger_length - distance) / larger_length
 
             if similarity >= config.misc.minsimilarity:

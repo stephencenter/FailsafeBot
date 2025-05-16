@@ -45,7 +45,7 @@ async def sound_command(user_command: UserCommand) -> CommandResponse:
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 
     # Parse the arguments the user provided for the sound name
-    sound_results = await sound_manager.get_sound(sound_name)
+    sound_results = await sound_manager.get_sound_by_name(sound_name, strict=False)
 
     user_message = f"Can you play the {sound_name} sound for me?"
 
@@ -132,7 +132,7 @@ async def addsound_command(user_command: UserCommand) -> CommandResponse:
         error_message = "That is not a valid sound name (only A-Z and 0-9 are allowed)"
         return CommandResponse(user_message=user_message, bot_message=error_message)
 
-    if await sound_manager.sound_exists(sound_name):
+    if await sound_manager.is_sound_or_alias(sound_name):
         error_message = "A sound or alias with that name already exists!"
         return CommandResponse(user_message=user_message, bot_message=error_message)
 
@@ -171,7 +171,7 @@ async def delsound_command(user_command: UserCommand) -> CommandResponse:
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 
     user_message = f"Can you delete the sound '{sound_to_delete} for me?"
-    if not await sound_manager.sound_exists(sound_to_delete):
+    if not await sound_manager.is_sound_or_alias(sound_to_delete):
         bot_message = random.choice(common.TXT_SOUND_NOT_FOUND)
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 
@@ -236,13 +236,13 @@ async def delalias_command(user_command: UserCommand) -> CommandResponse:
 async def getalias_command(user_command: UserCommand) -> CommandResponse:
     sound_name = user_command.get_first_arg(lowercase=True)
     if sound_name is None:
-        user_message = "How many aliases does that sound have?"
+        user_message = "What aliases does that sound have?"
         bot_message = random.choice(common.TXT_SOUND_NOT_PROVIDED)
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 
-    user_message = f"How many aliases does the sound '{sound_name}' have?"
+    user_message = f"What aliases does the sound '{sound_name}' have?"
 
-    if not await sound_manager.sound_exists(sound_name):
+    if not await sound_manager.is_sound_or_alias(sound_name):
         bot_message = random.choice(common.TXT_SOUND_NOT_FOUND)
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 
@@ -477,7 +477,7 @@ async def vcsound_command(user_command: UserCommand) -> CommandResponse:
     user_message = f"Can you play the {sound_name} sound in the voice channel?"
 
     # Alert the user if the sound they requested does not exist
-    sound_results = await sound_manager.get_sound(sound_name)
+    sound_results = await sound_manager.get_sound_by_name(sound_name, strict=False)
     if sound_results is None:
         return CommandResponse(user_message=user_message, bot_message=random.choice(common.TXT_SOUND_NOT_FOUND))
 
