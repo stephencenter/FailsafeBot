@@ -31,5 +31,9 @@
    "editor.codeActionsOnSave": {
        "source.organizeImports.ruff": "explicit"
    },
-   "python.analysis.typeCheckingMode": "strict"
+   "python.analysis.typeCheckingMode": "strict",
+   "editor.rulers": [
+      118
+   ],
+   "python.analysis.autoImportCompletions": false
 }

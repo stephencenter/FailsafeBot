@@ -64,15 +64,18 @@ class InterceptHandler(logging.Handler):
         if record.exc_info is not None:
             exc_type = record.exc_info[0]
             if exc_type is TelegramConflict:
-                logger.critical("Multiple instances of Telegram bot are running! Bot will not work until this is resolved")
+                error_msg = "Multiple instances of Telegram bot are running! Bot will not work until this is resolved"
+                logger.critical(error_msg)
                 return
 
             if exc_type is NetworkError:
-                logger.warning(f"Temporarily lost connection to telegram servers ({exc_type.__name__})")
+                error_msg = f"Temporarily lost connection to telegram servers ({exc_type.__name__})"
+                logger.warning(error_msg)
                 return
 
             if exc_type in {ConnectionClosed, aiohttp.ClientConnectorError, aiohttp.ClientConnectorDNSError}:
-                logger.warning(f"Temporarily lost connection to discord servers ({exc_type.__name__})")
+                error_msg = f"Temporarily lost connection to discord servers ({exc_type.__name__})"
+                logger.warning(error_msg)
                 return
 
         # Convert LogRecord to Loguru format
@@ -88,12 +91,19 @@ def init_logging() -> None:
     # Clear default logger
     logger.remove()
 
+    # Define format for logging
+    msg_format = "{message}"
+    level_format = "<level>[{level}]</level>"
+    time_format = "<green>{time:YYYY-MM-DD HH:mm:ss}</green>"
+    func_format = "<cyan>{name}:{function}:{line}</cyan>"
+
+    logger_format = f"{msg_format} {level_format} {time_format} {func_format}"
+
     # Add console output
-    info_format = "{message} <level>[{level}]</level> <green>{time:YYYY-MM-DD HH:mm:ss}</green> <cyan>{name}:{function}:{line}</cyan>"
-    logger.add(sys.stderr, level="DEBUG", backtrace=False, diagnose=False, format=info_format)
+    logger.add(sys.stderr, level="DEBUG", backtrace=False, diagnose=False, format=logger_format, enqueue=True)
 
     # Add file output with error logging
-    logger.add(common.PATH_LOGGING_FILE, level="WARNING", backtrace=False, diagnose=False, format=info_format)
+    logger.add(common.PATH_LOGGING_FILE, level="WARNING", backtrace=False, diagnose=False, format=logger_format)
 
     logging.root.handlers = [InterceptHandler()]
     logging.root.setLevel(logging.INFO)
@@ -144,8 +154,9 @@ async def check_superadmins() -> AsyncGenerator[str]:
     config = await common.Config.load()
 
     platform_list = [("telegram", config.main.autosupertelegram), ("discord", config.main.autosuperdiscord)]
-    for platform_str, autoassign in platform_list:
+    for p_str, autoassign in platform_list:
         if not autoassign:
             continue
-        if platform_str not in admin_dict or "superadmin" not in admin_dict[platform_str] or not admin_dict[platform_str]["superadmin"]:
-            yield f"{platform_str.title()} has no superadmins, first interaction will get role"
+
+        if not (p_str in admin_dict and "superadmin" in admin_dict[p_str] and admin_dict[p_str]["superadmin"]):
+            yield f"{p_str.title()} has no superadmins, first interaction will get role"

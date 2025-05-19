@@ -52,7 +52,7 @@ async def prepare_runway() -> None:
         logger.warning(warning)
 
 
-async def try_start_telegram_bot() -> common.TelegramBotAnnotation | None:
+async def try_start_telegram_bot() -> common.TelegramBotAnn | None:
     config = await common.Config.load()
     if not config.main.runtelegram:
         logger.info(f"Telegram bot disabled in {common.PATH_CONFIG_FILE}, skipping")
@@ -61,10 +61,11 @@ async def try_start_telegram_bot() -> common.TelegramBotAnnotation | None:
     # Retrieve telegram token
     telegram_token = await common.try_read_single_line(common.PATH_TELEGRAM_TOKEN, None)
     if telegram_token is None:
-        logger.error(f"Telegram bot is enabled but token not found at {common.PATH_TELEGRAM_TOKEN}, couldn't start bot")
+        error_msg = f"Telegram bot is enabled but token not found at {common.PATH_TELEGRAM_TOKEN}, couldn't start bot"
+        logger.error(error_msg)
         return None
 
-    telegram_bot: common.TelegramBotAnnotation = ApplicationBuilder().token(telegram_token).build()
+    telegram_bot: common.TelegramBotAnn = ApplicationBuilder().token(telegram_token).build()
 
     try:
         await telegram_bot.initialize()
@@ -78,20 +79,17 @@ async def try_start_telegram_bot() -> common.TelegramBotAnnotation | None:
 
     # Register commands
     for command in command_list.COMMAND_LIST:
-        telegram_bot.add_handler(CommandHandler(command[0], await common.wrap_telegram_command(telegram_bot, command[1])))
+        wrapped_command = await common.wrap_telegram_command(telegram_bot, command[1])
+        telegram_bot.add_handler(CommandHandler(command[0], wrapped_command))
 
     for command in command_list.FILE_COMMAND_LIST:
-        regex = rf'^/{command[0]}'
-        telegram_bot.add_handler(
-            MessageHandler(
-                (filters.ALL & filters.CaptionRegex(regex)) | (filters.TEXT & filters.Regex(regex)),
-                await common.wrap_telegram_command(telegram_bot, command[1]),
-            ),
-        )
+        r_string = rf'^/{command[0]}'
+        regex = (filters.ALL & filters.CaptionRegex(r_string)) | (filters.TEXT & filters.Regex(r_string))
+        wrapped_command = await common.wrap_telegram_command(telegram_bot, command[1])
+        telegram_bot.add_handler(MessageHandler(regex, wrapped_command))
 
-    telegram_bot.add_handler(
-        MessageHandler(filters.TEXT & (~filters.COMMAND), await common.wrap_telegram_command(telegram_bot, command_list.handle_message_event)),
-    )
+    wrapped_msg_handler = await common.wrap_telegram_command(telegram_bot, command_list.handle_message_event)
+    telegram_bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), wrapped_msg_handler))
 
     # Begin polling
     if telegram_bot.updater is not None:
@@ -100,7 +98,7 @@ async def try_start_telegram_bot() -> common.TelegramBotAnnotation | None:
     return telegram_bot
 
 
-async def try_start_discord_bot() -> tuple[common.DiscordBotAnnotation | None, asyncio.Task[Any] | None]:
+async def try_start_discord_bot() -> tuple[common.DiscordBotAnn | None, asyncio.Task[Any] | None]:
     config = await common.Config.load()
     if not config.main.rundiscord:
         logger.info(f"Discord bot disabled in {common.PATH_CONFIG_FILE}, skipping")
@@ -116,11 +114,12 @@ async def try_start_discord_bot() -> tuple[common.DiscordBotAnnotation | None, a
     intents = discord.Intents.default()
     intents.members = True
     intents.message_content = True
-    discord_bot = common.DiscordBotAnnotation(command_prefix='/', intents=intents, help_command=None)
+    discord_bot = common.DiscordBotAnn(command_prefix='/', intents=intents, help_command=None)
 
     # Register commands
     for command in [*command_list.COMMAND_LIST, *command_list.FILE_COMMAND_LIST]:
-        new_command: discord_commands.Command[Any, Any, Any] = discord_commands.Command(await common.wrap_discord_command(discord_bot, command[1]))
+        wrapped = await common.wrap_discord_command(discord_bot, command[1])
+        new_command: discord_commands.Command[Any, Any, Any] = discord_commands.Command(wrapped)
         new_command.name = command[0]
         discord_bot.add_command(new_command)
 
@@ -138,7 +137,7 @@ async def try_start_discord_bot() -> tuple[common.DiscordBotAnnotation | None, a
     return discord_bot, discord_task
 
 
-async def shutdown_telegram_bot(telegram_bot: common.TelegramBotAnnotation | None) -> None:
+async def stop_telegram_bot(telegram_bot: common.TelegramBotAnn | None) -> None:
     if telegram_bot is not None:
         logger.info("Shutting down telegram bot...")
 
@@ -149,7 +148,7 @@ async def shutdown_telegram_bot(telegram_bot: common.TelegramBotAnnotation | Non
         await telegram_bot.shutdown()
 
 
-async def shutdown_discord_bot(discord_bot: common.DiscordBotAnnotation | None, discord_task: asyncio.Task[Any] | None) -> None:
+async def stop_discord_bot(discord_bot: common.DiscordBotAnn | None, discord_task: asyncio.Task[Any] | None) -> None:
     if discord_bot is not None:
         logger.info("Shutting down discord bot...")
         with contextlib.suppress(IndexError):
@@ -186,8 +185,8 @@ async def main() -> None:
             await asyncio.Event().wait()  # Continue with tasks until they are completed or user exits
 
     finally:
-        await shutdown_telegram_bot(telegram_bot)
-        await shutdown_discord_bot(discord_bot, discord_task)
+        await stop_telegram_bot(telegram_bot)
+        await stop_discord_bot(discord_bot, discord_task)
         logger.info('Exiting...')
 
 

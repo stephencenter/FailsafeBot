@@ -1,3 +1,9 @@
+"""Dice utilities.
+
+This module contains constants, classes, and functions used by Dice commands like
+/roll, /statroll, and /d10000.
+"""
+
 import random
 import re
 from collections.abc import Callable
@@ -98,25 +104,23 @@ def get_dnd_statroll() -> dict[str, int]:
 
 def get_coc_statroll() -> dict[str, int]:
     # Based on CoC 7e
-    statroll = {
+    return {
         # These characteristics use the formula 5*3d6
-        "STR": 5*roll_dice(3, 6, 0),
-        "CON": 5*roll_dice(3, 6, 0),
-        "DEX": 5*roll_dice(3, 6, 0),
-        "APP": 5*roll_dice(3, 6, 0),
-        "POW": 5*roll_dice(3, 6, 0),
+        "STR": 5 * roll_dice(3, 6, 0),
+        "CON": 5 * roll_dice(3, 6, 0),
+        "DEX": 5 * roll_dice(3, 6, 0),
+        "APP": 5 * roll_dice(3, 6, 0),
+        "POW": 5 * roll_dice(3, 6, 0),
 
         # These characteristics use the formula 5*(2d6 + 6)
-        "SIZ": 5*(roll_dice(2, 6, 6)),
-        "INT": 5*(roll_dice(2, 6, 6)),
-        "EDU": 5*(roll_dice(2, 6, 6)),
-        "LUC": 5*(roll_dice(2, 6, 6)),
+        "SIZ": 5 * (roll_dice(2, 6, 6)),
+        "INT": 5 * (roll_dice(2, 6, 6)),
+        "EDU": 5 * (roll_dice(2, 6, 6)),
+        "LUC": 5 * (roll_dice(2, 6, 6)),
 
         # This stat uses a single d10
         "Bonus": random.randint(1, 10),
     }
-
-    return statroll
 
 
 def get_pf_statroll() -> dict[str, int]:

@@ -113,7 +113,8 @@ async def get_elevenlabs_response(input_text: str, *, save_to_file: bool = False
 
     # Save sound to temp file
     if save_to_file:
-        temp_path = common.PATH_TEMP_FOLDER / f"{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.mp3"
+        temp_name = f"{datetime.datetime.now(tz=datetime.UTC).strftime("%Y-%m-%d_%H-%M-%S")}.mp3"
+        temp_path = common.PATH_TEMP_FOLDER / temp_name
         await common.write_bytes_to_file(temp_path, audio_stream)
         return temp_path
 
@@ -124,11 +125,12 @@ async def cap_elevenlabs_prompt(text_prompt: str) -> str:
     config = await common.Config.load()
 
     # Hard cap cuts off the text abruptly, to keep costs down (longer strings = more elevenlabs credits)
-    text_prompt = text_prompt[:min(len(text_prompt), config.chat.sayhardcap)]
+    max_chars = min(config.chat.sayhardcap, len(text_prompt))
+    text_prompt = text_prompt[:max_chars]
 
     # Soft cap cuts off the text gently, only at certain punctuation marks
     for index, char in enumerate(text_prompt):
-        if index >= config.chat.saysoftcap and char in {'.', '?', '!'}:
+        if index >= config.chat.saysoftcap and char in {'.', '?', '!', ','}:
             text_prompt = text_prompt[:index]
             break
 
@@ -140,12 +142,23 @@ async def handle_elevenlabs_error(error: ElevenLabsApiError) -> str:
     config = await common.Config.load()
 
     error_map = {
-        'max_character_limit_exceeded': "Text input has too many characters for ElevenLabs text-to-speech (max is ~10k)",
-        'invalid_api_key': f"ElevenLabs API Key in '{common.PATH_ELEVENLABS_KEY}' is invalid!",
-        'voice_not_found': f"ElevenLabs Voice ID '{config.chat.sayvoiceid}' is invalid!",
-        'model_not_found': f"ElevenLabs Model ID '{config.chat.saymodelid}' is invalid!",
-        'quota_exceeded': "ElevenLabs account is out of credits!",
-        'free_users_not_allowed': f"Voice with ID '{config.chat.sayvoiceid}' needs an active ElevenLabs subscription to use.",
+        'max_character_limit_exceeded':
+            "Text input has too many characters for ElevenLabs text-to-speech (max is ~10k)",
+
+        'invalid_api_key':
+            f"ElevenLabs API Key in '{common.PATH_ELEVENLABS_KEY}' is invalid!",
+
+        'voice_not_found':
+            f"ElevenLabs Voice ID '{config.chat.sayvoiceid}' is invalid!",
+
+        'model_not_found':
+            f"ElevenLabs Model ID '{config.chat.saymodelid}' is invalid!",
+
+        'quota_exceeded':
+            "ElevenLabs account is out of credits!",
+
+        'free_users_not_allowed':
+            f"Voice with ID '{config.chat.sayvoiceid}' needs an active ElevenLabs subscription to use.",
     }
 
     try:
@@ -171,7 +184,8 @@ async def generate_markov_text(markov_chain: dict[str, dict[str, float]]) -> str
         else:
             prev_token: str = chosen_tokens[-1]
 
-        new_token = rng.choice(list(markov_chain[prev_token].keys()), 1, p=list(markov_chain[prev_token].values()))[0]
+        new_token = rng.choice(list(markov_chain[prev_token].keys()), 1, p=list(markov_chain[prev_token].values()))
+        new_token = new_token[0]
 
         if new_token == NULL_TOKEN:
             if len(chosen_tokens) < config.chat.minmarkov:
@@ -184,8 +198,7 @@ async def generate_markov_text(markov_chain: dict[str, dict[str, float]]) -> str
             break
 
     output_message = ' '.join(chosen_tokens)
-    output_message = output_message[0].upper() + output_message[1:]
-    return output_message
+    return output_message[0].upper() + output_message[1:]
 
 
 def clean_token(token: str) -> str:

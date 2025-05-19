@@ -52,14 +52,14 @@ class TriviaQuestion:
         alphabet = string.ascii_uppercase  # Should never need more than 4 letters
         answer_string = '\n'.join(f'    {alphabet[index]}. {answer}' for index, answer in enumerate(self.answer_list))
 
-        question_string = f"""\
+        num_guesses_string = f"{self.guesses_left} guess{'es' if self.guesses_left > 1 else ''} remaning"
+
+        return f"""\
 [Category: {self.category} — {self.difficulty.title()}]
 Q. {self.question}
 {answer_string}
-Type /guess [your answer] to answer ({self.guesses_left} guess{'es' if self.guesses_left > 1 else ''} remaning)
+Type /guess [your answer] to answer ({num_guesses_string})
 """
-
-        return question_string
 
     async def score_question(self, user_command: common.UserCommand, *, was_correct: bool) -> int:
         if was_correct:
@@ -139,8 +139,8 @@ async def get_trivia_question(user_command: common.UserCommand) -> TriviaQuestio
 
 async def get_new_trivia_question() -> TriviaQuestion:
     url = f"{common.URL_TRIVIA}1"
-    async with aiohttp.ClientSession() as session, session.post(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
-        response_data = (await response.json())['results']
+    async with aiohttp.ClientSession() as s, s.post(url, timeout=aiohttp.ClientTimeout(total=10)) as r:
+        response_data = (await r.json())['results']
 
     return TriviaQuestion(response_data[0])
 

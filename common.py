@@ -15,7 +15,7 @@ import random
 import string
 import types
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -40,7 +40,7 @@ from telegram.ext import CallbackContext as TelegramContext
 # region
 # PROJECT VARIABLES
 APPLICATION_NAME = "FailsafeBot"
-VERSION_NUMBER = "v1.1.15"
+VERSION_NUMBER = "v1.1.16"
 
 # DIRECTORIES
 PATH_DATA_FOLDER = Path("Data")
@@ -113,48 +113,99 @@ TXT_NO_PERMISSIONS = (
 class ConfigMain:
     """Config dataclass for core application functionality."""
 
-    botname: str = "Failsafe"  # Name of the bot, if replytoname is True then the bot will respond to this string
-    runtelegram: bool = True  # Whether to run the telegram bot or skip it
-    rundiscord: bool = True  # Whether to run the discord bot or skip it
-    requireadmin: bool = True  # Whether certain commands require admin rights to perform
-    maxmessagelength: int = 1024  # Maximum amount of characters to allow in a CommandResponse object's bot_message property
-    whitelistdiscord: bool = False  # Whether a Discord chat ID needs to be on the whitelist for commands to function
-    whitelisttelegram: bool = False  # Whether a Telegram chat ID needs to be on the whitelist for commands to function
-    autosuperdiscord: bool = True  # Whether Discord superadmin rights will be auto-assigned if none exist (disabled after first use)
-    autosupertelegram: bool = True  # Whether Telegram superadmin rights will be auto-assigned if none exist (disabled after first use)
+    # Name of the bot, if replytoname is True then the bot will respond to this string
+    botname: str = "Failsafe"
+
+    # Whether to run the Telegram/Discord bot or skip it
+    runtelegram: bool = True
+    rundiscord: bool = True
+
+    # Whether certain commands require admin rights to perform
+    requireadmin: bool = True
+
+    # Maximum amount of characters to allow in a CommandResponse object's bot_message property
+    maxmessagelength: int = 1024
+
+    # Whether a Telegram/Discord chat ID needs to be on the whitelist for commands to function
+    whitelisttelegram: bool = False
+    whitelistdiscord: bool = False
+
+    # Whether Telegram/Discord superadmin rights will be auto-assigned if none exist (disabled after first use)
+    autosupertelegram: bool = True
+    autosuperdiscord: bool = True
 
 
 @dataclass
 class ConfigChat:
     """Config dataclass for chatting functionality (text, voice, and general memory)."""
 
-    replytoname: bool = True  # Whether the bot should respond when their name is said
-    replytomonkey: bool = False  # Whether the bot should play a monkey sound when the word monkey is said (Discworld adventure game reference)
-    randreplychance: float = 0.05  # The chance for the bot to randomly reply to any message in a chat they're in (0 = no chance 1 = every message)
-    gptmodel: str = "gpt-4o-mini"  # What GPT model to use for AI chatting
-    gpttemp: float = 1.0  # Temperature for GPT chat completions (0 to 2, values outside this will break)
-    gptmaxtokens: int = 256  # Value to be passed for parameter max_completion_tokens for gpt chat completion (note 1 token = ~4 chars)
-    usememory: bool = True  # Whether the bot will use the memory system for AI chatting
-    memorysize: int = 24  # Maximum number of messages to record in memory for AI chatting (higher is probably more expensive)
-    recordall: bool = False  # Whether the bot wil record ALL messages sent in chat to memory, or just messages directed towards it
-    minmarkov: int = 2  # Minimum number of tokens for the markov chain command /wisdom (higher takes longer exponentially)
-    maxmarkov: int = 256  # Maximum number of tokens for the markov chain command /wisdomly)
-    saysoftcap: int = 224  # The "soft cap" for elevenlabs text-to-speech input length (soft cap only breaks on punctuation)
-    sayhardcap: int = 256  # The "hard cap" for elevenlabs text-to-speech input length (hard cap breaks no matter what)
-    sayvoiceid: str = "XB0fDUnXU5powFXDhCwa"  # The voice to use for elevenlabs (defaults to Charlotte)
-    saymodelid: str = "eleven_multilingual_v2"  # The base model to use for elevenlabs
-    vcautodc: bool = True  # Whether the bot will automatically disconnect if they're the only ones in a voice call
+    # Whether the bot should respond when their name is said
+    replytoname: bool = True
+
+    # Whether the bot should play a sound when the word monkey is said (Discworld adventure game reference)
+    replytomonkey: bool = False
+
+    # Chance for the bot to randomly reply to any message in a chat they're in (0 -> 0%, 1.0 -> 100%)
+    randreplychance: float = 0.05
+
+    # What GPT model to use for AI chatting
+    gptmodel: str = "gpt-4o-mini"
+
+    # Temperature for GPT chat completions (0 to 2, values outside this will break)
+    gpttemp: float = 1.0
+
+    # Value to be passed for parameter max_completion_tokens for gpt chat completion (1 token = ~4 chars)
+    gptmaxtokens: int = 256
+
+    # Whether the bot will use the memory system for AI chatting
+    usememory: bool = True
+
+    # Maximum number of messages to record in memory for AI chatting (higher is probably more expensive)
+    memorysize: int = 24
+
+    # Whether the bot wil record ALL messages sent in chat to memory, or just messages directed towards it
+    recordall: bool = False
+
+    # Minimum number of tokens for the markov chain command /wisdom (higher takes longer exponentially)
+    minmarkov: int = 2
+
+    # Maximum number of tokens for the markov chain command /wisdom)
+    maxmarkov: int = 256
+
+    # The "soft cap" for elevenlabs text-to-speech input length (soft cap only breaks on punctuation)
+    saysoftcap: int = 224
+
+    # The "hard cap" for elevenlabs text-to-speech input length (hard cap breaks no matter what)
+    sayhardcap: int = 256
+
+    # The voice to use for elevenlabs (defaults to Charlotte)
+    sayvoiceid: str = "XB0fDUnXU5powFXDhCwa"
+
+    # The base model to use for elevenlabs
+    saymodelid: str = "eleven_multilingual_v2"
+
+    # Whether the bot will automatically disconnect if they're the only ones in a voice call
+    vcautodc: bool = True
 
 
 @dataclass
 class ConfigMisc:
     """Config dataclass for command functionality that isn't covered by other dataclasses."""
 
-    usemegabytes: bool = True  # Whether the /system command should use megabytes (will use gigabytes if false)
-    minsimilarity: float = 0.75  # The minimum similarity threshold when searching for sound names (1.0 = exact matches on
-    maxstreamtime: int = 30  # How much of a video the /stream command will download (does not apply to /vcstream)
-    maxdice: int = 100  # Maximum number of dice in one command for dice roller (bigger numbers might make messages too large for telegram)
-    maxfaces: int = 10000  # Maximum number of faces for the dice for dice roller
+    # Whether the /system command should use megabytes (will use gigabytes if false)
+    usemegabytes: bool = False
+
+    # The minimum similarity threshold when searching for sound names (1.0 = exact matches on
+    minsimilarity: float = 0.75
+
+    # How much of a video the /stream command will download (does not apply to /vcstream)
+    maxstreamtime: int = 30
+
+    # Maximum number of dice in one command for dice roller (bigger numbers might reach message length cap)
+    maxdice: int = 100
+
+    # Maximum number of faces for the dice for dice roller
+    maxfaces: int = 10000
 
 
 @dataclass
@@ -187,7 +238,7 @@ class Config:
                     # Try to find subkey in the 'correct' location
                     self.__dict__[key].__dict__[subkey] = loaded[key][subkey]
                 else:
-                    # Try to find subkey in 'incorrect' locations, in case the dataclasses had their settings moved around
+                    # Try to find subkey in 'incorrect' locations, in case dataclasses had their settings moved around
                     for other_key in loaded:
                         if other_key != key and subkey in loaded[other_key]:
                             self.__dict__[key].__dict__[subkey] = loaded[other_key][subkey]
@@ -260,36 +311,35 @@ async def verify_settings() -> AsyncGenerator[str]:
 # COMMANDS & RESPONSES
 # ==========================
 # region
+@dataclass(kw_only=True)
 class CommandResponse:
-    def __init__(self, user_message: str, bot_message: str,
-                 *, record_to_memory: bool = True, send_to_chat: bool = True) -> None:
-        self.user_message: str = user_message
-        self.bot_message: str = bot_message
-        self.record_to_memory: bool = record_to_memory  # Whether user_message and bot_message should be recorded to memory
-        self.send_to_chat: bool = send_to_chat  # Whether bot_message should be sent to chat
+    user_message: str
+    bot_message: str
+    record_memory: bool = field(default=True)  # Whether user_message and bot_message should be recorded to memory
+    send_chat: bool = field(default=True)  # Whether bot_message should be sent to chat
 
 
+@dataclass(kw_only=True)
 class FileResponse(CommandResponse):
-    def __init__(self, user_message: str, bot_message: str, file_path: str | Path,
-                 *, record_to_memory: bool = True, temp: bool = False, send_to_chat: bool = False) -> None:
-        super().__init__(user_message, bot_message, record_to_memory=record_to_memory, send_to_chat=send_to_chat)
-        self.file_path: str | Path = file_path  # The path of the file to send
-        self.temp: bool = temp  # Whether the file should be deleted after being sent
+    file_path: str | Path  # Path of file relative to script
+    temp: bool = field(default=False)  # Whether the file should be deleted after its sent
+    record_memory: bool = field(default=True)
+    send_chat: bool = field(default=False)
 
 
+@dataclass(kw_only=True)
 class SoundResponse(FileResponse):
-    def __init__(self, user_message: str, bot_message: str, file_path: str | Path,
-                 *, record_to_memory: bool = True, temp: bool = False, send_to_chat: bool = False) -> None:
-        super().__init__(user_message, bot_message, file_path, record_to_memory=record_to_memory, temp=temp, send_to_chat=send_to_chat)
+    pass  # Doesn't change anything from superclass, used for isinstance() purposes
 
 
+@dataclass(kw_only=True)
 class NoResponse(CommandResponse):
     def __init__(self) -> None:
-        super().__init__('', '', record_to_memory=False, send_to_chat=False)
+        super().__init__(user_message='', bot_message='', record_memory=False, send_chat=False)
 
 
 class UserCommand:
-    def __init__(self, target_bot: AnyBotAnnotation, context: AnyContextAnnotation, update: TelegramUpdate | None = None) -> None:
+    def __init__(self, target_bot: AnyBotAnn, context: AnyContextAnn, update: TelegramUpdate | None) -> None:
         self.target_bot = target_bot
         self.context = context
         self.update = update
@@ -376,7 +426,8 @@ class UserCommand:
 
     async def get_id_by_username(self, username: str) -> str | None:
         # Attempt to retrieve the ID belonging to the provided username
-        # This ID is platform-specific (Discord, Telegram) and can only be retrieved if the user has interacted with this bot before
+        # This ID is platform-specific (Discord, Telegram) and can only be retrieved if the
+        # user has interacted with this bot before
         id_dict = await try_read_json(PATH_TRACK_USERID, {})
         platform_str = self.get_platform_string()
 
@@ -571,7 +622,12 @@ class UserCommand:
         if isinstance(self.context, TelegramContext) and isinstance(self.update, TelegramUpdate):
             if self.update.effective_chat is None:
                 raise MissingUpdateInfoError(self.update)
-            await self.context.bot.send_document(chat_id=self.update.effective_chat.id, document=response.file_path, caption=text)
+
+            await self.context.bot.send_document(
+                chat_id=self.update.effective_chat.id,
+                document=response.file_path,
+                caption=text,
+            )
 
         elif isinstance(self.context, DiscordContext):
             await self.context.send(content=text, file=discord.File(response.file_path))
@@ -588,7 +644,11 @@ class UserCommand:
             if self.update.effective_chat is None:
                 raise MissingUpdateInfoError(self.update)
 
-            await self.context.bot.send_voice(chat_id=self.update.effective_chat.id, voice=response.file_path, caption=text)
+            await self.context.bot.send_voice(
+                chat_id=self.update.effective_chat.id,
+                voice=response.file_path,
+                caption=text,
+            )
 
         elif isinstance(self.context, DiscordContext):
             await self.context.send(content=text, file=discord.File(response.file_path))
@@ -659,14 +719,16 @@ class UserCommand:
 # ==========================
 # region
 class InvalidBotTypeError(TypeError):
-    # This exception type should be raised if a function expects a TelegramBot or DiscordBot but gets something else instead
+    # This exception type should be raised if a function expects a TelegramBot or DiscordBot
+    # but gets something else instead
     def __init__(self, user_command: UserCommand, message: str | None = None) -> None:
         self.message = message
         if message is None:
             bot_type = type(user_command.target_bot).__name__
             context_type = type(user_command.context).__name__
             update_type = type(user_command.update).__name__
-            self.message = f"Function failed for provided bot type (Bot: {bot_type}, Context: {context_type}, Update: {update_type})"
+            type_string = f"Bot: {bot_type}, Context: {context_type}, Update: {update_type}?"
+            self.message = f"Function failed for provided types ({type_string})"
 
         super().__init__(self.message)
 
@@ -700,25 +762,26 @@ class MissingUpdateInfoError(ValueError):
 # TYPE ANNOTATIONS
 # ==========================
 # region
-CommandAnnotation = Callable[[UserCommand], types.CoroutineType[Any, Any, CommandResponse]]
-TelegramBotAnnotation = TelegramBot[Any, Any, Any, Any, Any, Any]
-DiscordBotAnnotation = DiscordBot
-AnyBotAnnotation = TelegramBotAnnotation | DiscordBotAnnotation
-TelegramContextAnnotation = TelegramContext[Any, Any, Any, Any]
-DiscordContextAnnotation = DiscordContext[Any]
-AnyContextAnnotation = TelegramContextAnnotation | DiscordContextAnnotation
-TelegramFunctionAnnotation = Callable[[TelegramUpdate, TelegramContextAnnotation], types.CoroutineType[Any, Any, None]]
-DiscordFunctionAnnotation = Callable[[DiscordContextAnnotation], types.CoroutineType[Any, Any, None]]
+CommandAnn = Callable[[UserCommand], types.CoroutineType[Any, Any, CommandResponse]]
+TelegramBotAnn = TelegramBot[Any, Any, Any, Any, Any, Any]
+DiscordBotAnn = DiscordBot
+AnyBotAnn = TelegramBotAnn | DiscordBotAnn
+TelegramContextAnn = TelegramContext[Any, Any, Any, Any]
+DiscordContextAnn = DiscordContext[Any]
+AnyContextAnn = TelegramContextAnn | DiscordContextAnn
+TelegramFuncAnn = Callable[[TelegramUpdate, TelegramContextAnn], types.CoroutineType[Any, Any, None]]
+DiscordFuncAnn = Callable[[DiscordContextAnn], types.CoroutineType[Any, Any, None]]
 # endregion
 
 
-def requireadmin(function: CommandAnnotation) -> CommandAnnotation:
+def requireadmin(function: CommandAnn) -> CommandAnn:
     # Put this decorator on a function using @requireadmin to prevent its use without admin rights
     @functools.wraps(function)
     async def admin_wrapper(user_command: UserCommand) -> CommandResponse:
         config = await Config.load()
         if config.main.requireadmin and not await user_command.is_admin():
-            return CommandResponse("Can I do that sensitive thing that requires admin rights?", random.choice(TXT_NO_PERMISSIONS))
+            user_message = "Can I do that sensitive thing that requires superadmin rights?"
+            return CommandResponse(user_message=user_message, bot_message=random.choice(TXT_NO_PERMISSIONS))
 
         return await function(user_command)
 
@@ -726,14 +789,15 @@ def requireadmin(function: CommandAnnotation) -> CommandAnnotation:
     return admin_wrapper
 
 
-def requiresuper(function: CommandAnnotation) -> CommandAnnotation:
+def requiresuper(function: CommandAnn) -> CommandAnn:
     # Put this decorator on a functio using @requiresuper to prevent its use without superadmin rights
     # This is strictly stronger than admin rights, normal admin rights are insufficent
     @functools.wraps(function)
     async def superadmin_wrapper(user_command: UserCommand) -> CommandResponse:
         config = await Config.load()
         if config.main.requireadmin and not await user_command.is_superadmin():
-            return CommandResponse("Can I do that sensitive thing that requires superadmin rights?", random.choice(TXT_NO_PERMISSIONS))
+            user_message = "Can I do that sensitive thing that requires superadmin rights?"
+            return CommandResponse(user_message=user_message, bot_message=random.choice(TXT_NO_PERMISSIONS))
 
         return await function(user_command)
 
@@ -741,14 +805,14 @@ def requiresuper(function: CommandAnnotation) -> CommandAnnotation:
     return superadmin_wrapper
 
 
-async def send_response(command_function: CommandAnnotation, user_command: UserCommand) -> None:
+async def send_response(command_function: CommandAnn, user_command: UserCommand) -> None:
     config = await Config.load()
 
     # Send the command to the bot and await its response
     user_command.response = await command_function(user_command)
 
     text_response = None
-    if user_command.response.send_to_chat and user_command.response.bot_message:
+    if user_command.response.send_chat and user_command.response.bot_message:
         text_response = user_command.response.bot_message
 
     if text_response is not None and len(text_response) > config.main.maxmessagelength:
@@ -786,20 +850,20 @@ async def send_response(command_function: CommandAnnotation, user_command: UserC
             raise
 
     # Add the command and its response to memory if necessary
-    if user_command.response.record_to_memory:
+    if user_command.response.record_memory:
         user_prompt = await user_command.get_user_prompt()
         await append_to_gpt_memory(user_prompt=user_prompt, bot_prompt=user_command.response.bot_message)
 
 
-async def wrap_telegram_command(bot: TelegramBotAnnotation, command: CommandAnnotation) -> TelegramFunctionAnnotation:
+async def wrap_telegram_command(bot: TelegramBotAnn, command: CommandAnn) -> TelegramFuncAnn:
     @functools.wraps(command)
-    async def telegram_wrapper(update: TelegramUpdate, context: TelegramContextAnnotation) -> None:
+    async def telegram_wrapper(update: TelegramUpdate, context: TelegramContextAnn) -> None:
         config = await Config.load()
 
         if update.message is None:
-            return
+            raise MissingUpdateInfoError(update)
 
-        user_command = UserCommand(bot, context, update=update)
+        user_command = UserCommand(bot, context, update)
 
         # Track this user's platform, name, and user ID
         await user_command.track_user_id()
@@ -822,11 +886,11 @@ async def wrap_telegram_command(bot: TelegramBotAnnotation, command: CommandAnno
     return telegram_wrapper
 
 
-async def wrap_discord_command(bot: DiscordBotAnnotation, command: CommandAnnotation) -> DiscordFunctionAnnotation:
+async def wrap_discord_command(bot: DiscordBotAnn, command: CommandAnn) -> DiscordFuncAnn:
     @functools.wraps(command)
-    async def discord_wrapper(context: DiscordContextAnnotation) -> None:
+    async def discord_wrapper(context: DiscordContextAnn) -> None:
         config = await Config.load()
-        user_command = UserCommand(bot, context)
+        user_command = UserCommand(bot, context, None)
         await user_command.track_user_id()
 
         # If the whitelist is enforced, don't allow interacting with this bot unless on the list
@@ -883,11 +947,10 @@ async def get_gpt_memory() -> list[dict[str, str]]:
 
 def convert_to_ascii(text: str) -> str:
     text = html.unescape(text)
-    text = unidecode.unidecode(text, errors="replace", replace_str='')
-    return text
+    return unidecode.unidecode(text, errors="replace", replace_str='')
 
 
-def make_valid_filename(input_str: str, *, strict: bool = False) -> str:
+def make_valid_filename(input_str: str, *, strict: bool) -> str:
     input_str = convert_to_ascii(input_str)
 
     if strict:
@@ -898,8 +961,8 @@ def make_valid_filename(input_str: str, *, strict: bool = False) -> str:
 
 
 async def try_read_lines_list[T](path: str | Path, default: T) -> list[str] | T:
-    # Attempt to load the text data from the provided path, treating each line as a separate element in a list, and return it
-    # If this fails, return the provided default object instead
+    # Attempt to load the text data from the provided path, treating each line as a separate element
+    # in a list, and return it. If this fails, return the provided default object instead
     try:
         async with aiofiles.open(path, encoding='utf-8') as f:
             lines = [x.strip() for x in await f.readlines()]
@@ -913,8 +976,8 @@ async def try_read_lines_list[T](path: str | Path, default: T) -> list[str] | T:
 
 
 async def try_read_lines_str[T](path: str | Path, default: T) -> str | T:
-    # Attempt to load the text data from the provided path, treating the entire text file as a single string, and return it
-    # If this fails, return the provided default object instead
+    # Attempt to load the text data from the provided path, treating the entire text file as a
+    # single string, and return it. If this fails, return the provided default object instead
     try:
         async with aiofiles.open(path, encoding='utf-8') as f:
             string_lines = ''.join(await f.readlines())
