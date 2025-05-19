@@ -34,5 +34,6 @@
    "python.analysis.typeCheckingMode": "strict",
    "editor.rulers": [
       118
-   ]
+   ],
+   "python.analysis.autoImportCompletions": false
 }
