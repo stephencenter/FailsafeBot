@@ -172,7 +172,8 @@ async def delsound_command(user_command: UserCommand) -> CommandResponse:
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 
     user_message = f"Can you delete the sound '{sound_to_delete} for me?"
-    if not await sound_manager.is_sound_or_alias(sound_to_delete):
+    sound_to_delete = await sound_manager.coalesce_sound_name(sound_to_delete)
+    if sound_to_delete is None:
         bot_message = random.choice(common.TXT_SOUND_NOT_FOUND)
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 
@@ -331,13 +332,9 @@ async def playcount_command(user_command: UserCommand) -> CommandResponse:
         bot_message = random.choice(common.TXT_SOUND_NOT_PROVIDED)
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 
-    sound_aliases = await sound_manager.get_alias_dict()
-    if sound_name in sound_aliases:
-        sound_name = sound_aliases[sound_name]
-
     user_message = f"How many times has the sound {sound_name} been played?"
-
-    if sound_name not in sound_manager.get_sound_dict():
+    sound_name = await sound_manager.coalesce_sound_name(sound_name)
+    if sound_name is None:
         bot_message = random.choice(common.TXT_SOUND_NOT_FOUND)
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 

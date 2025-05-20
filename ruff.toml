@@ -41,6 +41,9 @@ ignore = [
     # Conditionally import if type-checking is enabled, unnecessary IMO
     "TC002", "TC003",
 
+    # TODO stuff, good suggestions but not relevant for this project
+    "TD001", "TD002", "TD003",
+
     # Whitespace (unnecessary as editor fixes this upon save)
     "W291", "W292", "W293"
 ]
