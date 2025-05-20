@@ -9,9 +9,11 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
 
+import ffmpeg
 import filetype
 import strsimpy
 import yt_dlp
+from loguru import logger
 
 import common
 
@@ -192,28 +194,32 @@ async def is_sound_or_alias(name: str) -> bool:
     return await is_existing_sound(name) or await is_existing_alias(name)
 
 
-async def get_sound_by_name(sound_name: str, *, strict: bool) -> Path | list[str] | None:
+async def coalesce_sound_name(name: str) -> str | None:
+    if name in get_sound_dict():
+        return name
+
+    # Sounds can have aliases, which are alternative names you can call
+    # them with. If an alias is provided, we determine what sound the
+    # alias corresponds to and play that sound
+    if name in (alias_dict := await get_alias_dict()):
+        return alias_dict[name]
+
+    return None
+
+
+async def get_sound_by_name(name: str, *, strict: bool) -> Path | list[str] | None:
     # Get the dictionary of all sounds and the paths they're located at
     sound_dict = get_sound_dict()
 
-    try:
+    if (sound_name := await coalesce_sound_name(name)) is not None:
         return sound_dict[sound_name]
-
-    except KeyError:
-        # Sounds can have aliases, which are alternative names you can call
-        # them with. If an alias is provided, we determine what sound the
-        # alias corresponds to and play that sound
-        sound_aliases = await get_alias_dict()
-
-        if sound_name in sound_aliases:
-            return sound_dict[sound_aliases[sound_name]]
 
     # If strict = True, then we require an exact match for sound/alias name
     if strict:
         return None
 
     # Find sounds/aliases that are close matches to the provided string
-    candidates = await search_sounds(sound_name)
+    candidates = await search_sounds(name)
 
     # If there's more than 5 matches, then the search term is too general and we reject it
     max_candidates = 5
@@ -327,6 +333,28 @@ def is_valid_audio(data: bytearray) -> bool:
 
     valid_types = {'audio/mpeg', 'audio/ogg', 'audio/x-wav'}
     return file_type.mime in valid_types
+
+
+def adjust_volume(sound_name: str, delta: float) -> None:
+    # Note that adjusting sound volume is LOSSY, i.e. NOT REVERSIBLE
+    # Smaller adjustments may sound the same when reversed, but it's not exact
+    # and larger adjustments will noticeably reduce sound quality when reversed
+    # If the volume is reduced or increased too much, the sound can be entirely lost
+    # Use at own risk! Back up your sound files!
+    sound_path = (common.PATH_SOUNDS_FOLDER / sound_name).with_suffix('.mp3')
+    temp_path = (common.PATH_TEMP_FOLDER / sound_name).with_suffix('.mp3')
+
+    # Make sure temp folder exists and temp file doesn't exist already
+    common.PATH_TEMP_FOLDER.mkdir(parents=True, exist_ok=True)
+    temp_path.unlink(missing_ok=True)
+
+    # Write copy to temp directory in case an error occurs
+    ffmpeg.input(sound_path).output(str(temp_path), af=f'volume={delta}dB').run(quiet=True)
+
+    # If no error occurred then we can delete the original and replace with volume-adjusted version
+    sound_path.unlink(missing_ok=True)
+    temp_path.rename(sound_path)
+    logger.info(f'Adjusted volume of {sound_name} by {delta} decibels')
 
 
 async def verify_aliases() -> AsyncGenerator[str]:

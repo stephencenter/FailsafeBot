@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import discord
+import ffmpeg
 import httpx
 import psutil
 from discord import Member, VoiceState
@@ -178,6 +179,36 @@ async def delsound_command(user_command: UserCommand) -> CommandResponse:
     sound_manager.del_sound_file(sound_to_delete)
 
     bot_message = f"The sound '{sound_to_delete}' has been banished to oblivion."
+    return CommandResponse(user_message=user_message, bot_message=bot_message)
+
+
+@requireadmin
+async def adjvolume_command(user_command: UserCommand) -> CommandResponse:
+    args_list = user_command.get_args_list()
+
+    user_message = "Can you adjust the volume of this sound?"
+    try:
+        sound_name = args_list[0]
+        delta = float(args_list[1])
+    except (IndexError, ValueError):
+        bot_message = "Format is /adjvolume_command [sound_name] [amount]"
+        return CommandResponse(user_message=user_message, bot_message=bot_message)
+
+    if (sound_name := await sound_manager.coalesce_sound_name(sound_name)) is None:
+        bot_message = random.choice(common.TXT_SOUND_NOT_FOUND)
+        return CommandResponse(user_message=user_message, bot_message=bot_message)
+
+    user_message = f"Can you adjust the volume of the sound '{sound_name}' by {delta}dB?"
+    try:
+        sound_manager.adjust_volume(sound_name, delta)
+    except PermissionError:
+        bot_message = "There was an error reading or writing sound file."
+        return CommandResponse(user_message=user_message, bot_message=bot_message)
+    except ffmpeg.Error:
+        bot_message = "There was an error adjusting the sound volume."
+        return CommandResponse(user_message=user_message, bot_message=bot_message)
+
+    bot_message = f"Adjusted volume of sound '{sound_name}' by {delta}dB."
     return CommandResponse(user_message=user_message, bot_message=bot_message)
 
 
@@ -1349,6 +1380,7 @@ COMMAND_LIST: list[tuple[str, common.CommandAnn]] = [
     ("botsounds", botsounds_command),
     ("newsounds", newsounds_command),
     ("delsound", delsound_command),
+    ("adjvolume", adjvolume_command),
     ("addalias", addalias_command),
     ("delalias", delalias_command),
     ("getalias", getalias_command),
