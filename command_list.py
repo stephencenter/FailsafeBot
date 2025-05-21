@@ -1353,7 +1353,11 @@ async def handle_message_event(user_command: UserCommand) -> CommandResponse:
 async def monkey_event(message: str) -> CommandResponse:
     # Discworld adventure game reference
     file_path = common.PATH_SOUNDS_FOLDER / "monkey.mp3"
-    return SoundResponse(user_message=message, bot_message="AAAAAHHHHH-EEEEE-AAAAAHHHHH!", file_path=file_path)
+    if not file_path.exists():
+        return NoResponse()
+
+    bot_message = "AAAAAHHHHH-EEEEE-AAAAAHHHHH!"
+    return SoundResponse(user_message=message, bot_message=bot_message, file_path=file_path)
 
 
 async def reply_event(user_command: UserCommand) -> CommandResponse:

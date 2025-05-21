@@ -100,30 +100,30 @@ async def download_audio_from_url(url: str) -> Path | None:
 
 
 async def save_new_sound(sound_name: str, sound_file: bytearray) -> None:
-    sound_path = (common.PATH_SOUNDS_FOLDER / sound_name).with_suffix(".mp3")
+    sound_path = (common.PATH_SOUNDS_FOLDER / sound_name).with_suffix('.mp3')
 
     await common.write_bytes_to_file(sound_path, sound_file)
 
 
 def del_sound_file(sound_name: str) -> None:
-    sound_path = (common.PATH_SOUNDS_FOLDER / sound_name).with_suffix(".mp3")
+    sound_path = (common.PATH_SOUNDS_FOLDER / sound_name).with_suffix('.mp3')
     sound_path.unlink()
 
 
 def get_sound_dict() -> dict[str, Path]:
-    # If any .mp3 files are in the main directory, move them to the Sounds directory
-    for file in Path().iterdir():
-        if file.suffix == ".mp3":
-            Path.replace(file, f"{common.PATH_SOUNDS_FOLDER}/{file}")
-
     # Create the sound dictionary. The keys will be the names of each sound, and the values will be the
     # path to that sound's file
     sound_dict: dict[str, Path] = {}
     for file in common.PATH_SOUNDS_FOLDER.iterdir():
-        if file.suffix == ".mp3":
+        if file.suffix == '.mp3':
             sound_dict[file.stem] = file
 
     return sound_dict
+
+
+def get_sound_list() -> list[str]:
+    sound_list = [file.stem for file in common.PATH_SOUNDS_FOLDER.iterdir() if file.suffix == '.mp3']
+    return sorted(sound_list)
 
 
 async def get_alias_dict() -> dict[str, str]:
@@ -202,12 +202,11 @@ async def is_sound_or_alias(name: str) -> bool:
 
 
 async def coalesce_sound_name(name: str) -> str | None:
+    # If given sound name, return unchanged
     if name in get_sound_dict():
         return name
 
-    # Sounds can have aliases, which are alternative names you can call
-    # them with. If an alias is provided, we determine what sound the
-    # alias corresponds to and return that sound
+    # If given alias, return corresponding sound name
     if name in (alias_dict := await get_alias_dict()):
         return alias_dict[name]
 
@@ -244,10 +243,6 @@ def get_random_sound() -> tuple[str, Path]:
     # Get the dictionary of all sounds and the paths they're located at
     sound_dict = get_sound_dict()
     return random.choice(list(sound_dict.items()))
-
-
-def get_sound_list() -> list[str]:
-    return sorted(get_sound_dict().keys())
 
 
 async def get_aliases(sound_name: str) -> list[str]:
