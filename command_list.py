@@ -11,7 +11,7 @@ import random
 import sys
 from collections.abc import AsyncIterator, Callable, Generator
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 import discord
 import ffmpeg
@@ -1071,7 +1071,7 @@ async def test_command(user_command: UserCommand) -> CommandResponse:
 
 
 @requiresuper
-async def restart_command(user_command: UserCommand) -> CommandResponse:
+async def restart_command(user_command: UserCommand) -> NoReturn:
     logger.info("Restarting...")
     await user_command.send_text_response("Restarting...")
 
@@ -1115,7 +1115,7 @@ async def version_command(_: UserCommand) -> CommandResponse:
 
 
 @requiresuper
-async def crash_command(_: UserCommand) -> CommandResponse:
+async def crash_command(_: UserCommand) -> NoReturn:
     error_message = "/crash command used"
     raise ZeroDivisionError(error_message)
 

@@ -133,51 +133,58 @@ async def get_alias_dict() -> dict[str, str]:
 
 
 async def get_playcount_dict() -> dict[str, int]:
-    # Retrieve the sound and alias dictionaries
-    sound_list = get_sound_list()
-    alias_dict = await get_alias_dict()
-
-    playcount_dict = await common.try_read_json(common.PATH_PLAYCOUNTS, dict.fromkeys(sound_list, 0))
-
-    # This variable makes note of whether a correction was made to the playcounts dictionary
-    changed = False
-
-    # Ensure that all sounds are in the playcount dictionary
-    for sound_name in sound_list:
-        if sound_name not in playcount_dict:
-            playcount_dict[sound_name] = 0
-            changed = True
-
-    # Ensure that the playcounts of aliases are not being tracked separately.
-    # This could occur, for example, if a sound's name and alias are swapped
-    for alias in alias_dict:
-        if alias in playcount_dict:
-            sound_name = alias_dict[alias]
-            playcount_dict[sound_name] += playcount_dict[alias]
-            del playcount_dict[alias]
-            changed = True
-
-    # Ensure that there aren't any nonexistent sounds in the playcount dictionary
-    for sound_name in playcount_dict.copy():
-        if sound_name not in sound_list:
-            del playcount_dict[sound_name]
-            changed = True
+    playcount_dict = await common.try_read_json(common.PATH_PLAYCOUNTS, dict.fromkeys(get_sound_list(), 0))
+    playcount_dict, changed = await fix_playcount_dict(playcount_dict)
 
     # If the playcount dictionary had to be corrected, then we write the corrected
     # dictionary to a file
     if changed:
         await common.write_json_to_file(common.PATH_PLAYCOUNTS, playcount_dict)
+        logger.info("Fixed error with playcount dictionary, wrote to file")
 
     return playcount_dict
 
 
-async def increment_playcount(sound_name: str) -> None:
-    play_counts = await get_playcount_dict()
+async def fix_playcount_dict(playcount_dict: dict[str, int]) -> tuple[dict[str, int], bool]:
+    sound_list = get_sound_list()
+    alias_dict = await get_alias_dict()
 
-    try:
-        play_counts[sound_name] += 1
-    except KeyError:
-        play_counts[sound_name] = 1
+    # This variable makes note of whether a correction was made to the playcounts dictionary
+    changed = False
+
+    # Ensure that all sounds are in the playcount dictionary
+    missing_sounds = [sound for sound in sound_list if sound not in playcount_dict]
+    for sound_name in missing_sounds:
+        playcount_dict[sound_name] = 0
+        changed = True
+
+    # Ensure that the playcounts of aliases are not being tracked separately.
+    # This could occur, for example, if a sound's name and alias are swapped
+    unmerged_aliases = [alias for alias in alias_dict if alias in playcount_dict]
+    for alias in unmerged_aliases:
+        sound_name = alias_dict[alias]
+        playcount_dict[sound_name] += playcount_dict[alias]
+        del playcount_dict[alias]
+        changed = True
+
+    # Ensure that there aren't any nonexistent sounds in the playcount dictionary
+    invalid_sounds = [sound for sound in playcount_dict if sound not in sound_list]
+    for sound_name in invalid_sounds:
+        del playcount_dict[sound_name]
+        changed = True
+
+    return playcount_dict, changed
+
+
+async def increment_playcount(name: str) -> None:
+    sound_name = await coalesce_sound_name(name)
+    logger.debug(f"{name}, {sound_name}")
+    if sound_name is None:
+        error_msg = f"Invalid sound name {name} provided."
+        raise ValueError(error_msg)
+
+    play_counts = await get_playcount_dict()
+    play_counts[sound_name] = play_counts.get(sound_name, 0) + 1
 
     await common.write_json_to_file(common.PATH_PLAYCOUNTS, play_counts)
 
@@ -200,7 +207,7 @@ async def coalesce_sound_name(name: str) -> str | None:
 
     # Sounds can have aliases, which are alternative names you can call
     # them with. If an alias is provided, we determine what sound the
-    # alias corresponds to and play that sound
+    # alias corresponds to and return that sound
     if name in (alias_dict := await get_alias_dict()):
         return alias_dict[name]
 
@@ -236,9 +243,7 @@ async def get_sound_by_name(name: str, *, strict: bool) -> Path | list[str] | No
 def get_random_sound() -> tuple[str, Path]:
     # Get the dictionary of all sounds and the paths they're located at
     sound_dict = get_sound_dict()
-    sound_name = random.choice(list(sound_dict.keys()))
-
-    return sound_name, sound_dict[sound_name]
+    return random.choice(list(sound_dict.items()))
 
 
 def get_sound_list() -> list[str]:
@@ -331,7 +336,7 @@ def is_valid_audio(data: bytearray) -> bool:
     if file_type is None:
         return False
 
-    valid_types = {'audio/mpeg', 'audio/ogg', 'audio/x-wav'}
+    valid_types = {'audio/mpeg', 'audio/ogg', 'audio/x-wav'}  # mp3, ogg, wav
     return file_type.mime in valid_types
 
 
