@@ -26,6 +26,8 @@ from common import UserCommand
 # ==========================
 # region
 class FakeTelegramApplication:
+    """Dummy Telegram Application class for unit testing."""
+
     @property
     def __class__(self) -> type:  # type: ignore
         return TelegramBotType
@@ -33,6 +35,8 @@ class FakeTelegramApplication:
 
 @dataclass
 class FakeTelegramUpdate:
+    """Dummy Telegram Update class for unit testing."""
+
     message: FakeTelegramMessage | None
 
     @property
@@ -41,6 +45,8 @@ class FakeTelegramUpdate:
 
 
 class FakeTelegramContext:
+    """Dummy Telegram Context class for unit testing."""
+
     @property
     def __class__(self) -> type:  # type: ignore
         return TelegramContextType
@@ -48,12 +54,16 @@ class FakeTelegramContext:
 
 @dataclass
 class FakeTelegramUser:
+    """Dummy Telegram User class for unit testing."""
+
     username: str
     id: str
 
 
 @dataclass
 class FakeTelegramMessage:
+    """Dummy Telegram Message class for unit testing."""
+
     text: str | None
     caption: str | None
     chat: FakeTelegramChat
@@ -62,6 +72,8 @@ class FakeTelegramMessage:
 
 @dataclass
 class FakeTelegramChat:
+    """Dummy Telegram Chat class for unit testing."""
+
     id: str
     type: str
 # endregion
@@ -72,6 +84,8 @@ class FakeTelegramChat:
 # ==========================
 # region
 class FakeDiscordBot:
+    """Dummy Discord Bot class for unit testing."""
+
     @property
     def __class__(self) -> type:  # type: ignore
         return DiscordBotType
@@ -79,6 +93,8 @@ class FakeDiscordBot:
 
 @dataclass
 class FakeDiscordContext:
+    """Dummy Discord Context class for unit testing."""
+
     message: FakeDiscordMessage
     author: FakeDiscordUser
     guild: FakeDiscordGuild | None
@@ -91,23 +107,31 @@ class FakeDiscordContext:
 
 @dataclass
 class FakeDiscordUser:
+    """Dummy Discord User class for unit testing."""
+
     name: str
     id: str
 
 
 @dataclass
 class FakeDiscordMessage:
+    """Dummy Discord Message class for unit testing."""
+
     content: str
     author: FakeDiscordUser
 
 
 @dataclass
 class FakeDiscordGuild:
+    """Dummy Discord Guild class for unit testing."""
+
     id: str
 
 
 @dataclass
 class FakeDiscordChannel:
+    """Dummy Discord Channel class for unit testing."""
+
     id: str
 # endregion
 
@@ -196,6 +220,8 @@ TEST_LIST = [
 # region
 @dataclass(kw_only=True)
 class TestInput:
+    """Dataclass for describing the input for a unit test case."""
+
     text_input: str
     user_name: str
     user_id: str
@@ -265,6 +291,8 @@ INPUT_LIST: list[TestInput] = [
 
 
 class TestResult:
+    """Class for describing the result/output for a unit test case."""
+
     def __init__(self, *, passed: bool, test_name: str, index: int, subindex: str) -> None:
         self.passed = passed
         self.test_name = test_name

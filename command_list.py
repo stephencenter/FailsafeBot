@@ -485,6 +485,42 @@ async def stream_command(user_command: UserCommand) -> CommandResponse:
 # VOICE CHAT COMMANDS
 # ==========================
 # region
+async def vcjoin_command(user_command: UserCommand) -> CommandResponse:
+    user_message = "Join my voice channel please."
+    if not user_command.is_discord():
+        return CommandResponse(user_message=user_message, bot_message="That's Discord only, sorry!")
+
+    target_channel = user_command.get_user_voice_channel()
+
+    if target_channel is None:
+        return CommandResponse(user_message=user_message, bot_message="You're not in a voice channel!")
+
+    bot_voice_client = user_command.get_bot_voice_client()
+    if bot_voice_client is not None:
+        await bot_voice_client.move_to(target_channel)
+
+    else:
+        await target_channel.connect()
+
+    return CommandResponse(user_message=user_message, bot_message="If you insist.", send_chat=False)
+
+
+async def vcleave_command(user_command: UserCommand) -> CommandResponse:
+    user_message = "Leave the current voice channel please."
+    if not user_command.is_discord():
+        return CommandResponse(user_message=user_message, bot_message="That's Discord only, sorry!")
+
+    bot_voice_client = user_command.get_bot_voice_client()
+
+    if bot_voice_client is None:
+        return CommandResponse(user_message=user_message, bot_message="I'm not in a voice channel!")
+
+    await bot_voice_client.disconnect()
+    bot_voice_client.cleanup()
+
+    return CommandResponse(user_message=user_message, bot_message="If you insist.", send_chat=False)
+
+
 async def vcsound_command(user_command: UserCommand) -> CommandResponse:
     user_message = "Hey, play that sound in the voice channel."
 
@@ -620,40 +656,6 @@ async def vcpause_command(user_command: UserCommand) -> CommandResponse:
 
     bot_voice_client.pause()
     return CommandResponse(user_message=user_message, bot_message="Done.", send_chat=False)
-
-
-async def vcjoin_command(user_command: UserCommand) -> CommandResponse:
-    user_message = "Join my voice channel please."
-    if not user_command.is_discord():
-        return CommandResponse(user_message=user_message, bot_message="That's Discord only, sorry!")
-
-    target_channel = user_command.get_user_voice_channel()
-
-    if target_channel is None:
-        return CommandResponse(user_message=user_message, bot_message="You're not in a voice channel!")
-
-    bot_voice_client = user_command.get_bot_voice_client()
-    if bot_voice_client is not None:
-        await bot_voice_client.move_to(target_channel)
-
-    else:
-        await target_channel.connect()
-
-    return CommandResponse(user_message=user_message, bot_message="If you insist.", send_chat=False)
-
-
-async def vcleave_command(user_command: UserCommand) -> CommandResponse:
-    user_message = "Leave the current voice channel please."
-    if not user_command.is_discord():
-        return CommandResponse(user_message=user_message, bot_message="That's Discord only, sorry!")
-
-    bot_voice_client = user_command.get_bot_voice_client()
-
-    if bot_voice_client is not None:
-        await bot_voice_client.disconnect()
-        bot_voice_client.cleanup()
-
-    return CommandResponse(user_message=user_message, bot_message="If you insist.", send_chat=False)
 
 
 async def vcsay_command(user_command: UserCommand) -> CommandResponse:
@@ -898,7 +900,8 @@ async def memory_command(_: UserCommand) -> CommandResponse:
     memory_list = await common.get_gpt_memory()
 
     if not memory_list:
-        return CommandResponse(user_message=user_message, bot_message="My mind is a blank slate.")
+        bot_message = "My mind is a blank slate."
+        return CommandResponse(user_message=user_message, bot_message=bot_message, record_memory=False)
 
     memory_list = [f"{item['role']}: {item['content']}" for item in memory_list if 'content' in item]
 
@@ -906,7 +909,8 @@ async def memory_command(_: UserCommand) -> CommandResponse:
     await common.write_lines_to_file(temp_path, memory_list)
 
     bot_message = "Sure, here's my memory list."
-    return FileResponse(user_message=user_message, bot_message=bot_message, file_path=temp_path, temp=True)
+    return FileResponse(user_message=user_message, bot_message=bot_message,
+                        file_path=temp_path, temp=True, record_memory=False)
 # endregion
 
 
@@ -985,17 +989,18 @@ async def configlist_command(_: UserCommand) -> CommandResponse:
 async def help_command(_: UserCommand) -> CommandResponse:
     help_string = """\
 Look upon my works, ye mighty, and despair:
+/mycommands (view all commands you have access to)
 /vcjoin and /vcleave (join or leave current voice channel)
-/say and /vcsay (AI voice)
 /sound and /vcsound (play a sound effect)
 /random and /vcrandom (play a random sound effect)
+/say and /vcsay (AI voice)
 /stream and /vcstream (stream audio from a URL)
 /soundlist and /search (find sounds to play)
 /trivia (play trivia against your friends)
 /chat (talk to me)
 /wisdom (request my wisdom)
 /roll (roll a dice)
-/d10000 and /effects (roll the d10000 table)
+/d10000 and /effects (roll on the d10000 table)
 /pressf (pay respects)"""
 
     return CommandResponse(user_message="What chat commands are available?", bot_message=help_string)

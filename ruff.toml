@@ -9,7 +9,7 @@ ignore = [
     "CPY001",
 
     # Documentation stuff, eventually I should remove these and add more documentation
-    "D101", "D102", "D103", "D105", "D107",
+    "D102", "D103", "D105", "D107",
 
     # Replace lambda with function from operator module, very unnecessary
     "FURB118",

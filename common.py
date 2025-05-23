@@ -5,7 +5,7 @@ the rest of this script. This includes important file paths, UserCommand/Command
 and file IO functions.
 """
 
-from __future__ import annotations
+from __future__ import annotations  # Python 3.14 feature for deferred annotations
 
 import dataclasses
 import functools
@@ -210,6 +210,11 @@ class ConfigMisc:
 
 @dataclass
 class Config:
+    """Dataclass that stores user config data for this application.
+
+    Do not instantiate this class directly, call `await Config.load()` to create a config object.
+    """
+
     main: ConfigMain = dataclasses.field(default_factory=ConfigMain)
     chat: ConfigChat = dataclasses.field(default_factory=ConfigChat)
     misc: ConfigMisc = dataclasses.field(default_factory=ConfigMisc)
@@ -247,8 +252,8 @@ class Config:
         return self
 
     def find_setting(self, search_string: str) -> tuple[str | None, str | None, Any]:
-        # Provide a search string (either the setting name or [group name].[setting name]) and
-        # this method will return the group name, setting name, and current value if it exists
+        # Accepts a search string (either the setting name or [group name].[setting name]) and
+        # parses/returns the group name, setting name, and current value if it exists
         group_name = None
         setting_name = None
         value = None
@@ -311,34 +316,13 @@ async def verify_settings() -> AsyncGenerator[str]:
 # COMMANDS & RESPONSES
 # ==========================
 # region
-@dataclass(kw_only=True)
-class CommandResponse:
-    user_message: str
-    bot_message: str
-    record_memory: bool = field(default=True)  # Whether user_message and bot_message should be recorded to memory
-    send_chat: bool = field(default=True)  # Whether bot_message should be sent to chat
-
-
-@dataclass(kw_only=True)
-class FileResponse(CommandResponse):
-    file_path: str | Path  # Path of file relative to script
-    temp: bool = field(default=False)  # Whether the file should be deleted after its sent
-    record_memory: bool = field(default=True)
-    send_chat: bool = field(default=False)
-
-
-@dataclass(kw_only=True)
-class SoundResponse(FileResponse):
-    pass  # Doesn't change anything from superclass, used for isinstance() purposes
-
-
-@dataclass(kw_only=True)
-class NoResponse(CommandResponse):
-    def __init__(self) -> None:
-        super().__init__(user_message='', bot_message='', record_memory=False, send_chat=False)
-
-
 class UserCommand:
+    """Class that stores information regarding messages or commands sent to the bot.
+
+    This class acts as a wrapper for both PTB's CallbackContext and Update, and Discord.py's Context. This allows
+    commands to easily be written that support both platforms.
+    """
+
     def __init__(self, target_bot: AnyBotAnn, context: AnyContextAnn, update: TelegramUpdate | None) -> None:
         self.target_bot = target_bot
         self.context = context
@@ -363,7 +347,7 @@ class UserCommand:
     async def get_command_name(self) -> str | None:
         if isinstance(self.update, TelegramUpdate):
             if self.update.message is None:
-                raise MissingUpdateInfoError(self.update)
+                raise MissingUpdateInfoError(self)
 
             if (text := self.update.message.text) is not None and text.startswith('/'):
                 return text.split()[0][1:]
@@ -396,7 +380,7 @@ class UserCommand:
         username = None
         if isinstance(self.update, TelegramUpdate):
             if self.update.message is None or self.update.message.from_user is None:
-                raise MissingUpdateInfoError(self.update)
+                raise MissingUpdateInfoError(self)
 
             username = self.update.message.from_user.username
 
@@ -415,7 +399,7 @@ class UserCommand:
         # Returns the user ID of the user that sent the command or message
         if isinstance(self.update, TelegramUpdate):
             if self.update.message is None or self.update.message.from_user is None:
-                raise MissingUpdateInfoError(self.update)
+                raise MissingUpdateInfoError(self)
 
             return str(self.update.message.from_user.id)
 
@@ -440,7 +424,7 @@ class UserCommand:
         # Returns whether the command was called in a private chat or a group chat
         if isinstance(self.update, TelegramUpdate):
             if self.update.message is None:
-                raise MissingUpdateInfoError(self.update)
+                raise MissingUpdateInfoError(self)
 
             return self.update.message.chat.type == "private"
 
@@ -454,7 +438,7 @@ class UserCommand:
         # Ex. /test a b c -> ['a', 'b', 'c']
         if isinstance(self.update, TelegramUpdate):
             if self.update.message is None:
-                raise MissingUpdateInfoError(self.update)
+                raise MissingUpdateInfoError(self)
 
             if (text := self.update.message.text) is not None:
                 if text.startswith('/'):
@@ -466,7 +450,7 @@ class UserCommand:
                     return caption.split()[1:]
                 return caption.split()
 
-            raise MissingUpdateInfoError(self.update)
+            raise MissingUpdateInfoError(self)
 
         if isinstance(self.context, DiscordContext):
             if (caption := self.context.message.content).startswith('/'):
@@ -497,7 +481,7 @@ class UserCommand:
             # NOTE: If this function is returning None for a TelegramBot when you're expecting files,
             # make sure that you have your command registered in FILE_COMMAND_LIST and not COMMAND_LIST!
             if self.update.message is None:
-                raise MissingUpdateInfoError(self.update)
+                raise MissingUpdateInfoError(self)
 
             attachments: list[bytearray] = []
             for file in [self.update.message.document, self.update.message.audio, self.update.message.voice]:
@@ -582,7 +566,7 @@ class UserCommand:
     def get_chat_id(self) -> str | None:
         if isinstance(self.update, TelegramUpdate):
             if self.update.message is None:
-                raise MissingUpdateInfoError(self.update)
+                raise MissingUpdateInfoError(self)
 
             return str(self.update.message.chat.id)
 
@@ -608,7 +592,7 @@ class UserCommand:
     async def send_text_response(self, response: str | None) -> None:
         if isinstance(self.context, TelegramContext) and isinstance(self.update, TelegramUpdate):
             if self.update.effective_chat is None:
-                raise MissingUpdateInfoError(self.update)
+                raise MissingUpdateInfoError(self)
 
             await self.context.bot.send_message(chat_id=self.update.effective_chat.id, text=response)
 
@@ -621,7 +605,7 @@ class UserCommand:
     async def send_file_response(self, response: FileResponse, text: str | None) -> None:
         if isinstance(self.context, TelegramContext) and isinstance(self.update, TelegramUpdate):
             if self.update.effective_chat is None:
-                raise MissingUpdateInfoError(self.update)
+                raise MissingUpdateInfoError(self)
 
             await self.context.bot.send_document(
                 chat_id=self.update.effective_chat.id,
@@ -642,7 +626,7 @@ class UserCommand:
     async def send_sound_response(self, response: SoundResponse, text: str | None) -> None:
         if isinstance(self.context, TelegramContext) and isinstance(self.update, TelegramUpdate):
             if self.update.effective_chat is None:
-                raise MissingUpdateInfoError(self.update)
+                raise MissingUpdateInfoError(self)
 
             await self.context.bot.send_voice(
                 chat_id=self.update.effective_chat.id,
@@ -698,6 +682,7 @@ class UserCommand:
             return None
 
         if not isinstance(self.context.voice_client, discord.VoiceClient):
+            logger.debug(self.context.voice_client)
             return None
 
         return self.context.voice_client
@@ -711,6 +696,43 @@ class UserCommand:
             return username
 
         return corrected_name
+
+
+@dataclass(kw_only=True)
+class CommandResponse:
+    """Class representing the bot's response to a UserCommand."""
+
+    user_message: str
+    bot_message: str
+    record_memory: bool = field(default=True)  # Whether user_message and bot_message should be recorded to memory
+    send_chat: bool = field(default=True)  # Whether bot_message should be sent to chat
+
+
+@dataclass(kw_only=True)
+class FileResponse(CommandResponse):
+    """Subclass of CommandResponse for when the response has a file attached."""
+
+    file_path: str | Path  # Path of file relative to script
+    temp: bool = field(default=False)  # Whether the file should be deleted after its sent
+    record_memory: bool = field(default=True)
+    send_chat: bool = field(default=False)
+
+
+@dataclass(kw_only=True)
+class SoundResponse(FileResponse):
+    """Subclass of FileResponse for when the response is to be sent as a voice message.
+
+    Note that the Discord API does not currently (2025-05-22) support bots sending voice messages,
+    so the distinction is only important for Telegram.
+    """
+
+
+@dataclass(kw_only=True)
+class NoResponse(CommandResponse):
+    """Subclass of CommandResponse for when there is no response, and thus no message is to be sent by the bot."""
+
+    def __init__(self) -> None:
+        super().__init__(user_message='', bot_message='', record_memory=False, send_chat=False)
 # endregion
 
 
@@ -719,8 +741,8 @@ class UserCommand:
 # ==========================
 # region
 class InvalidBotTypeError(TypeError):
-    # This exception type should be raised if a function expects a TelegramBot or DiscordBot
-    # but gets something else instead
+    """Exception type to be raised if a function expects a TelegramBot or DiscordBot but receives something else."""
+
     def __init__(self, user_command: UserCommand, message: str | None = None) -> None:
         self.message = message
         if message is None:
@@ -734,8 +756,10 @@ class InvalidBotTypeError(TypeError):
 
 
 class MissingUpdateInfoError(ValueError):
-    # This exception type should be raised if a function is passed a Telegram Update but it is missing information
-    def __init__(self, update: TelegramUpdate | None, message: str | None = None) -> None:
+    """Exception type to be raised if a function is passed a Telegram Update but it is missing information."""
+
+    def __init__(self, user_command: UserCommand, message: str | None = None) -> None:
+        update = user_command.update
         if message is not None:
             self.message = message
 
@@ -754,7 +778,7 @@ class MissingUpdateInfoError(ValueError):
         elif update.effective_chat is None:
             self.message = "Update.effective_chat cannot be None"
 
-        super().__init__(self.message)
+        super().__init__(f"Command {user_command.get_command_name()}: {self.message}")
 # endregion
 
 
@@ -860,10 +884,10 @@ async def wrap_telegram_command(bot: TelegramBotAnn, command: CommandAnn) -> Tel
     async def telegram_wrapper(update: TelegramUpdate, context: TelegramContextAnn) -> None:
         config = await Config.load()
 
-        if update.message is None:
-            raise MissingUpdateInfoError(update)
-
         user_command = UserCommand(bot, context, update)
+
+        if update.message is None:
+            raise MissingUpdateInfoError(user_command)
 
         # Track this user's platform, name, and user ID
         await user_command.track_user_id()

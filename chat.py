@@ -123,22 +123,24 @@ async def get_elevenlabs_response(input_text: str, *, save_to_file: bool = False
 
 async def cap_elevenlabs_prompt(text_prompt: str) -> str:
     config = await common.Config.load()
+    hard_cap = config.chat.sayhardcap
+    soft_cap = config.chat.saysoftcap
 
     # Hard cap cuts off the text abruptly, to keep costs down (longer strings = more elevenlabs credits)
-    max_chars = min(config.chat.sayhardcap, len(text_prompt))
-    text_prompt = text_prompt[:max_chars]
+    if len(text_prompt) > hard_cap:
+        text_prompt = text_prompt[:hard_cap]
 
-    # Soft cap cuts off the text gently, only at certain punctuation marks
-    for index, char in enumerate(text_prompt):
-        if index >= config.chat.saysoftcap and char in {'.', '?', '!', ','}:
-            text_prompt = text_prompt[:index]
+    # Soft cap cuts off the text gently, only at spaces or certain punctuation marks
+    break_chars = {' ', '.', '?', '!', ','}
+    for index, char in enumerate(text_prompt[soft_cap:]):
+        if char in break_chars:
+            text_prompt = text_prompt[:soft_cap + index]
             break
 
     return text_prompt
 
 
 async def handle_elevenlabs_error(error: ElevenLabsApiError) -> str:
-    status = error.body['detail']['status']
     config = await common.Config.load()
 
     error_map = {
@@ -160,6 +162,8 @@ async def handle_elevenlabs_error(error: ElevenLabsApiError) -> str:
         'free_users_not_allowed':
             f"Voice with ID '{config.chat.sayvoiceid}' needs an active ElevenLabs subscription to use.",
     }
+
+    status = error.body['detail']['status']
 
     try:
         return error_map[status]
@@ -212,6 +216,7 @@ def clean_token(token: str) -> str:
 
     for pair in pair_list:
         if token.startswith(":") or token.endswith(":"):
+            # Don't remove unpaired characters from emoticons like :-) and (-:
             continue
 
         if token.startswith(pair[0]) and not token.endswith(pair[1]):

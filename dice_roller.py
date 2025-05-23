@@ -74,6 +74,8 @@ async def reset_active_effects(username: str) -> None:
 
 @dataclass
 class StatrollGame:
+    """Dataclass for mapping TTRPG names to statroll functions."""
+
     game_name: str
     game_aliases: list[str]
     game_function: Callable[[], dict[str, int]]

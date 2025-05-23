@@ -20,8 +20,12 @@ import common
 
 # region
 class SilenceYTDL:
-    # This is disgusting but I don't know how else to stop YTDL from printing stuff to console
-    # when provided with bad URLs
+    """Dummy error logger that silences all unhandled error output from YTDL.
+
+    This is disgusting but I don't know how else to stop YTDL from printing stuff to console
+    when provided with bad URLs
+    """
+
     def debug(self) -> None: pass
     def info(self) -> None: pass
     def warning(self) -> None: pass

@@ -60,6 +60,8 @@ do_not_create: set[Path] = set()
 
 
 class InterceptHandler(logging.Handler):
+    """Class that intercepts errors from libraries that use logging, and redirects to loguru."""
+
     def emit(self, record: logging.LogRecord) -> None:
         if record.exc_info is not None:
             exc_type = record.exc_info[0]

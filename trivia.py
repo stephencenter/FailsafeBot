@@ -19,6 +19,8 @@ TRIVIA_DIFFICULTY_POINTS = {
 
 
 class TriviaQuestion:
+    """Class for storing and managing trivia questions from OpenTDB."""
+
     def __init__(self, question_dict: dict[str, str]) -> None:
         self.type: str = question_dict['type']
         self.difficulty: str = question_dict['difficulty']
