@@ -182,7 +182,6 @@ async def fix_playcount_dict(playcount_dict: dict[str, int]) -> tuple[dict[str, 
 
 async def increment_playcount(name: str) -> None:
     sound_name = await coalesce_sound_name(name)
-    logger.debug(f"{name}, {sound_name}")
     if sound_name is None:
         error_msg = f"Invalid sound name {name} provided."
         raise ValueError(error_msg)

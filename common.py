@@ -344,7 +344,7 @@ class UserCommand:
         if not isinstance(target_bot, TelegramBot) and not isinstance(target_bot, DiscordBot):
             raise InvalidBotTypeError(self)
 
-    async def get_command_name(self) -> str | None:
+    def get_command_name(self) -> str | None:
         if isinstance(self.update, TelegramUpdate):
             if self.update.message is None:
                 raise MissingUpdateInfoError(self)
@@ -682,7 +682,7 @@ class UserCommand:
             return None
 
         if not isinstance(self.context.voice_client, discord.VoiceClient):
-            logger.debug(self.context.voice_client)
+            logger.debug(F"Voice client: {self.context.voice_client}")
             return None
 
         return self.context.voice_client
@@ -859,7 +859,7 @@ async def send_response(command_function: CommandAnn, user_command: UserCommand)
     except (BadRequest, TimedOut, NetworkError, HTTPException) as e:
         await user_command.send_text_response(TXT_BZZZT_ERROR)
 
-        command_name = await user_command.get_command_name()
+        command_name = user_command.get_command_name()
         user_message = user_command.get_user_message()
         error_string = f"{type(e).__name__}: {e}"
 
