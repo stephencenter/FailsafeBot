@@ -29,9 +29,6 @@ ignore = [
     # Stupid rule about preferring double quotes over single quotes
     "Q000",
 
-    # Function is declared async but doesn't await or use async features, almost 100% false positives!
-    "RUF029",
-
     # Security stuff that doesn't really apply for this project (famous last words)
     "S102", "S105", "S311", "S602", "S603", "S606",
 
@@ -46,4 +43,13 @@ ignore = [
 
     # Whitespace (unnecessary as editor fixes this upon save)
     "W291", "W292", "W293"
+]
+
+[lint.per-file-ignores]
+"command_list.py" = [
+    "RUF029"
+]
+
+"unit_test.py" = [
+    "RUF029"
 ]

@@ -682,7 +682,7 @@ class UserCommand:
             return None
 
         if not isinstance(self.context.voice_client, discord.VoiceClient):
-            logger.debug(F"Voice client: {self.context.voice_client}")
+            logger.debug(f"Voice client: {self.context.voice_client}")
             return None
 
         return self.context.voice_client
@@ -879,7 +879,7 @@ async def send_response(command_function: CommandAnn, user_command: UserCommand)
         await append_to_gpt_memory(user_prompt=user_prompt, bot_prompt=user_command.response.bot_message)
 
 
-async def wrap_telegram_command(bot: TelegramBotAnn, command: CommandAnn) -> TelegramFuncAnn:
+def wrap_telegram_command(bot: TelegramBotAnn, command: CommandAnn) -> TelegramFuncAnn:
     @functools.wraps(command)
     async def telegram_wrapper(update: TelegramUpdate, context: TelegramContextAnn) -> None:
         config = await Config.load()
@@ -910,7 +910,7 @@ async def wrap_telegram_command(bot: TelegramBotAnn, command: CommandAnn) -> Tel
     return telegram_wrapper
 
 
-async def wrap_discord_command(bot: DiscordBotAnn, command: CommandAnn) -> DiscordFuncAnn:
+def wrap_discord_command(bot: DiscordBotAnn, command: CommandAnn) -> DiscordFuncAnn:
     @functools.wraps(command)
     async def discord_wrapper(context: DiscordContextAnn) -> None:
         config = await Config.load()

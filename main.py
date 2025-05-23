@@ -79,16 +79,16 @@ async def try_start_telegram_bot() -> common.TelegramBotAnn | None:
 
     # Register commands
     for command in command_list.COMMAND_LIST:
-        wrapped_command = await common.wrap_telegram_command(telegram_bot, command[1])
+        wrapped_command = common.wrap_telegram_command(telegram_bot, command[1])
         telegram_bot.add_handler(CommandHandler(command[0], wrapped_command))
 
     for command in command_list.FILE_COMMAND_LIST:
         r_string = rf'^/{command[0]}'
         regex = (filters.ALL & filters.CaptionRegex(r_string)) | (filters.TEXT & filters.Regex(r_string))
-        wrapped_command = await common.wrap_telegram_command(telegram_bot, command[1])
+        wrapped_command = common.wrap_telegram_command(telegram_bot, command[1])
         telegram_bot.add_handler(MessageHandler(regex, wrapped_command))
 
-    wrapped_msg_handler = await common.wrap_telegram_command(telegram_bot, command_list.handle_message_event)
+    wrapped_msg_handler = common.wrap_telegram_command(telegram_bot, command_list.handle_message_event)
     telegram_bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), wrapped_msg_handler))
 
     # Begin polling
@@ -118,7 +118,7 @@ async def try_start_discord_bot() -> tuple[common.DiscordBotAnn | None, asyncio.
 
     # Register commands
     for command in [*command_list.COMMAND_LIST, *command_list.FILE_COMMAND_LIST]:
-        wrapped = await common.wrap_discord_command(discord_bot, command[1])
+        wrapped = common.wrap_discord_command(discord_bot, command[1])
         new_command: discord_commands.Command[Any, Any, Any] = discord_commands.Command(wrapped)
         new_command.name = command[0]
         discord_bot.add_command(new_command)

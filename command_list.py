@@ -1318,7 +1318,7 @@ async def discord_register_events(discord_bot: common.DiscordBotAnn) -> None:  #
             await discord_bot.process_commands(message)
             return
 
-        message_handler = await common.wrap_discord_command(discord_bot, handle_message_event)
+        message_handler = common.wrap_discord_command(discord_bot, handle_message_event)
         context = await discord_bot.get_context(message)
         await message_handler(context)
 

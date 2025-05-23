@@ -192,7 +192,7 @@ async def increment_playcount(name: str) -> None:
     await common.write_json_to_file(common.PATH_PLAYCOUNTS, play_counts)
 
 
-async def is_existing_sound(sound_name: str) -> bool:
+def is_existing_sound(sound_name: str) -> bool:
     return sound_name in get_sound_dict()
 
 
@@ -201,7 +201,7 @@ async def is_existing_alias(alias: str) -> bool:
 
 
 async def is_sound_or_alias(name: str) -> bool:
-    return await is_existing_sound(name) or await is_existing_alias(name)
+    return is_existing_sound(name) or await is_existing_alias(name)
 
 
 async def coalesce_sound_name(name: str) -> str | None:
@@ -268,7 +268,7 @@ async def add_sound_alias(new_alias: str, sound_name: str) -> str:
     if not await is_sound_or_alias(sound_name):
         return f"'{sound_name}' is not an existing sound or alias."
 
-    if await is_existing_sound(new_alias):
+    if is_existing_sound(new_alias):
         return f"There is already a sound called '{new_alias}'."
 
     alias_dict = await get_alias_dict()
