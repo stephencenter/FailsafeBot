@@ -160,10 +160,13 @@ class ConfigChat:
     # Whether the bot will use the memory system for AI chatting
     usememory: bool = True
 
-    # Maximum number of messages to record in memory for AI chatting (higher is probably more expensive)
-    memorysize: int = 24
+    # Maximum number of messages to record in memory
+    memorysize: int = 64
 
-    # Whether the bot wil record ALL messages sent in chat to memory, or just messages directed towards it
+    # Amount of messages to pull from memory for AI chatting/recall (higher uses more input tokens/money)
+    recallsize: int = 16
+
+    # Whether the bot wil record ALL text messages sent in chat to memory, or just messages directed towards it
     recordall: bool = False
 
     # Minimum number of tokens for the markov chain command /wisdom (higher takes longer exponentially)
@@ -195,7 +198,7 @@ class ConfigMisc:
     # Whether the /system command should use megabytes (will use gigabytes if false)
     usemegabytes: bool = False
 
-    # The minimum similarity threshold when searching for sound names (1.0 = exact matches on
+    # The minimum similarity threshold when searching for sound names (1.0 = exact matches only)
     minsimilarity: float = 0.75
 
     # How much of a video the /stream command will download (does not apply to /vcstream)
@@ -653,6 +656,7 @@ class UserCommand:
         return isinstance(self.target_bot, DiscordBot)
 
     def get_platform_string(self) -> str:
+        # Platform string is used to store/retrieve platform-dependent data like user IDs and chat IDs
         if self.is_telegram():
             return "telegram"
         if self.is_discord():
@@ -778,7 +782,10 @@ class MissingUpdateInfoError(ValueError):
         elif update.effective_chat is None:
             self.message = "Update.effective_chat cannot be None"
 
-        super().__init__(f"Command {user_command.get_command_name()}: {self.message}")
+        if update is not None:
+            logger.error(f"UPDATE DICT: {update.to_dict()}")
+
+        super().__init__(self.message)
 # endregion
 
 
@@ -882,14 +889,13 @@ async def send_response(command_function: CommandAnn, user_command: UserCommand)
 def wrap_telegram_command(bot: TelegramBotAnn, command: CommandAnn) -> TelegramFuncAnn:
     @functools.wraps(command)
     async def telegram_wrapper(update: TelegramUpdate, context: TelegramContextAnn) -> None:
-        config = await Config.load()
+        if update.message is None:
+            return
 
+        config = await Config.load()
         user_command = UserCommand(bot, context, update)
 
-        if update.message is None:
-            raise MissingUpdateInfoError(user_command)
-
-        # Track this user's platform, name, and user ID
+        # Track this user's platform, name, and user ID. This powers the /getuserid command
         await user_command.track_user_id()
 
         # If the whitelist is enforced, don't allow interacting with this bot unless on the list
@@ -915,6 +921,8 @@ def wrap_discord_command(bot: DiscordBotAnn, command: CommandAnn) -> DiscordFunc
     async def discord_wrapper(context: DiscordContextAnn) -> None:
         config = await Config.load()
         user_command = UserCommand(bot, context, None)
+
+        # Track this user's platform, name, and user ID. This powers the /getuserid command
         await user_command.track_user_id()
 
         # If the whitelist is enforced, don't allow interacting with this bot unless on the list
@@ -952,8 +960,8 @@ async def append_to_gpt_memory(*, user_prompt: str | None = None, bot_prompt: st
         memory.append({"role": "assistant", "content": bot_prompt})
 
     # The AI's memory has a size limit to keep API usage low, and to keep it from veering off track too much
-    if (size := len(memory)) > config.chat.memorysize:
-        memory = memory[size - config.chat.memorysize:]
+    if (size := len(memory)) > config.chat.recallsize:
+        memory = memory[size - config.chat.recallsize:]
 
     # Write the AI's memory to a file so it can be retrieved later
     await write_json_to_file(PATH_MEMORY_LIST, memory)

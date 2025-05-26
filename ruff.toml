@@ -47,7 +47,7 @@ ignore = [
 
 [lint.per-file-ignores]
 "command_list.py" = [
-    "RUF029"
+    "RUF029"  # Async function doesn't need to be async, all false positives in this file
 ]
 
 "unit_test.py" = [

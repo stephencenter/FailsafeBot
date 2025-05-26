@@ -905,7 +905,7 @@ async def memory_command(_: UserCommand) -> CommandResponse:
 
     memory_list = [f"{item['role']}: {item['content']}" for item in memory_list if 'content' in item]
 
-    temp_path = common.PATH_TEMP_FOLDER / 'mem_list.txt'
+    temp_path = common.PATH_TEMP_FOLDER / 'memory_list.txt'
     await common.write_lines_to_file(temp_path, memory_list)
 
     bot_message = "Sure, here's my memory list."
