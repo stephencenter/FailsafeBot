@@ -897,7 +897,7 @@ async def lobotomize_command(_: UserCommand) -> CommandResponse:
 async def memory_command(_: UserCommand) -> CommandResponse:
     user_message = "Can you send me your memory as a list?"
 
-    memory_list = await common.get_gpt_memory()
+    memory_list = await common.get_full_chat_memory()
 
     if not memory_list:
         bot_message = "My mind is a blank slate."

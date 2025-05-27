@@ -44,7 +44,7 @@ async def get_gpt_response(user_command: UserCommand) -> str:
         messages.append({"role": "assistant", "content": prepend_message})
 
     # Load the current conversation so far and add it to the end of the message history
-    loaded_memory: list[dict[str, str]] = await common.get_gpt_memory()
+    loaded_memory: list[dict[str, str]] = await common.get_recall_chat_memory()
     messages += loaded_memory
 
     user_prompt = await user_command.get_user_prompt()
@@ -85,7 +85,7 @@ async def get_gpt_response(user_command: UserCommand) -> str:
 
 
 async def get_most_recent_bot_message() -> str | None:
-    memory_list: list[dict[str, str]] = await common.get_gpt_memory()
+    memory_list: list[dict[str, str]] = await common.get_full_chat_memory()
 
     for memory in memory_list[::-1]:
         if memory["role"] == "assistant":
@@ -236,6 +236,7 @@ def get_chat_data_files() -> list[Path]:
 
 
 async def load_message_list(chat_files: list[Path]) -> list[str]:
+    # Load messages from list of .json files for use in building Markov chain.
     message_list: list[str] = []
     for file in chat_files:
         logger.info(f"Processing {file}...")

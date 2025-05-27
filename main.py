@@ -61,7 +61,7 @@ async def try_start_telegram_bot() -> common.TelegramBotAnn | None:
     # Retrieve telegram token
     telegram_token = await common.try_read_single_line(common.PATH_TELEGRAM_TOKEN, None)
     if telegram_token is None:
-        error_msg = f"Telegram bot is enabled but token not found at {common.PATH_TELEGRAM_TOKEN}, couldn't start bot"
+        error_msg = f"Telegram bot is enabled but no token found at {common.PATH_TELEGRAM_TOKEN}, couldn't start bot"
         logger.error(error_msg)
         return None
 
@@ -107,7 +107,7 @@ async def try_start_discord_bot() -> tuple[common.DiscordBotAnn | None, asyncio.
     # Retrieve discord token
     discord_token = await common.try_read_single_line(common.PATH_DISCORD_TOKEN, None)
     if discord_token is None:
-        logger.error(f"Discord bot is enabled but token not found at {common.PATH_DISCORD_TOKEN}, couldn't start bot")
+        logger.error(f"Discord bot is enabled but no token found at {common.PATH_DISCORD_TOKEN}, couldn't start bot")
         return None, None
 
     logger.info("Starting discord bot")

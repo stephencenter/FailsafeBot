@@ -883,7 +883,7 @@ async def send_response(command_function: CommandAnn, user_command: UserCommand)
     # Add the command and its response to memory if necessary
     if user_command.response.record_memory:
         user_prompt = await user_command.get_user_prompt()
-        await append_to_gpt_memory(user_prompt=user_prompt, bot_prompt=user_command.response.bot_message)
+        await append_to_gpt_memory(user_prompt=user_prompt, bot_response=user_command.response.bot_message)
 
 
 def wrap_telegram_command(bot: TelegramBotAnn, command: CommandAnn) -> TelegramFuncAnn:
@@ -945,36 +945,42 @@ def wrap_discord_command(bot: DiscordBotAnn, command: CommandAnn) -> DiscordFunc
 
 
 # region
-async def append_to_gpt_memory(*, user_prompt: str | None = None, bot_prompt: str | None = None) -> None:
+async def append_to_gpt_memory(*, user_prompt: str | None = None, bot_response: str | None = None) -> None:
     config = await Config.load()
 
     if not config.chat.usememory:
         return
 
-    memory = await get_gpt_memory()
+    memory = await get_full_chat_memory()
 
     if user_prompt is not None:
         memory.append({"role": "user", "content": user_prompt})
 
-    if bot_prompt is not None:
-        memory.append({"role": "assistant", "content": bot_prompt})
+    if bot_response is not None:
+        memory.append({"role": "assistant", "content": bot_response})
 
-    # The AI's memory has a size limit to keep API usage low, and to keep it from veering off track too much
-    if (size := len(memory)) > config.chat.recallsize:
-        memory = memory[size - config.chat.recallsize:]
+    # We cap the amount of memory stored (configurable) for storage space purposes
+    memory_point = max(0, len(memory) - config.chat.memorysize)
+    memory = memory[memory_point:]
 
     # Write the AI's memory to a file so it can be retrieved later
     await write_json_to_file(PATH_MEMORY_LIST, memory)
 
 
-async def get_gpt_memory() -> list[dict[str, str]]:
-    # Load the AI's memory (if it exists)
+async def get_full_chat_memory() -> list[dict[str, str]]:
+    # Load and return the AI's full memory
+    return await try_read_json(PATH_MEMORY_LIST, [])
+
+
+async def get_recall_chat_memory() -> list[dict[str, str]]:
+    # Load and return the most recent messages from the AI's memory
+    # The number of messages retrieved is configurable -- this allows for the AI to only have access
+    # to a portion of the full stored memory, which is useful for limiting API input token count
     config = await Config.load()
+    memory_list = await try_read_json(PATH_MEMORY_LIST, [])
 
-    if config.chat.usememory:
-        return await try_read_json(PATH_MEMORY_LIST, [])
-
-    return []
+    recall_point = max(0, len(memory_list) - config.chat.recallsize)
+    return memory_list[recall_point:]
 
 
 def convert_to_ascii(text: str) -> str:
