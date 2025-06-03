@@ -7,3 +7,5 @@ Test/
 sync.py
 *.exe
 *.bat
+*.xlsx
+*.csv

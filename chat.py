@@ -219,16 +219,18 @@ def clean_token(token: str) -> str:
         ('{', '}'),
     ]
 
+    first_char = token[0]
+    last_char = token[-1]
+    if first_char == ':' or last_char == ":":
+        # Don't remove unpaired characters from emoticons like :-) and (-:
+        return token
+
     for pair in pair_list:
-        if token.startswith(":") or token.endswith(":"):
-            # Don't remove unpaired characters from emoticons like :-) and (-:
-            continue
+        if first_char == pair[0] and last_char != pair[1]:
+            return token[1:]
 
-        if token.startswith(pair[0]) and not token.endswith(pair[1]):
-            token = token[1:]
-
-        if token.endswith(pair[1]) and not token.startswith(pair[0]):
-            token = token[:-1]
+        if first_char != pair[0] and last_char == pair[1]:
+            return token[:-1]
 
     return token
 

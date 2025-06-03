@@ -1011,8 +1011,10 @@ def make_valid_filename(input_str: str, *, strict: bool) -> str:
 
 
 async def try_read_lines_list[T](path: str | Path, default: T) -> list[str] | T:
-    # Attempt to load the text data from the provided path, treating each line as a separate element
-    # in a list, and return it. If this fails, return the provided default object instead
+    """Attempt to load the text data from the provided path as a list of strings, and return it.
+
+    If this fails, return the provided default object instead.
+    """
     try:
         async with aiofiles.open(path, encoding='utf-8') as f:
             lines = [x.strip() for x in await f.readlines()]
@@ -1026,8 +1028,10 @@ async def try_read_lines_list[T](path: str | Path, default: T) -> list[str] | T:
 
 
 async def try_read_lines_str[T](path: str | Path, default: T) -> str | T:
-    # Attempt to load the text data from the provided path, treating the entire text file as a
-    # single string, and return it. If this fails, return the provided default object instead
+    """Attempt to load the text data from the provided path as a single string, and return it.
+
+    If this fails, return the provided default object instead.
+    """
     try:
         async with aiofiles.open(path, encoding='utf-8') as f:
             string_lines = ''.join(await f.readlines())
@@ -1041,8 +1045,10 @@ async def try_read_lines_str[T](path: str | Path, default: T) -> str | T:
 
 
 async def try_read_single_line[T](path: str | Path, default: T) -> str | T:
-    # Attempt to read only the first line of text data from the provided path and return it
-    # If this fails, return the provided default object instead
+    """Attempt to read only the first line of text data from the provided path and return it.
+
+    If this fails, return the provided default object instead.
+    """
     try:
         async with aiofiles.open(path, encoding='utf-8') as f:
             line = (await f.readline()).strip()
@@ -1056,8 +1062,10 @@ async def try_read_single_line[T](path: str | Path, default: T) -> str | T:
 
 
 async def try_read_bytes(path: str | Path, default: bytes) -> bytes:
-    # Attempt to load bytes from the provided path and return it
-    # If this fails, return the provided default bytes object instead
+    """Attempt to load bytes from the provided path and return it.
+
+    If this fails, return the provided default bytes object instead.
+    """
     try:
         async with aiofiles.open(path, mode='rb') as f:
             data = await f.read()
@@ -1071,8 +1079,10 @@ async def try_read_bytes(path: str | Path, default: bytes) -> bytes:
 
 
 async def try_read_json[T](path: str | Path, default: T) -> T:
-    # Attempt to load a json object from the provided path and return it
-    # If this fails, return the provided default object instead
+    """Attempt to load a json object from the provided path and return it.
+
+    If this fails, return the provided default object instead.
+    """
     try:
         async with aiofiles.open(path, encoding='utf-8') as f:
             data = json.loads(await f.read())
@@ -1088,6 +1098,10 @@ async def try_read_json[T](path: str | Path, default: T) -> T:
 
 
 async def try_read_toml(path: str | Path, default: dict[str, Any]) -> dict[str, Any]:
+    """Attempt to load a toml object from the provided path and return it as a dictionary.
+
+    If this fails, return the provided default object instead.
+    """
     try:
         async with aiofiles.open(path, encoding='utf-8') as f:
             data = toml.loads(await f.read())
