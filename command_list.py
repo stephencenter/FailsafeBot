@@ -11,7 +11,7 @@ import random
 import sys
 from collections.abc import AsyncIterator, Callable, Generator
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import NoReturn
 
 import discord
 import ffmpeg
@@ -1097,17 +1097,7 @@ async def test_command(user_command: UserCommand) -> CommandResponse:
         CommandResponse(user_message="Hey, are you working?", bot_message="I'm still alive, unfortunately.")
 
     chosen_response = random.choice(response_list)
-
-    # Note that because we're using exec, this command is capable of executing arbitrary code.
-    # This is EXTREMELY DANGEROUS, be very sure that you know what lines are inside of the response list file!
-    async def evaluate_fstring(fstring: str, local_vars: dict[str, object]) -> str:
-        code = f"async def _f(): return {fstring}"
-        namespace: dict[str, Any] = {}
-        exec(code, local_vars, namespace)
-        return await namespace["_f"]()
-
-    if chosen_response.startswith(('f"', "f'")):
-        chosen_response = await evaluate_fstring(chosen_response, {'user_command': user_command, 'random': random})
+    chosen_response = await chat.parse_response_list_item(user_command, chosen_response)
 
     return CommandResponse(user_message="Hey, are you working?", bot_message=chosen_response)
 

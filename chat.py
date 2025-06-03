@@ -6,6 +6,8 @@ This module contains constants, classes, and functions used by Chat commands lik
 
 import collections
 import datetime
+import random
+import re
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -20,6 +22,8 @@ from common import UserCommand
 
 MAX_GPT_ATTEMPTS = 3
 NULL_TOKEN = "NULL_TOKEN"
+SENDER_NAME_TOKEN = "SENDER_NAME"
+BOT_NAME_TOKEN = "BOT_NAME"
 
 
 async def get_gpt_response(user_command: UserCommand) -> str:
@@ -294,3 +298,31 @@ def build_markov_chain(message_list: list[str]) -> dict[str, dict[str, float]]:
             markov_chain[key][subkey] /= key_total
 
     return markov_chain
+
+
+async def parse_response_list_item(user_command: UserCommand, text: str) -> str:
+    # Replace any instance of SENDER_NAME_TOKEN with the name of the user that sent this message
+    user_name = await user_command.get_user_name()
+    text = text.replace(SENDER_NAME_TOKEN, user_name)
+
+    # Replace any instance of BOT_NAME_TOKEN with the name of the bot this message will be sent by
+    config = await common.Config.load()
+    bot_name = config.main.botname
+    text = text.replace(BOT_NAME_TOKEN, bot_name)
+
+    """
+    This pattern checks for double brackets [[]], and treats the text inside as a list of strings
+    Elements in the list can be separated with double commas ,,
+    An element from each list is then randomly selected, and the entire list is replaced with
+    the random selection.
+
+    Example: The quick brown [[fox,, horse,, cat]] jumps over the lazy [[dog,, pig,, panda]].
+    Possible outcome: The quick brown horse jumps over the lazy panda."""
+    pattern = re.compile(r"\[\[(.*?)\]\]")
+
+    def replace_match(match: re.Match[str]) -> str:
+        content = match.group(1)
+        options = [option.strip() for option in content.split(',,')]
+        return random.choice(options)
+
+    return pattern.sub(replace_match, text)

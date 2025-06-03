@@ -342,6 +342,7 @@ class UserCommand:
             raise TypeError(error_msg)
 
     def get_command_name(self) -> str | None:
+        """Return name of the command that was called, or None if no command was called."""
         if isinstance(self.update, TelegramUpdate):
             if self.update.message is None:
                 raise MissingUpdateInfoError(self)
@@ -359,6 +360,7 @@ class UserCommand:
         return None
 
     async def track_user_id(self) -> None:
+        """Write the calling user's name and ID to a json file for later retrieval."""
         id_dict: dict[str, dict[str, str]] = await try_read_json(PATH_TRACK_USERID, {})
         username = (await self.get_user_name()).lower()
         user_id = self.get_user_id()
@@ -373,7 +375,7 @@ class UserCommand:
         await write_json_to_file(PATH_TRACK_USERID, id_dict)
 
     async def get_user_name(self, *, map_name: bool = False) -> str:
-        # Returns the username of the user that sent the command or message
+        """Return the username of the user that sent the command or message."""
         username = None
         if isinstance(self.update, TelegramUpdate):
             if self.update.message is None or self.update.message.from_user is None:
@@ -393,7 +395,7 @@ class UserCommand:
         return username
 
     def get_user_id(self) -> str:
-        # Returns the user ID of the user that sent the command or message
+        """Return the user ID of the user that sent the command or message."""
         if isinstance(self.update, TelegramUpdate):
             if self.update.message is None or self.update.message.from_user is None:
                 raise MissingUpdateInfoError(self)
@@ -406,9 +408,11 @@ class UserCommand:
         raise InvalidBotTypeError(self)
 
     async def get_id_by_username(self, username: str) -> str | None:
-        # Attempt to retrieve the ID belonging to the provided username
-        # This ID is platform-specific (Discord, Telegram) and can only be retrieved if the
-        # user has interacted with this bot before
+        """Attempt to retrieve the user ID belonging to the provided username.
+
+        This ID is platform-specific (Discord, Telegram) and can only be retrieved if the
+        user has interacted with this bot before and was tracked by UserCommand.track_user_id()
+        """
         id_dict = await try_read_json(PATH_TRACK_USERID, {})
         platform_str = self.get_platform_string()
 
@@ -418,7 +422,7 @@ class UserCommand:
         return None
 
     def is_private(self) -> bool:
-        # Returns whether the command was called in a private chat or a group chat
+        """Return whether the command was called in a private chat or a group chat."""
         if isinstance(self.update, TelegramUpdate):
             if self.update.message is None:
                 raise MissingUpdateInfoError(self)
@@ -431,8 +435,10 @@ class UserCommand:
         raise InvalidBotTypeError(self)
 
     def get_args_list(self) -> list[str]:
-        # Returns the list of arguments provided with the command
-        # Ex. /test a b c -> ['a', 'b', 'c']
+        """Return the list of arguments provided with the command.
+
+        Example: /test a b c -> ['a', 'b', 'c']
+        """
         if isinstance(self.update, TelegramUpdate):
             if self.update.message is None:
                 raise MissingUpdateInfoError(self)
@@ -457,8 +463,10 @@ class UserCommand:
         raise InvalidBotTypeError(self)
 
     def get_first_arg(self, *, lowercase: bool = False) -> str | None:
-        # Returns the first element from the argument list, all lowercase if lowercase=True
-        # Ex. /test a b c -> 'a'
+        """Return the first element from the argument list, all lowercase if lowercase=True.
+
+        Example: /test a b c -> 'a'
+        """
         args_list = self.get_args_list()
 
         if args_list:
@@ -469,8 +477,12 @@ class UserCommand:
         return None
 
     def get_user_message(self) -> str:
-        # Returns the message that this user sent with this UserCommand
-        # Ex. /test a b c -> 'a b c', Hello world! -> 'Hello world!'
+        """Return the message that this user sent with this UserCommand.
+
+        Examples:
+            Hello world! -> 'Hello world!'
+            /test a b c -> 'a b c'
+        """
         return ' '.join(self.get_args_list())
 
     async def get_user_attachments(self) -> list[bytearray] | BadRequest | None:
@@ -514,7 +526,7 @@ class UserCommand:
         return f'{sender}: {user_message}'
 
     async def is_admin(self) -> bool:
-        # Returns whether the message sender is on the bot's admin list or superadmin list
+        """Return whether the message sender is on the bot's admin list or superadmin list."""
         user_id = self.get_user_id()
         admin_dict: dict[str, dict[str, list[str]]] = await try_read_json(PATH_ADMIN_LIST, {})
         platform_str = self.get_platform_string()
@@ -529,8 +541,10 @@ class UserCommand:
         return "superadmin" in admin_dict[platform_str] and user_id in admin_dict[platform_str]["superadmin"]
 
     async def is_superadmin(self) -> bool:
-        # Returns whether the message sender is on the bot's superadmin list
-        # Normal admin rights are NOT sufficient for this to return True
+        """Return whether the message sender is on the bot's superadmin list.
+
+        Normal admin rights are NOT sufficient for this to return True.
+        """
         user_id = self.get_user_id()
         admin_dict: dict[str, dict[str, list[str]]] = await try_read_json(PATH_ADMIN_LIST, {})
         platform_str = self.get_platform_string()
@@ -576,7 +590,7 @@ class UserCommand:
         raise InvalidBotTypeError(self)
 
     async def is_whitelisted(self) -> bool:
-        # Returns whether the chat is on the bot's whitelist
+        """Return whether the chat is on the bot's whitelist."""
         chat_id = self.get_chat_id()
         platform_str = self.get_platform_string()
         whitelist: dict[str, list[str]] = await try_read_json(PATH_WHITELIST, {})
@@ -642,15 +656,19 @@ class UserCommand:
             Path(response.file_path).unlink()
 
     def is_telegram(self) -> bool:
-        # Returns whether this UserCommand object was sent to a Telegram bot or not
+        """Return whether this UserCommand object was sent to a Telegram bot or not."""
         return isinstance(self.target_bot, TelegramBot)
 
     def is_discord(self) -> bool:
-        # Returns whether this UserCommand object was sent to a Discord bot or not
+        """Return whether this UserCommand object was sent to a Discord bot or not."""
         return isinstance(self.target_bot, DiscordBot)
 
     def get_platform_string(self) -> str:
-        # Platform string is used to store/retrieve platform-dependent data like user IDs and chat IDs
+        """Return the string for the user/bot's current platform.
+
+        Platform string is used to store/retrieve platform-dependent data like user IDs and chat IDs.
+        Current platform strings are "telegram" and "discord".
+        """
         if self.is_telegram():
             return "telegram"
         if self.is_discord():
@@ -658,7 +676,7 @@ class UserCommand:
         raise InvalidBotTypeError(self)
 
     def get_user_voice_channel(self) -> discord.VoiceChannel | None:
-        # Returns the voice channel that the user who sent this UserCommand is currently in
+        """Return the voice channel that the user who sent this UserCommand is currently in."""
         if not isinstance(self.context, DiscordContext):
             return None
 
@@ -675,7 +693,7 @@ class UserCommand:
         return author.voice.channel
 
     def get_bot_voice_client(self) -> discord.VoiceClient | None:
-        # Returns the voice channel that the bot this UserCommand was sent to is currently in
+        """Return the voice channel that the bot this UserCommand was sent to is currently in."""
         if not isinstance(self.context, DiscordContext):
             return None
 

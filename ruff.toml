@@ -9,7 +9,7 @@ ignore = [
     "CPY001",
 
     # Documentation stuff, eventually I should remove these and add more documentation
-    "D102", "D103", "D105", "D107", "DOC201",
+    "D102", "D103", "D105", "D107", "D413", "DOC201", "DOC501",
 
     # Replace lambda with function from operator module, very unnecessary
     "FURB118",
@@ -30,9 +30,9 @@ ignore = [
     "Q000",
 
     # Security stuff that doesn't really apply for this project (famous last words)
-    "S102", "S105", "S311", "S602", "S603", "S606",
+    "S105", "S311", "S606",
 
-    # Replace if-else with ternary operator, frequently a terrible suggestion
+    # Replace if-else with ternary operator, frequently a terrible suggestion for readability
     "SIM108",
 
     # Conditionally import if type-checking is enabled, unnecessary IMO
