@@ -1110,8 +1110,14 @@ async def write_lines_to_file(path: str | Path, lines: list[str]) -> None:
 
 async def write_text_to_file(path: str | Path, text: str) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    async with aiofiles.open(path, mode='w', encoding='u tf-8') as f:
+    async with aiofiles.open(path, mode='w', encoding='utf-8') as f:
         await f.write(text)
+
+
+async def append_lines_to_file(path: str | Path, lines: list[str]) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    async with aiofiles.open(path, mode='a', encoding='utf-8') as f:
+        await f.writelines(f"{x}\n" for x in lines)
 
 
 async def write_bytes_to_file(path: str | Path, byte_obj: AsyncIterator[bytes] | bytes | bytearray) -> None:

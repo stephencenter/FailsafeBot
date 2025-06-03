@@ -1090,16 +1090,34 @@ async def test_command(user_command: UserCommand) -> CommandResponse:
     # This command is for verifying that the bot is online and receiving commands.
     # You can also supply it with a list of responses and it will pick a random one
     # I think of this as similar to how RTS units say things when you click them
+
+    user_message = "Hey, are you working?"
     response_list = await common.try_read_lines_list(common.PATH_RESPONSE_LIST, [])
     response_list = [line for line in response_list if line and not line.isspace() and not line.startswith("#")]
 
     if not response_list:
-        CommandResponse(user_message="Hey, are you working?", bot_message="I'm still alive, unfortunately.")
+        CommandResponse(user_message=user_message, bot_message="I'm still alive, unfortunately.")
 
     chosen_response = random.choice(response_list)
+
+    # Parse the chosen response in case it contains certain special syntax
     chosen_response = await chat.parse_response_list_item(user_command, chosen_response)
 
-    return CommandResponse(user_message="Hey, are you working?", bot_message=chosen_response)
+    return CommandResponse(user_message=user_message, bot_message=chosen_response)
+
+
+@requiresuper
+async def addresponse_command(user_command: UserCommand) -> CommandResponse:
+    user_message = "Can you add this to the response list?"
+    new_response = user_command.get_user_message()
+
+    if not new_response:
+        bot_message = "What do you want me to add to the response list?"
+        return CommandResponse(user_message=user_message, bot_message=bot_message)
+
+    await common.append_lines_to_file(common.PATH_RESPONSE_LIST, [new_response])
+
+    return CommandResponse(user_message=user_message, bot_message="Added new response to response list.")
 
 
 @requiresuper
@@ -1429,6 +1447,7 @@ COMMAND_LIST: list[tuple[str, common.CommandAnn]] = [
     ("help", help_command),
     ("chat", chat_command),
     ("test", test_command),
+    ("addresponse", addresponse_command),
     ("lobotomize", lobotomize_command),
     ("memory", memory_command),
     ("logs", logs_command),

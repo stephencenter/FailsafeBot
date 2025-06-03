@@ -53,3 +53,7 @@ ignore = [
 "unit_test.py" = [
     "RUF029"
 ]
+
+"sync.py" = [
+    "S602", "S603"
+]
