@@ -66,9 +66,7 @@ async def sound_command(user_command: UserCommand) -> CommandResponse:
     if random.randint(1, 1000) == 555:
         return CommandResponse(user_message=user_message, bot_message="You know, I'm just not feeling it right now.")
 
-    # If the sound was requested in a non-private chat, then we'll update the playcount for this sound
-    if not user_command.is_private():
-        await sound_manager.increment_playcount(sound_name)
+    await sound_manager.increment_playcount(user_command, sound_name)
 
     bot_message = f"Sure, here's the {sound_name} sound."
     return SoundResponse(user_message=user_message, bot_message=bot_message, file_path=sound_results)
@@ -85,8 +83,7 @@ async def randomsound_command(user_command: UserCommand) -> CommandResponse:
     sound_name, sound_path = sound_manager.get_random_sound()
 
     # If the sound was requested in a group chat, then we update the playcount for this sound
-    if not user_command.is_private():
-        await sound_manager.increment_playcount(sound_name)
+    await sound_manager.increment_playcount(user_command, sound_name)
 
     bot_message = f"Sure, here you go. The sound I chose is called '{sound_name}'."
     return SoundResponse(user_message=user_message, bot_message=bot_message, file_path=sound_path)
@@ -213,26 +210,6 @@ async def adjvolume_command(user_command: UserCommand) -> CommandResponse:
     return CommandResponse(user_message=user_message, bot_message=bot_message)
 
 
-async def newsounds_command(_: UserCommand) -> CommandResponse:
-    playcount_dict = await sound_manager.get_playcount_dict()
-    new_sounds = [sound for sound in playcount_dict if playcount_dict[sound] == 0]
-    new_count = len(new_sounds)
-    list_string = ', '.join(new_sounds)
-
-    user_message = "How many new sounds are available?"
-
-    if new_count == 0:
-        bot_message = "There are no new sounds available."
-        return CommandResponse(user_message=user_message, bot_message=bot_message)
-
-    if new_count == 1:
-        bot_message = f"There is one new sound available: {list_string}"
-        return CommandResponse(user_message=user_message, bot_message=bot_message)
-
-    bot_message = f"There are {new_count} new sounds available:\n\n{list_string}"
-    return CommandResponse(user_message=user_message, bot_message=bot_message)
-
-
 @requireadmin
 async def addalias_command(user_command: UserCommand) -> CommandResponse:
     args_list = user_command.get_args_list()
@@ -328,42 +305,102 @@ async def search_command(user_command: UserCommand) -> CommandResponse:
 async def playcount_command(user_command: UserCommand) -> CommandResponse:
     sound_name = user_command.get_first_arg(lowercase=True)
     if sound_name is None:
-        user_message = "How many times has that sound been played?"
+        user_message = "How many times has that sound been played in this chat?"
         bot_message = random.choice(common.TXT_SOUND_NOT_PROVIDED)
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 
-    user_message = f"How many times has the sound {sound_name} been played?"
-    sound_name = await sound_manager.coalesce_sound_name(sound_name)
-    if sound_name is None:
+    user_message = f"How many times has the sound {sound_name} been played in this chat?"
+    playcount = await sound_manager.get_sound_chat_playcount(user_command, sound_name)
+    if playcount is None:
         bot_message = random.choice(common.TXT_SOUND_NOT_FOUND)
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 
-    playcount = (await sound_manager.get_playcount_dict())[sound_name]
-    bot_message = f"/sound {sound_name} has been used {playcount} times"
+    bot_message = f"/sound {sound_name} has been used {playcount} times in this chat."
     return CommandResponse(user_message=user_message, bot_message=bot_message)
 
 
-async def topsounds_command(_: UserCommand) -> CommandResponse:
-    play_counts = await sound_manager.get_playcount_dict()
-    list_size = 20
-    top_sounds = sorted(play_counts, key=lambda x: play_counts[x], reverse=True)[:list_size]
+async def newsounds_command(user_command: UserCommand) -> CommandResponse:
+    playcount_dict = await sound_manager.get_chat_playcounts(user_command)
+    new_sounds = [sound for sound in playcount_dict if playcount_dict[sound] == 0]
+    new_count = len(new_sounds)
+    list_string = ', '.join(new_sounds)
 
-    sound_string = "\n".join(f"    {sound} @ {play_counts[sound]} plays" for sound in top_sounds)
+    user_message = "How many new sounds are available?"
 
-    user_message = f"What are the {list_size} most played sounds?"
-    bot_message = f"The {list_size} most played sounds are:\n{sound_string}"
+    if new_count == 0:
+        bot_message = "There are no new sounds available."
+        return CommandResponse(user_message=user_message, bot_message=bot_message)
+
+    if new_count == 1:
+        bot_message = f"There is one new sound available: {list_string}"
+        return CommandResponse(user_message=user_message, bot_message=bot_message)
+
+    bot_message = f"There are {new_count} new sounds available:\n\n{list_string}"
     return CommandResponse(user_message=user_message, bot_message=bot_message)
 
 
-async def botsounds_command(_: UserCommand) -> CommandResponse:
-    play_counts = await sound_manager.get_playcount_dict()
+async def topsounds_command(user_command: UserCommand) -> CommandResponse:
+    playcounts = await sound_manager.get_chat_playcounts(user_command)
     list_size = 20
-    bot_sounds = sorted(play_counts, key=lambda x: play_counts[x])[:list_size]
+    top_sounds = sorted(playcounts, key=lambda x: playcounts[x], reverse=True)[:list_size]
 
-    sound_string = "\n".join(f"    {sound} @ {play_counts[sound]} plays" for sound in bot_sounds)
+    sound_string = "\n".join(f"    {sound} @ {playcounts[sound]} plays" for sound in top_sounds)
 
-    user_message = f"What are the {list_size} least played sounds?"
-    bot_message = f"The {list_size} least used sounds are:\n{sound_string}"
+    user_message = f"What are the {list_size} most played sounds in this chat?"
+    bot_message = f"The {list_size} most played sounds in this chat are:\n{sound_string}"
+    return CommandResponse(user_message=user_message, bot_message=bot_message)
+
+
+async def botsounds_command(user_command: UserCommand) -> CommandResponse:
+    playcounts = await sound_manager.get_chat_playcounts(user_command)
+    list_size = 20
+    bot_sounds = sorted(playcounts, key=lambda x: playcounts[x])[:list_size]
+
+    sound_string = "\n".join(f"    {sound} @ {playcounts[sound]} plays" for sound in bot_sounds)
+
+    user_message = f"What are the {list_size} least played sounds in this chat?"
+    bot_message = f"The {list_size} least used sounds in this chat are:\n{sound_string}"
+    return CommandResponse(user_message=user_message, bot_message=bot_message)
+
+
+async def globalplaycount_command(user_command: UserCommand) -> CommandResponse:
+    sound_name = user_command.get_first_arg(lowercase=True)
+    if sound_name is None:
+        user_message = "How many times has that sound been played globally?"
+        bot_message = random.choice(common.TXT_SOUND_NOT_PROVIDED)
+        return CommandResponse(user_message=user_message, bot_message=bot_message)
+
+    user_message = f"How many times has the sound {sound_name} been played globally?"
+    playcount = await sound_manager.get_sound_global_playcount(sound_name)
+    if playcount is None:
+        bot_message = random.choice(common.TXT_SOUND_NOT_FOUND)
+        return CommandResponse(user_message=user_message, bot_message=bot_message)
+
+    bot_message = f"/sound {sound_name} has been used {playcount} times globally."
+    return CommandResponse(user_message=user_message, bot_message=bot_message)
+
+
+async def globaltopsounds_command(_: UserCommand) -> CommandResponse:
+    playcounts = await sound_manager.get_global_playcounts()
+    list_size = 20
+    top_sounds = sorted(playcounts, key=lambda x: playcounts[x], reverse=True)[:list_size]
+
+    sound_string = "\n".join(f"    {sound} @ {playcounts[sound]} plays" for sound in top_sounds)
+
+    user_message = f"What are the {list_size} most played sounds globally?"
+    bot_message = f"The {list_size} most played sounds globally are:\n{sound_string}"
+    return CommandResponse(user_message=user_message, bot_message=bot_message)
+
+
+async def globalbotsounds_command(_: UserCommand) -> CommandResponse:
+    playcounts = await sound_manager.get_global_playcounts()
+    list_size = 20
+    bot_sounds = sorted(playcounts, key=lambda x: playcounts[x])[:list_size]
+
+    sound_string = "\n".join(f"    {sound} @ {playcounts[sound]} plays" for sound in bot_sounds)
+
+    user_message = f"What are the {list_size} least played sounds globally?"
+    bot_message = f"The {list_size} least used sounds globally are:\n{sound_string}"
     return CommandResponse(user_message=user_message, bot_message=bot_message)
 # endregion
 
@@ -559,7 +596,7 @@ async def vcsound_command(user_command: UserCommand) -> CommandResponse:
 
     bot_voice_client.play(source, after=lambda e: logger.error(e) if e else None)
 
-    await sound_manager.increment_playcount(sound_name)
+    await sound_manager.increment_playcount(user_command, sound_name)
     return CommandResponse(user_message=user_message, bot_message="Sure, here you go", send_chat=False)
 
 
@@ -582,7 +619,7 @@ async def vcrandom_command(user_command: UserCommand) -> CommandResponse:
     source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_path))  # type: ignore
     bot_voice_client.play(source, after=lambda e: logger.error(e) if e else None)
 
-    await sound_manager.increment_playcount(sound_name)
+    await sound_manager.increment_playcount(user_command, sound_name)
 
     bot_message = f"Sure, I chose the sound '{sound_name}'."
     return CommandResponse(user_message=user_message, bot_message=bot_message, send_chat=False)
@@ -1384,6 +1421,9 @@ COMMAND_LIST: list[tuple[str, common.CommandAnn]] = [
     ("playcount", playcount_command),
     ("topsounds", topsounds_command),
     ("botsounds", botsounds_command),
+    ("globalplaycount", globalplaycount_command),
+    ("globaltopsounds", globaltopsounds_command),
+    ("globalbotsounds", globalbotsounds_command),
     ("newsounds", newsounds_command),
     ("delsound", delsound_command),
     ("adjvolume", adjvolume_command),

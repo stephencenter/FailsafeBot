@@ -1,12 +1,14 @@
 {
    "editor.wordWrap": "off",
+   "editor.rulers": [
+      118
+   ],
+
    "search.exclude": {
-      "**/node_modules": true,
-      "**/bower_components": true,
-      "**/*.code-search": true,
       "**/.venv": true,
       "**.bat": true
    },
+
    "files.exclude": {
       "**/.git": true,
       "**/.svn": true,
@@ -22,18 +24,16 @@
       "**desktop.ini": true,
       "Test/": true
    },
+
+   "python.analysis.typeCheckingMode": "strict",
+   "python.analysis.autoImportCompletions": false,
    "python.analysis.diagnosticSeverityOverrides": {
       "reportMissingTypeStubs": "none",
       "reportUnusedFunction": "none",
-      "reportUnnecessaryIsInstance": "none",
       "reportUnknownMemberType": "none",
    },
+
    "editor.codeActionsOnSave": {
        "source.organizeImports.ruff": "explicit"
-   },
-   "python.analysis.typeCheckingMode": "strict",
-   "editor.rulers": [
-      118
-   ],
-   "python.analysis.autoImportCompletions": false
+   }
 }

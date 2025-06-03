@@ -136,8 +136,12 @@ async def get_alias_dict() -> dict[str, str]:
     return await common.try_read_json(common.PATH_SOUND_ALIASES, {})
 
 
-async def get_playcount_dict() -> dict[str, int]:
-    playcount_dict = await common.try_read_json(common.PATH_PLAYCOUNTS, dict.fromkeys(get_sound_list(), 0))
+def new_playcount_dict() -> dict[str, int]:
+    return dict.fromkeys(get_sound_list(), 0)
+
+
+async def get_playcount_dict() -> dict[str, dict[str, int]]:
+    playcount_dict = await common.try_read_json(common.PATH_PLAYCOUNTS, {})
     playcount_dict, changed = await fix_playcount_dict(playcount_dict)
 
     # If the playcount dictionary had to be corrected, then we write the corrected
@@ -149,47 +153,102 @@ async def get_playcount_dict() -> dict[str, int]:
     return playcount_dict
 
 
-async def fix_playcount_dict(playcount_dict: dict[str, int]) -> tuple[dict[str, int], bool]:
+async def fix_playcount_dict(playcount_dict: dict[str, dict[str, int]]) -> tuple[dict[str, dict[str, int]], bool]:
     sound_list = get_sound_list()
     alias_dict = await get_alias_dict()
 
     # This variable makes note of whether a correction was made to the playcounts dictionary
     changed = False
 
-    # Ensure that all sounds are in the playcount dictionary
-    missing_sounds = [sound for sound in sound_list if sound not in playcount_dict]
-    for sound_name in missing_sounds:
-        playcount_dict[sound_name] = 0
-        changed = True
+    for chat_id, chat_playcounts in playcount_dict.items():
+        # Ensure that all sounds are in the playcount dictionary
+        missing_sounds = [sound for sound in sound_list if sound not in chat_playcounts]
+        for sound_name in missing_sounds:
+            playcount_dict[chat_id][sound_name] = 0
+            changed = True
 
-    # Ensure that the playcounts of aliases are not being tracked separately.
-    # This could occur, for example, if a sound's name and alias are swapped
-    unmerged_aliases = [alias for alias in alias_dict if alias in playcount_dict]
-    for alias in unmerged_aliases:
-        sound_name = alias_dict[alias]
-        playcount_dict[sound_name] += playcount_dict[alias]
-        del playcount_dict[alias]
-        changed = True
+        # Ensure that the playcounts of aliases are not being tracked separately.
+        # This could occur, for example, if a sound's name and alias are swapped
+        unmerged_aliases = [alias for alias in alias_dict if alias in chat_playcounts]
+        for alias in unmerged_aliases:
+            sound_name = alias_dict[alias]
+            playcount_dict[chat_id][sound_name] += chat_playcounts[alias]
+            del playcount_dict[chat_id][alias]
+            changed = True
 
-    # Ensure that there aren't any nonexistent sounds in the playcount dictionary
-    invalid_sounds = [sound for sound in playcount_dict if sound not in sound_list]
-    for sound_name in invalid_sounds:
-        del playcount_dict[sound_name]
-        changed = True
+        # Ensure that there aren't any nonexistent sounds in the playcount dictionary
+        invalid_sounds = [sound for sound in chat_playcounts if sound not in sound_list]
+        for sound_name in invalid_sounds:
+            del playcount_dict[chat_id][sound_name]
+            changed = True
 
     return playcount_dict, changed
 
 
-async def increment_playcount(name: str) -> None:
+async def increment_playcount(user_command: common.UserCommand, name: str) -> None:
     sound_name = await coalesce_sound_name(name)
     if sound_name is None:
         error_msg = f"Invalid sound name {name} provided."
         raise ValueError(error_msg)
 
-    play_counts = await get_playcount_dict()
-    play_counts[sound_name] = play_counts.get(sound_name, 0) + 1
+    playcounts = await get_playcount_dict()
+    chat_id = user_command.get_chat_id()
 
-    await common.write_json_to_file(common.PATH_PLAYCOUNTS, play_counts)
+    if chat_id not in playcounts:
+        playcounts[chat_id] = new_playcount_dict()
+
+    playcounts[chat_id][sound_name] = playcounts[chat_id].get(sound_name, 0) + 1
+    await common.write_json_to_file(common.PATH_PLAYCOUNTS, playcounts)
+
+
+async def get_chat_playcounts(user_command: common.UserCommand) -> dict[str, int]:
+    """Return the number of times each sound has been played within the user's current chat."""
+    playcount_dict = await get_playcount_dict()
+    chat_id = user_command.get_chat_id()
+
+    return playcount_dict.get(chat_id, new_playcount_dict())
+
+
+async def get_sound_chat_playcount(user_command: common.UserCommand, name: str) -> int | None:
+    """Return the number of times the provided sound has been played within the user's current chat.
+
+    Returns None if the sound does not exist.
+    """
+    sound_name = await coalesce_sound_name(name)
+    if sound_name is None:
+        return None
+
+    playcounts = await get_chat_playcounts(user_command)
+    return playcounts[sound_name]
+
+
+async def get_global_playcounts() -> dict[str, int]:
+    """Return the total number of times each sound has been played globally, in all chats."""
+    playcount_dict = await get_playcount_dict()
+
+    global_playcounts = dict.fromkeys(get_sound_list(), 0)
+    for chat_id in playcount_dict:
+        for sound in playcount_dict[chat_id]:
+            global_playcounts[sound] += playcount_dict[chat_id][sound]
+
+    return global_playcounts
+
+
+async def get_sound_global_playcount(name: str) -> int | None:
+    """Return the total number of times the provided sound has been played globally, in all chats.
+
+    Returns None if the sound does not exist.
+    """
+    sound_name = await coalesce_sound_name(name)
+    if sound_name is None:
+        return None
+
+    total = 0
+    playcounts = await get_playcount_dict()
+    for chat_id in playcounts:
+        total += playcounts[chat_id][sound_name]
+
+    return total
 
 
 def is_existing_sound(sound_name: str) -> bool:
@@ -205,11 +264,13 @@ async def is_sound_or_alias(name: str) -> bool:
 
 
 async def coalesce_sound_name(name: str) -> str | None:
-    # If given sound name, return unchanged
+    """Coalesce sound names and sound aliases to sound names.
+
+    Returns None if `name` is neither a sound nor an alias.
+    """
     if name in get_sound_dict():
         return name
 
-    # If given alias, return corresponding sound name
     if name in (alias_dict := await get_alias_dict()):
         return alias_dict[name]
 

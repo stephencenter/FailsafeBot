@@ -123,21 +123,22 @@ async def get_elevenlabs_response(input_text: str, *, save_to_file: bool = False
 
 async def cap_elevenlabs_prompt(text_prompt: str) -> str:
     config = await common.Config.load()
-    hard_cap = config.chat.sayhardcap
     soft_cap = config.chat.saysoftcap
+    hard_cap = int(soft_cap * 1.5)
 
-    # Hard cap cuts off the text abruptly, to keep costs down (longer strings = more elevenlabs credits)
-    if len(text_prompt) > hard_cap:
-        text_prompt = text_prompt[:hard_cap]
+    text_length = len(text_prompt)
+
+    if text_length < soft_cap:
+        return text_prompt
 
     # Soft cap cuts off the text gently, only at spaces or certain punctuation marks
     break_chars = {' ', '.', '?', '!', ','}
     for index, char in enumerate(text_prompt[soft_cap:]):
         if char in break_chars:
-            text_prompt = text_prompt[:soft_cap + index]
-            break
+            return text_prompt[:soft_cap + index]
 
-    return text_prompt
+    # Hard cap cuts off the text abruptly, to keep costs down (longer strings = more elevenlabs credits)
+    return text_prompt[:hard_cap]
 
 
 async def handle_elevenlabs_error(error: ElevenLabsApiError) -> str:

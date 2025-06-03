@@ -153,7 +153,7 @@ async def get_current_question(user_command: common.UserCommand) -> TriviaQuesti
         return None
 
     chat_id = user_command.get_chat_id()
-    if chat_id is None or chat_id not in trivia_data or trivia_data[chat_id] is None:
+    if chat_id not in trivia_data or trivia_data[chat_id] is None:
         return None
 
     current_question = TriviaQuestion(trivia_data[chat_id])
@@ -164,9 +164,6 @@ async def get_current_question(user_command: common.UserCommand) -> TriviaQuesti
 
 async def clear_current_question(user_command: common.UserCommand) -> None:
     chat_id = user_command.get_chat_id()
-
-    if chat_id is None:
-        return
 
     trivia_data = await common.try_read_json(common.PATH_CURRENT_TRIVIA, {})
     trivia_data[chat_id] = None

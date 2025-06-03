@@ -40,7 +40,7 @@ from telegram.ext import CallbackContext as TelegramContext
 # region
 # PROJECT VARIABLES
 APPLICATION_NAME = "FailsafeBot"
-VERSION_NUMBER = "v1.1.16"
+VERSION_NUMBER = "v1.1.17"
 
 # DIRECTORIES
 PATH_DATA_FOLDER = Path("Data")
@@ -175,11 +175,8 @@ class ConfigChat:
     # Maximum number of tokens for the markov chain command /wisdom)
     maxmarkov: int = 256
 
-    # The "soft cap" for elevenlabs text-to-speech input length (soft cap only breaks on punctuation)
-    saysoftcap: int = 224
-
-    # The "hard cap" for elevenlabs text-to-speech input length (hard cap breaks no matter what)
-    sayhardcap: int = 256
+    # The "soft cap" for elevenlabs text-to-speech input length (higher = higher cost/credit usage)
+    saysoftcap: int = 256
 
     # The voice to use for elevenlabs (defaults to Charlotte)
     sayvoiceid: str = "XB0fDUnXU5powFXDhCwa"
@@ -343,9 +340,6 @@ class UserCommand:
         if isinstance(target_bot, DiscordBot) != isinstance(context, DiscordContext):
             error_msg = f"Bot type (discord bot) and context type ({type(context).__name__}) must match"
             raise TypeError(error_msg)
-
-        if not isinstance(target_bot, TelegramBot) and not isinstance(target_bot, DiscordBot):
-            raise InvalidBotTypeError(self)
 
     def get_command_name(self) -> str | None:
         if isinstance(self.update, TelegramUpdate):
@@ -566,7 +560,7 @@ class UserCommand:
             await write_json_to_file(PATH_ADMIN_LIST, admin_dict)
             return
 
-    def get_chat_id(self) -> str | None:
+    def get_chat_id(self) -> str:
         if isinstance(self.update, TelegramUpdate):
             if self.update.message is None:
                 raise MissingUpdateInfoError(self)
@@ -579,7 +573,7 @@ class UserCommand:
 
             return str(self.context.channel.id)
 
-        return None
+        raise InvalidBotTypeError(self)
 
     async def is_whitelisted(self) -> bool:
         # Returns whether the chat is on the bot's whitelist
