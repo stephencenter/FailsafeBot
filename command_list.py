@@ -80,7 +80,7 @@ async def randomsound_command(user_command: UserCommand) -> CommandResponse:
     if random.randint(1, 1000) == 555:
         return CommandResponse(user_message=user_message, bot_message="You know, I'm just not feeling it right now.")
 
-    sound_name, sound_path = sound_manager.get_random_sound()
+    sound_name, sound_path = await sound_manager.get_random_sound()
 
     # If the sound was requested in a group chat, then we update the playcount for this sound
     await sound_manager.increment_playcount(user_command, sound_name)
@@ -90,7 +90,7 @@ async def randomsound_command(user_command: UserCommand) -> CommandResponse:
 
 
 async def soundlist_command(_: UserCommand) -> CommandResponse:
-    sound_list = sound_manager.get_sound_list()
+    sound_list = await sound_manager.get_sound_list()
     num_sounds = len(sound_list)
 
     user_message = "How many sounds are available to use? Can you list them for me?"
@@ -436,7 +436,7 @@ async def wisdom_command(_: UserCommand) -> CommandResponse:
 async def buildmarkov_command(_: UserCommand) -> CommandResponse:
     user_message = "Can you build the markov chain for me?"
 
-    chat_files = chat.get_chat_data_files()
+    chat_files = await chat.get_chat_data_files()
     if not chat_files:
         error_message = f"Couldn't find any Telegram chat history .json files in {common.PATH_MARKOV_INPUT}"
         return CommandResponse(user_message=user_message, bot_message=error_message)
@@ -610,7 +610,7 @@ async def vcrandom_command(user_command: UserCommand) -> CommandResponse:
     if bot_voice_client is None:
         return CommandResponse(user_message=user_message, bot_message="I'm not in a voice channel!")
 
-    sound_name, sound_path = sound_manager.get_random_sound()
+    sound_name, sound_path = await sound_manager.get_random_sound()
 
     # Stop the voice client if it's already playing a sound or stream
     if bot_voice_client.is_playing():

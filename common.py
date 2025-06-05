@@ -7,6 +7,7 @@ and file IO functions.
 
 from __future__ import annotations  # Python 3.14 feature for deferred annotations
 
+import contextlib
 import dataclasses
 import functools
 import html
@@ -20,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 import aiofiles
+import aiofiles.os
 import discord
 import toml
 import unidecode
@@ -848,7 +850,7 @@ def requiresuper(function: CommandAnn) -> CommandAnn:
     return superadmin_wrapper
 
 
-async def send_response(command_function: CommandAnn, user_command: UserCommand) -> None:
+async def get_and_send_response(command_function: CommandAnn, user_command: UserCommand) -> None:
     config = await Config.load()
 
     # Send the command to the bot and await its response
@@ -923,7 +925,7 @@ def wrap_telegram_command(bot: TelegramBotAnn, command: CommandAnn) -> TelegramF
             config.main.autosupertelegram = False
             await config.save_config()
 
-        await send_response(command, user_command)
+        await get_and_send_response(command, user_command)
 
     return telegram_wrapper
 
@@ -950,7 +952,7 @@ def wrap_discord_command(bot: DiscordBotAnn, command: CommandAnn) -> DiscordFunc
             config.main.autosuperdiscord = False
             await config.save_config()
 
-        await send_response(command, user_command)
+        await get_and_send_response(command, user_command)
 
     return discord_wrapper
 # endregion
@@ -980,14 +982,16 @@ async def append_to_gpt_memory(*, user_prompt: str | None = None, bot_response: 
 
 
 async def get_full_chat_memory() -> list[dict[str, str]]:
-    # Load and return the AI's full memory
+    """Load and return the AI's full memory."""
     return await try_read_json(PATH_MEMORY_LIST, [])
 
 
 async def get_recall_chat_memory() -> list[dict[str, str]]:
-    # Load and return the most recent messages from the AI's memory
-    # The number of messages retrieved is configurable -- this allows for the AI to only have access
-    # to a portion of the full stored memory, which is useful for limiting API input token count
+    """Load and return the most recent messages from the AI's memory.
+
+    The number of messages retrieved is configurable -- this allows for the AI to only have access
+    to a portion of the full stored memory, which is useful for limiting API input token count
+    """
     config = await Config.load()
     memory_list = await try_read_json(PATH_MEMORY_LIST, [])
 
@@ -1117,24 +1121,33 @@ async def try_read_toml(path: str | Path, default: dict[str, Any]) -> dict[str, 
 
 
 async def write_lines_to_file(path: str | Path, lines: list[str]) -> None:
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with contextlib.suppress(FileExistsError):
+        await aiofiles.os.mkdir(Path(path).parent)
+
     async with aiofiles.open(path, mode='w', encoding='utf-8') as f:
         await f.writelines(f"{x}\n" for x in lines)
 
 
 async def write_text_to_file(path: str | Path, text: str) -> None:
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with contextlib.suppress(FileExistsError):
+        await aiofiles.os.mkdir(Path(path).parent)
+
     async with aiofiles.open(path, mode='w', encoding='utf-8') as f:
         await f.write(text)
 
 
 async def append_lines_to_file(path: str | Path, lines: list[str]) -> None:
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with contextlib.suppress(FileExistsError):
+        await aiofiles.os.mkdir(Path(path).parent)
+
     async with aiofiles.open(path, mode='a', encoding='utf-8') as f:
         await f.writelines(f"{x}\n" for x in lines)
 
 
 async def write_bytes_to_file(path: str | Path, byte_obj: AsyncIterator[bytes] | bytes | bytearray) -> None:
+    with contextlib.suppress(FileExistsError):
+        await aiofiles.os.mkdir(Path(path).parent)
+
     async with aiofiles.open(path, "wb") as f:
         if isinstance(byte_obj, AsyncIterator):
             async for chunk in byte_obj:
@@ -1144,14 +1157,18 @@ async def write_bytes_to_file(path: str | Path, byte_obj: AsyncIterator[bytes] |
 
 
 async def write_json_to_file(path: str | Path, data: Iterable[Any]) -> None:
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with contextlib.suppress(FileExistsError):
+        await aiofiles.os.mkdir(Path(path).parent)
+
     async with aiofiles.open(path, mode='w', encoding='utf-8') as f:
         content = json.dumps(data, indent=4)
         await f.write(content)
 
 
 async def write_toml_to_file(path: str | Path, data: dict[str, Any]) -> None:
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with contextlib.suppress(FileExistsError):
+        await aiofiles.os.mkdir(Path(path).parent)
+
     async with aiofiles.open(path, mode='w', encoding='utf-8') as f:
         content = toml.dumps(data)
         await f.write(content)

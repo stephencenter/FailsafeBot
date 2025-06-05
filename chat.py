@@ -11,6 +11,7 @@ import re
 from collections.abc import AsyncIterator
 from pathlib import Path
 
+import aiofiles.os
 import numpy as np
 import openai
 from elevenlabs.client import AsyncElevenLabs
@@ -235,9 +236,11 @@ def clean_token(token: str) -> str:
     return token
 
 
-def get_chat_data_files() -> list[Path]:
+async def get_chat_data_files() -> list[Path]:
     try:
-        return [path for path in common.PATH_MARKOV_INPUT.iterdir() if path.suffix == ".json"]
+        return [common.PATH_MARKOV_INPUT / Path(path)
+                for path in await aiofiles.os.listdir(common.PATH_MARKOV_INPUT) if path.endswith('.json')]
+
     except FileNotFoundError:
         return []
 

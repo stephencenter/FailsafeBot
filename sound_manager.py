@@ -9,6 +9,7 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
 
+import aiofiles.os
 import ffmpeg
 import filetype
 import strsimpy
@@ -114,19 +115,22 @@ def del_sound_file(sound_name: str) -> None:
     sound_path.unlink()
 
 
-def get_sound_dict() -> dict[str, Path]:
+async def get_sound_dict() -> dict[str, Path]:
     # Create the sound dictionary. The keys will be the names of each sound, and the values will be the
     # path to that sound's file
     sound_dict: dict[str, Path] = {}
-    for file in common.PATH_SOUNDS_FOLDER.iterdir():
+
+    for f in await aiofiles.os.listdir(common.PATH_SOUNDS_FOLDER):
+        file = common.PATH_SOUNDS_FOLDER / Path(f)
         if file.suffix == '.mp3':
             sound_dict[file.stem] = file
 
     return sound_dict
 
 
-def get_sound_list() -> list[str]:
-    sound_list = [file.stem for file in common.PATH_SOUNDS_FOLDER.iterdir() if file.suffix == '.mp3']
+async def get_sound_list() -> list[str]:
+    sound_list = [Path(file).stem
+                  for file in await aiofiles.os.listdir(common.PATH_SOUNDS_FOLDER) if file.endswith('.mp3')]
     return sorted(sound_list)
 
 
@@ -136,8 +140,8 @@ async def get_alias_dict() -> dict[str, str]:
     return await common.try_read_json(common.PATH_SOUND_ALIASES, {})
 
 
-def new_playcount_dict() -> dict[str, int]:
-    return dict.fromkeys(get_sound_list(), 0)
+async def new_playcount_dict() -> dict[str, int]:
+    return dict.fromkeys(await get_sound_list(), 0)
 
 
 async def get_playcount_dict() -> dict[str, dict[str, int]]:
@@ -154,7 +158,7 @@ async def get_playcount_dict() -> dict[str, dict[str, int]]:
 
 
 async def fix_playcount_dict(playcount_dict: dict[str, dict[str, int]]) -> tuple[dict[str, dict[str, int]], bool]:
-    sound_list = get_sound_list()
+    sound_list = await get_sound_list()
     alias_dict = await get_alias_dict()
 
     # This variable makes note of whether a correction was made to the playcounts dictionary
@@ -195,7 +199,7 @@ async def increment_playcount(user_command: common.UserCommand, name: str) -> No
     chat_id = user_command.get_chat_id()
 
     if chat_id not in playcounts:
-        playcounts[chat_id] = new_playcount_dict()
+        playcounts[chat_id] = await new_playcount_dict()
 
     playcounts[chat_id][sound_name] = playcounts[chat_id].get(sound_name, 0) + 1
     await common.write_json_to_file(common.PATH_PLAYCOUNTS, playcounts)
@@ -206,7 +210,7 @@ async def get_chat_playcounts(user_command: common.UserCommand) -> dict[str, int
     playcount_dict = await get_playcount_dict()
     chat_id = user_command.get_chat_id()
 
-    return playcount_dict.get(chat_id, new_playcount_dict())
+    return playcount_dict.get(chat_id, await new_playcount_dict())
 
 
 async def get_sound_chat_playcount(user_command: common.UserCommand, name: str) -> int | None:
@@ -225,8 +229,9 @@ async def get_sound_chat_playcount(user_command: common.UserCommand, name: str) 
 async def get_global_playcounts() -> dict[str, int]:
     """Return the total number of times each sound has been played globally, in all chats."""
     playcount_dict = await get_playcount_dict()
+    sound_list = await get_sound_list()
 
-    global_playcounts = dict.fromkeys(get_sound_list(), 0)
+    global_playcounts = dict.fromkeys(sound_list, 0)
     for chat_id in playcount_dict:
         for sound in playcount_dict[chat_id]:
             global_playcounts[sound] += playcount_dict[chat_id][sound]
@@ -251,8 +256,8 @@ async def get_sound_global_playcount(name: str) -> int | None:
     return total
 
 
-def is_existing_sound(sound_name: str) -> bool:
-    return sound_name in get_sound_dict()
+async def is_existing_sound(sound_name: str) -> bool:
+    return sound_name in await get_sound_dict()
 
 
 async def is_existing_alias(alias: str) -> bool:
@@ -260,7 +265,7 @@ async def is_existing_alias(alias: str) -> bool:
 
 
 async def is_sound_or_alias(name: str) -> bool:
-    return is_existing_sound(name) or await is_existing_alias(name)
+    return await is_existing_sound(name) or await is_existing_alias(name)
 
 
 async def coalesce_sound_name(name: str) -> str | None:
@@ -268,7 +273,7 @@ async def coalesce_sound_name(name: str) -> str | None:
 
     Returns None if `name` is neither a sound nor an alias.
     """
-    if name in get_sound_dict():
+    if name in await get_sound_dict():
         return name
 
     if name in (alias_dict := await get_alias_dict()):
@@ -279,7 +284,7 @@ async def coalesce_sound_name(name: str) -> str | None:
 
 async def get_sound_by_name(name: str, *, strict: bool) -> Path | list[str] | None:
     # Get the dictionary of all sounds and the paths they're located at
-    sound_dict = get_sound_dict()
+    sound_dict = await get_sound_dict()
 
     if (sound_name := await coalesce_sound_name(name)) is not None:
         return sound_dict[sound_name]
@@ -303,9 +308,9 @@ async def get_sound_by_name(name: str, *, strict: bool) -> Path | list[str] | No
     return candidates
 
 
-def get_random_sound() -> tuple[str, Path]:
+async def get_random_sound() -> tuple[str, Path]:
     # Get the dictionary of all sounds and the paths they're located at
-    sound_dict = get_sound_dict()
+    sound_dict = await get_sound_dict()
     return random.choice(list(sound_dict.items()))
 
 
@@ -329,7 +334,7 @@ async def add_sound_alias(new_alias: str, sound_name: str) -> str:
     if not await is_sound_or_alias(sound_name):
         return f"'{sound_name}' is not an existing sound or alias."
 
-    if is_existing_sound(new_alias):
+    if await is_existing_sound(new_alias):
         return f"There is already a sound called '{new_alias}'."
 
     alias_dict = await get_alias_dict()
@@ -366,7 +371,7 @@ async def search_sounds(search_string: str) -> list[str]:
     calculator = strsimpy.Damerau()
 
     search_results: list[str] = []
-    for sound_name in get_sound_list():
+    for sound_name in await get_sound_list():
         for alias in [sound_name, *await get_aliases(sound_name)]:
             if search_string in alias:
                 search_results.append(alias)
@@ -422,7 +427,7 @@ def adjust_volume(sound_name: str, delta: float) -> None:
 
 
 async def verify_aliases() -> AsyncGenerator[str]:
-    sound_list = get_sound_list()
+    sound_list = await get_sound_list()
     alias_dict = await get_alias_dict()
 
     for alias in alias_dict:

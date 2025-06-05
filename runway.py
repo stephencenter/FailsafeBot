@@ -105,7 +105,8 @@ def init_logging() -> None:
     logger.add(sys.stderr, level="DEBUG", backtrace=False, diagnose=False, format=logger_format, enqueue=True)
 
     # Add file output with error logging
-    logger.add(common.PATH_LOGGING_FILE, level="WARNING", backtrace=False, diagnose=False, format=logger_format)
+    logger.add(common.PATH_LOGGING_FILE, level="WARNING", backtrace=False, diagnose=False, format=logger_format,
+               enqueue=True)
 
     logging.root.handlers = [InterceptHandler()]
     logging.root.setLevel(logging.INFO)
