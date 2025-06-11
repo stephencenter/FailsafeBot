@@ -9,3 +9,4 @@ sync.py
 *.bat
 *.xlsx
 *.csv
+*/target

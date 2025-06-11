@@ -446,6 +446,8 @@ async def buildmarkov_command(_: UserCommand) -> CommandResponse:
         error_message = f"Couldn't load message list from .json files in '{common.PATH_MARKOV_INPUT}'"
         return CommandResponse(user_message=user_message, bot_message=error_message)
 
+    logger.info("Creating markov chain...")
+
     markov_chain = chat.build_markov_chain(message_list)
     if not markov_chain:
         error_message = f"Failed to build markov chain from .json files in '{common.PATH_MARKOV_INPUT}'"
@@ -1328,11 +1330,24 @@ async def getfile_command(user_command: UserCommand) -> CommandResponse:
 # EVENTS
 # ==========================
 # region
-async def discord_register_events(discord_bot: common.DiscordBotAnn) -> None:  # noqa: C901
+async def discord_register_events(discord_bot: common.DiscordBotAnn) -> None:
     # This function assigns all of the event handlers to the discord bot
 
     @discord_bot.event
-    async def on_voice_state_update(member: Member, before: VoiceState, after: VoiceState) -> None:  # noqa: ARG001
+    async def on_message(message: discord.Message) -> None:  # type: ignore
+        if message.author.bot:
+            return
+
+        if message.content.startswith(common.COMMAND_PREFIX):
+            await discord_bot.process_commands(message)
+            return
+
+        message_handler = common.wrap_discord_command(discord_bot, handle_message_event)
+        context = await discord_bot.get_context(message)
+        await message_handler(context)
+
+    @discord_bot.event
+    async def on_voice_state_update(_member: Member, _before: VoiceState, _after: VoiceState) -> None:  # type: ignore
         # This function automatically disconnects the bot if it's the only
         # member remaining in a voice channel
         config = await common.Config.load()
@@ -1352,23 +1367,7 @@ async def discord_register_events(discord_bot: common.DiscordBotAnn) -> None:  #
             await discord_bot.voice_clients[0].disconnect(force=False)
 
     @discord_bot.event
-    async def on_message(message: discord.Message) -> None:
-        if message.author.bot:
-            return
-
-        if not isinstance(discord_bot.command_prefix, str):
-            return
-
-        if message.content.startswith(discord_bot.command_prefix):
-            await discord_bot.process_commands(message)
-            return
-
-        message_handler = common.wrap_discord_command(discord_bot, handle_message_event)
-        context = await discord_bot.get_context(message)
-        await message_handler(context)
-
-    @discord_bot.event
-    async def on_command_error(_: common.DiscordContextAnn, error: CommandInvokeError) -> None:
+    async def on_command_error(_: common.DiscordContextAnn, error: CommandInvokeError) -> None:  # type: ignore
         error = getattr(error, "original", error)
 
         # Suppress the error that happens if you try to use a command that doesn't exist

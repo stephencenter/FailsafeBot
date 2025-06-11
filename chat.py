@@ -6,6 +6,7 @@ This module contains constants, classes, and functions used by Chat commands lik
 
 import collections
 import datetime
+import itertools
 import random
 import re
 from collections.abc import AsyncIterator
@@ -22,9 +23,9 @@ import common
 from common import UserCommand
 
 MAX_GPT_ATTEMPTS = 3
-NULL_TOKEN = "NULL_TOKEN"
-SENDER_NAME_TOKEN = "SENDER_NAME"
-BOT_NAME_TOKEN = "BOT_NAME"
+NULL_TOKEN = "[NULL_TOKEN]"
+SENDER_NAME_TOKEN = "[SENDER_NAME]"
+BOT_NAME_TOKEN = "[BOT_NAME]"
 
 
 async def get_gpt_response(user_command: UserCommand) -> str:
@@ -73,10 +74,11 @@ async def get_gpt_response(user_command: UserCommand) -> str:
         # If the response is None, blank, or is blank after removing quotes, we don't accept and try again
         # up to MAX_GPT_ATTEMPTS times
         if response is not None:
-            # Remove quotation marks from the message if GPT decided to use them
-            if response.startswith('"') and response.endswith('"'):
-                response = response[1:-1]
+            response = remove_quotation_marks(response)
+            response = await truncate_mapped_name(response)
 
+            # The above functions can remove elements from the string, which could result in the string being
+            # empty in certain scenarios
             if response:
                 return response
 
@@ -87,6 +89,27 @@ async def get_gpt_response(user_command: UserCommand) -> str:
     error_msg = f"Failed to get a response from OpenAI Chat Completion API within {MAX_GPT_ATTEMPTS} attempts"
     logger.error(error_msg)
     return common.TXT_BZZZT_ERROR
+
+
+def remove_quotation_marks(text: str) -> str:
+    while True:
+        if (text.startswith('"') and text.endswith('"')) or (text.startswith("'") and text.endswith("'")):
+            text = text[1:-1]
+
+        else:
+            break
+
+    return text
+
+
+async def truncate_mapped_name(text: str) -> str:
+    usernames = set((await common.try_read_json(common.PATH_USERNAME_MAP, {})).values())
+
+    for name in usernames:
+        if text.startswith(substring := f"{name}:"):
+            return text[len(substring):].strip()
+
+    return text
 
 
 async def get_most_recent_bot_message() -> str | None:
@@ -188,24 +211,19 @@ async def generate_markov_text(markov_chain: dict[str, dict[str, float]]) -> str
 
     chosen_tokens: list[str] = []
     rng = np.random.default_rng()
-    while True:
-        if not chosen_tokens:
-            prev_token: str = NULL_TOKEN
-        else:
-            prev_token: str = chosen_tokens[-1]
+    while (num_tokens := len(chosen_tokens)) < config.chat.maxmarkov:
+        prev_token: str = chosen_tokens[-1] if chosen_tokens else NULL_TOKEN
 
-        new_token = rng.choice(list(markov_chain[prev_token].keys()), 1, p=list(markov_chain[prev_token].values()))
-        new_token = new_token[0]
+        token_list, probabilities = list(markov_chain[prev_token].keys()), list(markov_chain[prev_token].values())
+        new_token: str = rng.choice(token_list, p=probabilities)
 
         if new_token == NULL_TOKEN:
-            if len(chosen_tokens) < config.chat.minmarkov:
-                chosen_tokens = []
+            if num_tokens < config.chat.minmarkov:
+                chosen_tokens.clear()
                 continue
             break
 
         chosen_tokens.append(new_token)
-        if len(chosen_tokens) >= config.chat.maxmarkov:
-            break
 
     output_message = ' '.join(chosen_tokens)
     return output_message[0].upper() + output_message[1:]
@@ -238,8 +256,11 @@ def clean_token(token: str) -> str:
 
 async def get_chat_data_files() -> list[Path]:
     try:
-        return [common.PATH_MARKOV_INPUT / Path(path)
-                for path in await aiofiles.os.listdir(common.PATH_MARKOV_INPUT) if path.endswith('.json')]
+        return [
+            common.PATH_MARKOV_INPUT / Path(path)
+            for path in await aiofiles.os.listdir(common.PATH_MARKOV_INPUT)
+            if path.endswith('.json')
+        ]
 
     except FileNotFoundError:
         return []
@@ -276,23 +297,18 @@ async def load_message_list(chat_files: list[Path]) -> list[str]:
 
 def build_markov_chain(message_list: list[str]) -> dict[str, dict[str, float]]:
     markov_chain: dict[str, dict[str, float]] = collections.defaultdict(lambda: collections.defaultdict(int))
-
-    logger.info("Creating markov chain...")
     for message in message_list:
         token_list = [clean_token(token) for token in message.split()]
 
         if not token_list:
             continue
 
-        markov_chain[NULL_TOKEN][token_list[0]] += 1
+        token_list = [NULL_TOKEN, *token_list, NULL_TOKEN]
 
-        for index, current_token in enumerate(token_list):
-            if index + 1 < len(token_list):
-                next_token = token_list[index + 1]
-            else:
-                next_token = NULL_TOKEN
-
-            markov_chain[current_token][next_token] += 1
+        for prev, curr in itertools.pairwise(token_list):
+            if prev == NULL_TOKEN and curr == NULL_TOKEN:
+                logger.debug(token_list)
+            markov_chain[prev][curr] += 1
 
     markov_chain = dict(sorted(markov_chain.items(), key=lambda item: sum(item[1].values()), reverse=True))
 

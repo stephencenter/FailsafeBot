@@ -1,6 +1,10 @@
 extend-exclude = ["Test"]
 line-length = 118
 
+[lint.mccabe]
+# Flag errors (C901) whenever the complexity level exceeds this value
+max-complexity = 15
+
 [lint]
 preview = true
 select = ["ALL"]
@@ -9,7 +13,10 @@ ignore = [
     "CPY001",
 
     # Documentation stuff, eventually I should remove these and add more documentation
-    "D102", "D103", "D105", "D107", "D413", "DOC201", "DOC501",
+    "D102", "D103", "D105", "D107", "D413",
+
+    # Guidelines for writing docstrings, I do not like these
+    "DOC201", "DOC501",
 
     # Replace lambda with function from operator module, very unnecessary
     "FURB118",

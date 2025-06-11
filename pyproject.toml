@@ -24,4 +24,5 @@ dependencies = [
     "aiohttp>=3.11.16",
     "ffmpeg-python>=0.2.0",
     "filetype>=1.2.0",
+    "maturin>=1.8.7",
 ]

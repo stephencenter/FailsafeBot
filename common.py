@@ -43,13 +43,14 @@ from telegram.ext import CallbackContext as TelegramContext
 # PROJECT VARIABLES
 APPLICATION_NAME = "FailsafeBot"
 VERSION_NUMBER = "v1.1.17"
+COMMAND_PREFIX = '/'  # May be configurable in the future
 
 # DIRECTORIES
 PATH_DATA_FOLDER = Path("Data")
 PATH_TEMP_FOLDER = PATH_DATA_FOLDER / ".temp"
 PATH_SOUNDS_FOLDER = PATH_DATA_FOLDER / "Sounds"
 PATH_LOGGING_FOLDER = PATH_DATA_FOLDER / "logging"
-PATH_MARKOV_INPUT = PATH_DATA_FOLDER / "chat_data"  # Folder containing telegram chat logs (.json format)
+PATH_MARKOV_INPUT = PATH_DATA_FOLDER / "chat_data"  # Folder containing telegram chat logs (.json format) for markov
 
 # CORE FILES
 PATH_TELEGRAM_TOKEN = PATH_DATA_FOLDER / "telegram_token.txt"
@@ -117,6 +118,7 @@ class ConfigMain:
 
     # Name of the bot, if replytoname is True then the bot will respond to this string
     botname: str = "Failsafe"
+    # botname : str = (def_type=str, def_val="Failsafe", cur_val="Failsafe", valid_range=None)
 
     # Whether to run the Telegram/Discord bot or skip it
     runtelegram: bool = True
@@ -125,7 +127,7 @@ class ConfigMain:
     # Whether certain commands require admin rights to perform
     requireadmin: bool = True
 
-    # Maximum amount of characters to allow in a CommandResponse object's bot_message property
+    # Maximum amount of characters to allow in a CommandResponse object's bot_message proper
     maxmessagelength: int = 1024
 
     # Whether a Telegram/Discord chat ID needs to be on the whitelist for commands to function
@@ -602,6 +604,55 @@ class UserCommand:
 
         return chat_id in whitelist[platform_str]
 
+    async def get_and_send_response(self, command_function: CommandAnn) -> None:
+        config = await Config.load()
+
+        # Send the command to the bot and await its response
+        self.response = await command_function(self)
+
+        text_response = None
+        if self.response.send_chat and self.response.bot_message:
+            text_response = self.response.bot_message
+
+        if text_response is not None and len(text_response) > config.main.maxmessagelength:
+            text_response = text_response[:config.main.maxmessagelength]
+            logger.info(f"Cut off bot response at {config.main.maxmessagelength} characters")
+
+        try:
+            # Respond with a sound effect
+            if isinstance(self.response, SoundResponse):
+                await self.send_sound_response(self.response, text_response)
+
+            # Respond with a file
+            elif isinstance(self.response, FileResponse):
+                await self.send_file_response(self.response, text_response)
+
+            # Respond with text
+            elif text_response:
+                await self.send_text_response(text_response)
+
+        except (BadRequest, TimedOut, NetworkError, HTTPException) as e:
+            await self.send_text_response(TXT_BZZZT_ERROR)
+
+            command_name = self.get_command_name()
+            user_message = self.get_user_message()
+            error_string = f"{type(e).__name__}: {e}"
+
+            if command_name is not None:
+                command_string = f"{command_name} {user_message}".strip()
+                logger.error(f"Command '/{command_string}' encountered an exception ({error_string})")
+            else:
+                logger.error(f"User message '{user_message}' encountered an exception ({error_string})")
+
+            # Re-raise BadRequests, as these indicate a bug with the script that will need to be fixed
+            if isinstance(e, BadRequest):
+                raise
+
+        # Add the command and its response to memory if necessary
+        if self.response.record_memory:
+            user_prompt = await self.get_user_prompt()
+            await append_to_gpt_memory(user_prompt=user_prompt, bot_response=self.response.bot_message)
+
     async def send_text_response(self, response: str | None) -> None:
         if isinstance(self.context, TelegramContext) and isinstance(self.update, TelegramUpdate):
             if self.update.effective_chat is None:
@@ -818,7 +869,10 @@ TelegramFuncAnn = Callable[[TelegramUpdate, TelegramContextAnn], types.Coroutine
 DiscordFuncAnn = Callable[[DiscordContextAnn], types.CoroutineType[Any, Any, None]]
 # endregion
 
-
+# ==========================
+# WRAPPERS
+# ==========================
+# region
 def requireadmin(function: CommandAnn) -> CommandAnn:
     # Put this decorator on a function using @requireadmin to prevent its use without admin rights
     @functools.wraps(function)
@@ -850,58 +904,8 @@ def requiresuper(function: CommandAnn) -> CommandAnn:
     return superadmin_wrapper
 
 
-async def get_and_send_response(command_function: CommandAnn, user_command: UserCommand) -> None:
-    config = await Config.load()
-
-    # Send the command to the bot and await its response
-    user_command.response = await command_function(user_command)
-
-    text_response = None
-    if user_command.response.send_chat and user_command.response.bot_message:
-        text_response = user_command.response.bot_message
-
-    if text_response is not None and len(text_response) > config.main.maxmessagelength:
-        text_response = text_response[:config.main.maxmessagelength]
-        logger.info(f"Cut off bot response at {config.main.maxmessagelength} characters")
-
-    try:
-        # Respond with a sound effect
-        if isinstance(user_command.response, SoundResponse):
-            await user_command.send_sound_response(user_command.response, text_response)
-
-        # Respond with a file
-        elif isinstance(user_command.response, FileResponse):
-            await user_command.send_file_response(user_command.response, text_response)
-
-        # Respond with text
-        elif text_response:
-            await user_command.send_text_response(text_response)
-
-    except (BadRequest, TimedOut, NetworkError, HTTPException) as e:
-        await user_command.send_text_response(TXT_BZZZT_ERROR)
-
-        command_name = user_command.get_command_name()
-        user_message = user_command.get_user_message()
-        error_string = f"{type(e).__name__}: {e}"
-
-        if command_name is not None:
-            command_string = f"{command_name} {user_message}".strip()
-            logger.error(f"Command '/{command_string}' encountered an exception ({error_string})")
-        else:
-            logger.error(f"User message '{user_message}' encountered an exception ({error_string})")
-
-        # Re-raise BadRequests, as these indicate a bug with the script that will need to be fixed
-        if isinstance(e, BadRequest):
-            raise
-
-    # Add the command and its response to memory if necessary
-    if user_command.response.record_memory:
-        user_prompt = await user_command.get_user_prompt()
-        await append_to_gpt_memory(user_prompt=user_prompt, bot_response=user_command.response.bot_message)
-
-
-def wrap_telegram_command(bot: TelegramBotAnn, command: CommandAnn) -> TelegramFuncAnn:
-    @functools.wraps(command)
+def wrap_telegram_command(bot: TelegramBotAnn, command_function: CommandAnn) -> TelegramFuncAnn:
+    @functools.wraps(command_function)
     async def telegram_wrapper(update: TelegramUpdate, context: TelegramContextAnn) -> None:
         if update.message is None:
             return
@@ -925,13 +929,13 @@ def wrap_telegram_command(bot: TelegramBotAnn, command: CommandAnn) -> TelegramF
             config.main.autosupertelegram = False
             await config.save_config()
 
-        await get_and_send_response(command, user_command)
+        await user_command.get_and_send_response(command_function)
 
     return telegram_wrapper
 
 
-def wrap_discord_command(bot: DiscordBotAnn, command: CommandAnn) -> DiscordFuncAnn:
-    @functools.wraps(command)
+def wrap_discord_command(bot: DiscordBotAnn, command_function: CommandAnn) -> DiscordFuncAnn:
+    @functools.wraps(command_function)
     async def discord_wrapper(context: DiscordContextAnn) -> None:
         config = await Config.load()
         user_command = UserCommand(bot, context, None)
@@ -952,7 +956,7 @@ def wrap_discord_command(bot: DiscordBotAnn, command: CommandAnn) -> DiscordFunc
             config.main.autosuperdiscord = False
             await config.save_config()
 
-        await get_and_send_response(command, user_command)
+        await user_command.get_and_send_response(command_function)
 
     return discord_wrapper
 # endregion
@@ -1000,11 +1004,16 @@ async def get_recall_chat_memory() -> list[dict[str, str]]:
 
 
 def convert_to_ascii(text: str) -> str:
+    """Attempt to replace all non-ascii characters in string with ascii equivalents (e.g. 'é' -> 'e')
+
+    Removes all characters that have no good equivalents.
+    """
     text = html.unescape(text)
     return unidecode.unidecode(text, errors="replace", replace_str='')
 
 
 def make_valid_filename(input_str: str, *, strict: bool) -> str:
+    """Return input_str with characters unsuitable for filenames replaced or removed."""
     input_str = convert_to_ascii(input_str)
 
     if strict:

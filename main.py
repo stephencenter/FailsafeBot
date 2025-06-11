@@ -114,7 +114,11 @@ async def try_start_discord_bot() -> tuple[common.DiscordBotAnn | None, asyncio.
     intents = discord.Intents.default()
     intents.members = True
     intents.message_content = True
-    discord_bot = common.DiscordBotAnn(command_prefix='/', intents=intents, help_command=None)
+    discord_bot = common.DiscordBotAnn(
+        command_prefix=common.COMMAND_PREFIX,
+        intents=intents,
+        help_command=None,
+    )
 
     # Register commands
     for command in [*command_list.COMMAND_LIST, *command_list.FILE_COMMAND_LIST]:

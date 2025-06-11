@@ -1,5 +1,6 @@
 {
    "editor.wordWrap": "off",
+
    "editor.rulers": [
       118
    ],
@@ -21,16 +22,19 @@
       "**/Sounds": true,
       "**.exe": true,
       "**.bat": true,
+      "**.csv": true,
       "**desktop.ini": true,
-      "Test/": true
+      "Test/": true,
+      "**/target": true
    },
 
    "python.analysis.typeCheckingMode": "strict",
+
    "python.analysis.autoImportCompletions": false,
+
    "python.analysis.diagnosticSeverityOverrides": {
       "reportMissingTypeStubs": "none",
-      "reportUnusedFunction": "none",
-      "reportUnknownMemberType": "none",
+      "reportUnknownMemberType": "none"
    },
 
    "editor.codeActionsOnSave": {
