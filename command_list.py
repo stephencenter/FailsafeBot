@@ -1014,10 +1014,9 @@ async def configlist_command(_: UserCommand) -> CommandResponse:
     config = await common.Config.load()
 
     setting_list: list[str] = []
-    for g in config.__dict__:
-        for s in getattr(config, g).__dict__:
-            group_name, setting_name, value = config.find_setting(f"{g}.{s}")  # TODO: This is stupid
-            setting_list.append(f"{group_name}.{setting_name}: {value}")
+    for group_name, group_obj in config.__dict__.items():
+        for setting_name, config_item in group_obj.__dict__.items():
+            setting_list.append(f"{group_name}.{setting_name}: {config_item.value}")
 
     setting_string = '\n-- '.join(setting_list)
     bot_message = f"Here is a list of all available settings: \n-- {setting_string}"
