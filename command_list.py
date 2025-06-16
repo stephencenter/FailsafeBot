@@ -25,11 +25,12 @@ from telegram.error import BadRequest
 from yt_dlp.utils import DownloadError as YtdlDownloadError
 
 import chat
+import command
 import common
 import dice_roller
 import sound_manager
 import trivia
-from common import CommandResponse, FileResponse, NoResponse, SoundResponse, UserCommand, requireadmin, requiresuper
+from command import CommandResponse, FileResponse, NoResponse, SoundResponse, UserCommand, requireadmin, requiresuper
 
 
 # ==========================
@@ -595,7 +596,6 @@ async def vcsound_command(user_command: UserCommand) -> CommandResponse:
         bot_voice_client.stop()
 
     source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_results))   # type: ignore
-
     bot_voice_client.play(source, after=lambda e: logger.error(e) if e else None)
 
     await sound_manager.increment_playcount(user_command, sound_name)
@@ -1330,7 +1330,7 @@ async def getfile_command(user_command: UserCommand) -> CommandResponse:
 # EVENTS
 # ==========================
 # region
-async def discord_register_events(discord_bot: common.DiscordBotAnn) -> None:
+async def discord_register_events(discord_bot: command.DiscordBotAnn) -> None:
     # This function assigns all of the event handlers to the discord bot
 
     @discord_bot.event
@@ -1342,7 +1342,7 @@ async def discord_register_events(discord_bot: common.DiscordBotAnn) -> None:
             await discord_bot.process_commands(message)
             return
 
-        message_handler = common.wrap_discord_command(discord_bot, handle_message_event)
+        message_handler = command.wrap_discord_command(discord_bot, handle_message_event)
         context = await discord_bot.get_context(message)
         await message_handler(context)
 
@@ -1364,10 +1364,11 @@ async def discord_register_events(discord_bot: common.DiscordBotAnn) -> None:
             return
 
         if len(bot_channel.members) == 1:
+            logger.info("Detected nobody remaining in voice channel, disconnecting...")
             await discord_bot.voice_clients[0].disconnect(force=False)
 
     @discord_bot.event
-    async def on_command_error(_: common.DiscordContextAnn, error: CommandInvokeError) -> None:  # type: ignore
+    async def on_command_error(_: command.DiscordContextAnn, error: CommandInvokeError) -> None:  # type: ignore
         error = getattr(error, "original", error)
 
         # Suppress the error that happens if you try to use a command that doesn't exist
@@ -1421,7 +1422,7 @@ async def reply_event(user_command: UserCommand) -> CommandResponse:
 # the function that will be assigned to that name.
 # Do NOT register any commands to this list that take a user file attachment as an input,
 # those must be registered in FILE_COMMAND_LIST below or they won't work in Telegram
-COMMAND_LIST: list[tuple[str, common.CommandAnn]] = [
+COMMAND_LIST: list[tuple[str, command.CommandAnn]] = [
     ("sound", sound_command),
     ("random", randomsound_command),
     ("soundlist", soundlist_command),
@@ -1486,7 +1487,7 @@ COMMAND_LIST: list[tuple[str, common.CommandAnn]] = [
 
 # For the Telegram API, normal commands cannot accept a file as an input for some reason,
 # so we have to register them differently
-FILE_COMMAND_LIST: list[tuple[str, common.CommandAnn]] = [
+FILE_COMMAND_LIST: list[tuple[str, command.CommandAnn]] = [
     ("addsound", addsound_command),
 ]
 

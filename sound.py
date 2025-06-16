@@ -16,6 +16,7 @@ import strsimpy
 import yt_dlp
 from loguru import logger
 
+import command
 import common
 
 
@@ -189,7 +190,7 @@ async def fix_playcount_dict(playcount_dict: dict[str, dict[str, int]]) -> tuple
     return playcount_dict, changed
 
 
-async def increment_playcount(user_command: common.UserCommand, name: str) -> None:
+async def increment_playcount(user_command: command.UserCommand, name: str) -> None:
     sound_name = await coalesce_sound_name(name)
     if sound_name is None:
         error_msg = f"Invalid sound name {name} provided."
@@ -205,7 +206,7 @@ async def increment_playcount(user_command: common.UserCommand, name: str) -> No
     await common.write_json_to_file(common.PATH_PLAYCOUNTS, playcounts)
 
 
-async def get_chat_playcounts(user_command: common.UserCommand) -> dict[str, int]:
+async def get_chat_playcounts(user_command: command.UserCommand) -> dict[str, int]:
     """Return the number of times each sound has been played within the user's current chat."""
     playcount_dict = await get_playcount_dict()
     chat_id = user_command.get_chat_id()
@@ -213,7 +214,7 @@ async def get_chat_playcounts(user_command: common.UserCommand) -> dict[str, int
     return playcount_dict.get(chat_id, await new_playcount_dict())
 
 
-async def get_sound_chat_playcount(user_command: common.UserCommand, name: str) -> int | None:
+async def get_sound_chat_playcount(user_command: command.UserCommand, name: str) -> int | None:
     """Return the number of times the provided sound has been played within the user's current chat.
 
     Returns None if the sound does not exist.

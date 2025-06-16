@@ -18,7 +18,7 @@ from telegram import Update as TelegramUpdateType
 from telegram.ext import Application as TelegramBotType
 from telegram.ext import CallbackContext as TelegramContextType
 
-from common import UserCommand
+from command import UserCommand
 
 
 # ==========================

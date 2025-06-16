@@ -20,7 +20,7 @@ from elevenlabs.core.api_error import ApiError as ElevenLabsApiError
 from loguru import logger
 
 import common
-from common import UserCommand
+from command import UserCommand
 
 MAX_GPT_ATTEMPTS = 3
 NULL_TOKEN = "[NULL_TOKEN]"
@@ -306,8 +306,6 @@ def build_markov_chain(message_list: list[str]) -> dict[str, dict[str, float]]:
         token_list = [NULL_TOKEN, *token_list, NULL_TOKEN]
 
         for prev, curr in itertools.pairwise(token_list):
-            if prev == NULL_TOKEN and curr == NULL_TOKEN:
-                logger.debug(token_list)
             markov_chain[prev][curr] += 1
 
     markov_chain = dict(sorted(markov_chain.items(), key=lambda item: sum(item[1].values()), reverse=True))
