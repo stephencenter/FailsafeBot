@@ -28,7 +28,7 @@ async def prepare_runway() -> None:
     for info in runway.create_project_structure():
         logger.info(info)
 
-    # Clear temp folder if it wasn't already
+    # Clear temp folder if it isn't already
     for info in runway.clear_temp_folder():
         logger.info(info)
 

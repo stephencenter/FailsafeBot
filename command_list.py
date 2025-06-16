@@ -1016,7 +1016,7 @@ async def configlist_command(_: UserCommand) -> CommandResponse:
     setting_list: list[str] = []
     for g in config.__dict__:
         for s in getattr(config, g).__dict__:
-            group_name, setting_name, value = config.find_setting(f"{g}.{s}")
+            group_name, setting_name, value = config.find_setting(f"{g}.{s}")  # TODO: This is stupid
             setting_list.append(f"{group_name}.{setting_name}: {value}")
 
     setting_string = '\n-- '.join(setting_list)

@@ -11,7 +11,6 @@ import html
 import json
 import string
 from collections.abc import AsyncGenerator, AsyncIterator, Iterable
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -103,6 +102,7 @@ class ConfigError(Exception):
     """Error to be raised if loading a setting fails due to invalid values (e.g. expected float, got string)."""
 
     def __init__(self, message: str) -> None:
+        super().__init__(message)
         self.message = message
 
 
@@ -136,8 +136,16 @@ class ConfigItem[T]:
             raise ConfigError(error_msg)
 
     def __bool__(self) -> NoReturn:
-        msg = "You probably meant to call ConfigItem.value instead of ConfigItem"
+        msg = "Use ConfigItem.value to access this setting's value"
         raise ValueError(msg)
+
+    def __str__(self) -> NoReturn:
+        msg = "Use ConfigItem.value to access this setting's value"
+        raise RuntimeError(msg)
+
+    def __repr__(self) -> NoReturn:
+        msg = "Use ConfigItem.value to access this setting's value"
+        raise RuntimeError(msg)
 
     def validate_new_value(self, new_value: T) -> None:
         if not isinstance(new_value, self.item_type):
@@ -251,13 +259,13 @@ class ConfigMisc:
         self.maxfaces = ConfigItem(default_value=10000, valid_range=(100, 100000))
 
 
-@dataclass
 class Config:
     """Class that stores user config data for this application.
 
     Do not instantiate this class directly, call `await Config.load()` to create a config object.
     """
 
+    # We have to declare these here, so that our type checker knows these attributes exist
     main: ConfigMain
     chat: ConfigChat
     misc: ConfigMisc
@@ -273,6 +281,7 @@ class Config:
         self.chat = ConfigChat()
         self.misc = ConfigMisc()
 
+        # We have an await here, so we can't do this in __init__
         loaded = await try_read_toml(PATH_CONFIG_FILE, {})
 
         if not loaded:
@@ -311,8 +320,10 @@ class Config:
         return self
 
     def find_setting(self, search_string: str) -> tuple[str | None, str | None, Any]:
-        # Accepts a search string (either the setting name or [group name].[setting name]) and
-        # parses/returns the group name, setting name, and current value if it exists
+        """Take a search string and return the matching group name, setting name, and current value if it exists.
+
+        Accepts either the setting name or [group name].[setting name], will return the first match found
+        """
         group_name = None
         setting_name = None
         value = None
@@ -333,6 +344,7 @@ class Config:
                     group_name = group_key
                     setting_name = search_string
                     value = getattr(group, setting_name).value
+                    break
 
         return group_name, setting_name, value
 
@@ -342,6 +354,7 @@ class Config:
             settings_dict[key] = {}
             for subkey in self.__dict__[key].__dict__:
                 settings_dict[key][subkey] = self.__dict__[key].__dict__[subkey].value
+
         await write_toml_to_file(PATH_CONFIG_FILE, settings_dict)
 
     def update_setting(self, group_name: str, setting_name: str, value: str) -> None:
