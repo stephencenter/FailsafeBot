@@ -325,9 +325,9 @@ class UserCommand:
         if self.response.send_chat and self.response.bot_message:
             text_response = self.response.bot_message
 
-        if text_response is not None and len(text_response) > config.main.maxmessagelength:
-            text_response = text_response[:config.main.maxmessagelength]
-            logger.info(f"Cut off bot response at {config.main.maxmessagelength} characters")
+        if text_response is not None and len(text_response) > config.main.maxmessagelength.value:
+            text_response = text_response[:config.main.maxmessagelength.value]
+            logger.info(f"Cut off bot response at {config.main.maxmessagelength.value} characters")
 
         try:
             # Respond with a sound effect
@@ -589,7 +589,7 @@ def requireadmin(function: CommandAnn) -> CommandAnn:
     @functools.wraps(function)
     async def admin_wrapper(user_command: UserCommand) -> CommandResponse:
         config = await common.Config.load()
-        if config.main.requireadmin and not await user_command.is_admin():
+        if config.main.requireadmin.value and not await user_command.is_admin():
             user_message = "Can I do that sensitive thing that requires superadmin rights?"
             return CommandResponse(user_message=user_message, bot_message=random.choice(common.TXT_NO_PERMISSIONS))
 
@@ -605,7 +605,7 @@ def requiresuper(function: CommandAnn) -> CommandAnn:
     @functools.wraps(function)
     async def superadmin_wrapper(user_command: UserCommand) -> CommandResponse:
         config = await common.Config.load()
-        if config.main.requireadmin and not await user_command.is_superadmin():
+        if config.main.requireadmin.value and not await user_command.is_superadmin():
             user_message = "Can I do that sensitive thing that requires superadmin rights?"
             return CommandResponse(user_message=user_message, bot_message=random.choice(common.TXT_NO_PERMISSIONS))
 
@@ -628,16 +628,16 @@ def wrap_telegram_command(bot: TelegramBotAnn, command_function: CommandAnn) -> 
         await user_command.track_user_id()
 
         # If the whitelist is enforced, don't allow interacting with this bot unless on the list
-        if config.main.whitelisttelegram and not await user_command.is_whitelisted():
+        if config.main.whitelisttelegram.value and not await user_command.is_whitelisted():
             logger.warning(f"Whitelist rejected chat ID {user_command.get_chat_id()} for Telegram Bot")
             return
 
         # If there are no superadmins assigned to this bot, assign this user as the superadmin
-        if config.main.autosupertelegram:
+        if config.main.autosupertelegram.value:
             await user_command.assign_super_if_none()
 
             # Automatically disable this setting after checking for superadmins to prevent accidents
-            config.main.autosupertelegram = False
+            config.main.autosupertelegram.value = False
             await config.save_config()
 
         await user_command.get_and_send_response(command_function)
@@ -655,16 +655,16 @@ def wrap_discord_command(bot: DiscordBotAnn, command_function: CommandAnn) -> Di
         await user_command.track_user_id()
 
         # If the whitelist is enforced, don't allow interacting with this bot unless on the list
-        if config.main.whitelistdiscord and not await user_command.is_whitelisted():
+        if config.main.whitelistdiscord.value and not await user_command.is_whitelisted():
             logger.warning(f"Whitelist rejected chat ID {user_command.get_chat_id()} for Discord Bot")
             return
 
         # If there are no superadmins assigned to this bot, assign this user as the superadmin
-        if config.main.autosuperdiscord:
+        if config.main.autosuperdiscord.value:
             await user_command.assign_super_if_none()
 
             # Automatically disable this setting after checking for superadmins to prevent accidents
-            config.main.autosuperdiscord = False
+            config.main.autosuperdiscord.value = False
             await config.save_config()
 
         await user_command.get_and_send_response(command_function)

@@ -778,12 +778,12 @@ async def roll_command(user_command: UserCommand) -> CommandResponse:
     user_message = f"Can you roll a {roll_text} for me?"
 
     config = await common.Config.load()
-    if num_dice > config.misc.maxdice:
-        bot_message = f"Keep it to {config.misc.maxdice:,} dice or fewer please, I'm not a god."
+    if num_dice > config.misc.maxdice.value:
+        bot_message = f"Keep it to {config.misc.maxdice.value:,} dice or fewer please, I'm not a god."
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 
-    if num_faces > config.misc.maxfaces:
-        bot_message = f"Keep it to {config.misc.maxfaces:,} sides or fewer please, I'm not a god."
+    if num_faces > config.misc.maxfaces.value:
+        bot_message = f"Keep it to {config.misc.maxfaces.value:,} sides or fewer please, I'm not a god."
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 
     # Roll `num_dice` number of dice, each with `num_faces` sides and store each roll in a list
@@ -998,7 +998,11 @@ async def setconfig_command(user_command: UserCommand) -> CommandResponse:
         bot_message = f"Couldn't find a setting called '{search_string}'."
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 
-    config.update_setting(group_name, setting_name, new_value)
+    try:
+        config.update_setting(group_name, setting_name, new_value)
+    except common.ConfigError as e:
+        return CommandResponse(user_message=user_message, bot_message=e.message)
+
     await config.save_config()
 
     bot_message = f"Setting '{group_name}.{setting_name}' has been set to '{new_value}'."
@@ -1135,7 +1139,7 @@ async def restart_command(user_command: UserCommand) -> NoReturn:
 async def system_command(_: UserCommand) -> CommandResponse:
     config = await common.Config.load()
 
-    if config.misc.usemegabytes:
+    if config.misc.usemegabytes.value:
         divisor = 1024**2
         label = "MB"
     else:
@@ -1352,7 +1356,7 @@ async def discord_register_events(discord_bot: command.DiscordBotAnn) -> None:
         # member remaining in a voice channel
         config = await common.Config.load()
 
-        if not config.chat.vcautodc:
+        if not config.chat.vcautodc.value:
             return
 
         try:
@@ -1380,20 +1384,20 @@ async def discord_register_events(discord_bot: command.DiscordBotAnn) -> None:
 
 async def handle_message_event(user_command: UserCommand) -> CommandResponse:
     config = await common.Config.load()
-    bot_name = config.main.botname.lower()
+    bot_name = config.main.botname.value.lower()
     message = user_command.get_user_message().lower()
 
     response = NoResponse()
-    if config.chat.replytomonkey and "monkey" in message:
+    if config.chat.replytomonkey.value and "monkey" in message:
         response = await monkey_event(message)
 
-    elif config.chat.replytoname and (bot_name in message or ''.join(bot_name.split()) in message):
+    elif config.chat.replytoname.value and (bot_name in message or ''.join(bot_name.split()) in message):
         response = await reply_event(user_command)  # Could have responding to name have a different functionality
 
-    elif random.random() < config.chat.randreplychance:
+    elif random.random() < config.chat.randreplychance.value:
         response = await reply_event(user_command)
 
-    elif config.chat.recordall:
+    elif config.chat.recordall.value:
         user_prompt = await user_command.get_user_prompt()
         await common.append_to_gpt_memory(user_prompt=user_prompt)
 

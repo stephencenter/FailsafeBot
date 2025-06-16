@@ -75,7 +75,7 @@ async def download_audio_from_url(url: str) -> Path | None:
         }],
         'postprocessor_args': [
             '-ss', '0',
-            '-t', str(config.misc.maxstreamtime),
+            '-t', str(config.misc.maxstreamtime.value),
         ],
         'prefer_ffmpeg': True,
         'quiet': True,
@@ -370,6 +370,7 @@ async def del_sound_alias(alias_to_delete: str) -> str:
 async def search_sounds(search_string: str) -> list[str]:
     config = await common.Config.load()
     calculator = strsimpy.Damerau()
+    similarity_threshold = min(config.misc.minsimilarity.value, 1.0)
 
     search_results: list[str] = []
     for sound_name in await get_sound_list():
@@ -377,6 +378,11 @@ async def search_sounds(search_string: str) -> list[str]:
             if search_string in alias:
                 search_results.append(alias)
                 break
+
+            # If similarity threshold is 1.0 then only exact matches are accepted, so the similarity
+            # check is skipped
+            if similarity_threshold >= 1.0:
+                continue
 
             search_length = len(search_string)
             alias_length = len(alias)
@@ -389,7 +395,7 @@ async def search_sounds(search_string: str) -> list[str]:
             larger_length = max(search_length, alias_length)
             similarity = (larger_length - distance) / larger_length
 
-            if similarity >= config.misc.minsimilarity:
+            if similarity >= similarity_threshold:
                 search_results.append(alias)
                 break
 

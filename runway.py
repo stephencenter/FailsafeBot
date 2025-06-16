@@ -156,7 +156,10 @@ async def check_superadmins() -> AsyncGenerator[str]:
     admin_dict = await common.try_read_json(common.PATH_ADMIN_LIST, {})
     config = await common.Config.load()
 
-    platform_list = [("telegram", config.main.autosupertelegram), ("discord", config.main.autosuperdiscord)]
+    platform_list = [
+        ("telegram", config.main.autosupertelegram.value),
+        ("discord", config.main.autosuperdiscord.value),
+    ]
     for p_str, autoassign in platform_list:
         if not autoassign:
             continue

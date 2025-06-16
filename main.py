@@ -55,7 +55,7 @@ async def prepare_runway() -> None:
 
 async def try_start_telegram_bot() -> command.TelegramBotAnn | None:
     config = await common.Config.load()
-    if not config.main.runtelegram:
+    if not config.main.runtelegram.value:
         logger.info(f"Telegram bot disabled in {common.PATH_CONFIG_FILE}, skipping")
         return None
 
@@ -101,7 +101,7 @@ async def try_start_telegram_bot() -> command.TelegramBotAnn | None:
 
 async def try_start_discord_bot() -> tuple[command.DiscordBotAnn | None, asyncio.Task[Any] | None]:
     config = await common.Config.load()
-    if not config.main.rundiscord:
+    if not config.main.rundiscord.value:
         logger.info(f"Discord bot disabled in {common.PATH_CONFIG_FILE}, skipping")
         return None, None
 

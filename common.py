@@ -7,14 +7,13 @@ the rest of this script. This includes important file paths, configuration, and 
 from __future__ import annotations  # Python 3.14 feature for deferred annotations
 
 import contextlib
-import dataclasses
 import html
 import json
 import string
 from collections.abc import AsyncGenerator, AsyncIterator, Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 import aiofiles
 import aiofiles.os
@@ -100,153 +99,168 @@ TXT_NO_PERMISSIONS = (
 # SETTINGS MANAGEMENT
 # ==========================
 # region
+class ConfigError(Exception):
+    """Error to be raised if loading a setting fails due to invalid values (e.g. expected float, got string)."""
+
+    def __init__(self, message: str) -> None:
+        self.message = message
+
+
 class ConfigItem[T]:
     """Defines an individual configuration item, including default value, current value, and valid range."""
 
-    def __init__(self, *, def_value: T, valid_range: tuple[float, float] | None) -> None:
-        self.item_type = type(def_value)
-        self.def_value = def_value
-        self.cur_value = def_value
-        self.valid_range = valid_range
+    def __init__(self, *, default_value: T, valid_range: tuple[float, float] | None = None) -> None:
+        self.value = default_value
+        self.item_type = type(default_value)
+        self._default_value = default_value
+        self._valid_range = valid_range
 
-        if not isinstance(self.def_value, self.item_type):
-            error_msg = "Default value has to match assigned item_type."
-            raise TypeError(error_msg)
+        if self.item_type not in {float, int, str, bool}:
+            error_msg = f"Only float, int, str, bool are accepted setting types (got {self.item_type.__name__})"
+            raise ConfigError(error_msg)
 
-        if self.valid_range is not None:
+        if self._valid_range is not None:
             if self.item_type not in {float, int}:
                 error_msg = "valid_range != None is only valid for floats and ints."
-                raise ValueError(error_msg)
+                raise ConfigError(error_msg)
 
-            if (num_items := len(self.valid_range)) != 2:
+            if (num_items := len(self._valid_range)) != 2:
                 error_msg = f"valid_range must have two elements: min and max (got {num_items} elements)"
 
-            if self.valid_range[0] > self.valid_range[1]:
-                error_msg = "Second item of valid_range has to be equal or larger than the first."
-                raise ValueError(error_msg)
+            if self._valid_range[0] > self._valid_range[1]:
+                error_msg = "Second item of valid_range has to be equal or larger than the first"
+                raise ConfigError(error_msg)
+
+        elif self._valid_range is None and self.item_type in {float, int}:
+            error_msg = "valid_range cannot be None if item is float or int"
+            raise ConfigError(error_msg)
+
+    def __bool__(self) -> NoReturn:
+        msg = "You probably meant to call ConfigItem.value instead of ConfigItem"
+        raise ValueError(msg)
 
     def validate_new_value(self, new_value: T) -> None:
         if not isinstance(new_value, self.item_type):
             error_msg = f"Value for this setting has to be of type {self.item_type.__name__}"
-            raise TypeError(error_msg)
+            raise ConfigError(error_msg)
 
-        if self.valid_range is not None and isinstance(new_value, (float, int)):
-            v_min, v_max = self.valid_range
+        if self._valid_range is not None and isinstance(new_value, (float, int)):
+            v_min, v_max = self._valid_range
 
             if not (v_min <= new_value <= v_max):
                 error_msg = f"New value for this setting is outside valid range of {v_min} to {v_max}."
-                raise ValueError(error_msg)
+                raise ConfigError(error_msg)
 
 
 class ConfigMain:
-    """Config dataclass for core application functionality."""
+    """Config class for core application functionality."""
 
     def __init__(self) -> None:
         # Name of the bot, if replytoname is True then the bot will respond to this string
-        self.botname = "Failsafe"
+        self.botname = ConfigItem(default_value="Failsafe")
 
         # Whether to run the Telegram/Discord bot or skip it
-        self.runtelegram = True
-        self.rundiscord = True
+        self.runtelegram = ConfigItem(default_value=True)
+        self.rundiscord = ConfigItem(default_value=True)
 
         # Whether certain commands require admin rights to perform
-        self.requireadmin = True
+        self.requireadmin = ConfigItem(default_value=True)
 
-        # Maximum amount of characters to allow in a CommandResponse object's bot_message proper
-        self.maxmessagelength = 1024
+        # Maximum amount of characters to allow in a CommandResponse object's bot_message property
+        self.maxmessagelength = ConfigItem(default_value=1024, valid_range=(32, 4096))
 
         # Whether a Telegram/Discord chat ID needs to be on the whitelist for commands to function
-        self.whitelisttelegram = False
-        self.whitelistdiscord = False
+        self.whitelisttelegram = ConfigItem(default_value=False)
+        self.whitelistdiscord = ConfigItem(default_value=False)
 
         # Whether Telegram/Discord superadmin rights will be auto-assigned if none exist (disabled after first use)
-        self.autosupertelegram = True
-        self.autosuperdiscord = True
+        self.autosupertelegram = ConfigItem(default_value=True)
+        self.autosuperdiscord = ConfigItem(default_value=True)
 
 
-@dataclass
 class ConfigChat:
-    """Config dataclass for chatting functionality (text, voice, and general memory)."""
+    """Config class for chatting functionality (text, voice, and general memory)."""
 
-    # Whether the bot should respond when their name is said
-    replytoname: bool = True
+    def __init__(self) -> None:
+        # Whether the bot should respond when their name is said
+        self.replytoname = ConfigItem(default_value=True)
 
-    # Whether the bot should play a sound when the word monkey is said (Discworld adventure game reference)
-    replytomonkey: bool = False
+        # Whether the bot should play a sound when the word monkey is said (Discworld adventure game reference)
+        self.replytomonkey = ConfigItem(default_value=False)
 
-    # Chance for the bot to randomly reply to any message in a chat they're in (0 -> 0%, 1.0 -> 100%)
-    randreplychance: float = 0.05
+        # Chance for the bot to randomly reply to any message in a chat they're in (0 -> 0%, 1.0 -> 100%)
+        self.randreplychance = ConfigItem(default_value=0.05, valid_range=(0, 1))
 
-    # What GPT model to use for AI chatting
-    gptmodel: str = "gpt-4o-mini"
+        # What GPT model to use for AI chatting
+        self.gptmodel = ConfigItem(default_value="gpt-4o-mini")
 
-    # Temperature for GPT chat completions (0 to 2, values outside this will break)
-    gpttemp: float = 1.0
+        # Temperature for GPT chat completions (0 to 2, values outside this will break)
+        self.gpttemp = ConfigItem(default_value=1.0, valid_range=(0, 2))
 
-    # Value to be passed for parameter max_completion_tokens for gpt chat completion (1 token = ~4 chars)
-    gptmaxtokens: int = 256
+        # Value to be passed for parameter max_completion_tokens for gpt chat completion (1 token = ~4 chars)
+        self.gptmaxtokens = ConfigItem(default_value=256, valid_range=(1, 4096))
 
-    # Whether the bot will use the memory system for AI chatting
-    usememory: bool = True
+        # Whether the bot will use the memory system for AI chatting
+        self.usememory = ConfigItem(default_value=True)
 
-    # Maximum number of messages to record in memory
-    memorysize: int = 64
+        # Maximum number of messages to record in memory
+        self.memorysize = ConfigItem(default_value=64, valid_range=(1, 4096))
 
-    # Amount of messages to pull from memory for AI chatting/recall (higher uses more input tokens/money)
-    recallsize: int = 16
+        # Amount of messages to pull from memory for AI chatting/recall (higher uses more input tokens/money)
+        self.recallsize = ConfigItem(default_value=16, valid_range=(1, 4096))
 
-    # Whether the bot wil record ALL text messages sent in chat to memory, or just messages directed towards it
-    recordall: bool = False
+        # Whether the bot wil record ALL text messages sent in chat to memory, or just messages directed towards it
+        self.recordall = ConfigItem(default_value=False)
 
-    # Minimum number of tokens for the markov chain command /wisdom (higher takes longer exponentially)
-    minmarkov: int = 2
+        # Minimum number of tokens for the markov chain command /wisdom (higher takes longer exponentially)
+        self.minmarkov = ConfigItem(default_value=2, valid_range=(1, 4096))
 
-    # Maximum number of tokens for the markov chain command /wisdom)
-    maxmarkov: int = 256
+        # Maximum number of tokens for the markov chain command /wisdom)
+        self.maxmarkov = ConfigItem(default_value=256, valid_range=(32, 4096))
 
-    # The "soft cap" for elevenlabs text-to-speech input length (higher = higher cost/credit usage)
-    saysoftcap: int = 256
+        # The "soft cap" for elevenlabs text-to-speech input length (higher = higher cost/credit usage)
+        self.saysoftcap = ConfigItem(default_value=256, valid_range=(32, 4096))
 
-    # The voice to use for elevenlabs (defaults to Charlotte)
-    sayvoiceid: str = "XB0fDUnXU5powFXDhCwa"
+        # The voice to use for elevenlabs (defaults to Charlotte)
+        self.sayvoiceid = ConfigItem(default_value="XB0fDUnXU5powFXDhCwa")
 
-    # The base model to use for elevenlabs
-    saymodelid: str = "eleven_multilingual_v2"
+        # The base model to use for elevenlabs
+        self.saymodelid = ConfigItem(default_value="eleven_multilingual_v2")
 
-    # Whether the bot will automatically disconnect if they're the only ones in a voice call
-    vcautodc: bool = True
+        # Whether the bot will automatically disconnect if they're the only ones in a voice call
+        self.vcautodc = ConfigItem(default_value=True)
 
 
-@dataclass
 class ConfigMisc:
-    """Config dataclass for command functionality that isn't covered by other dataclasses."""
+    """Config class for command functionality that isn't covered by other dataclasses."""
 
-    # Whether the /system command should use megabytes (will use gigabytes if false)
-    usemegabytes: bool = False
+    def __init__(self) -> None:
+        # Whether the /system command should use megabytes (will use gigabytes if false)
+        self.usemegabytes = ConfigItem(default_value=False)
 
-    # The minimum similarity threshold when searching for sound names (1.0 = exact matches only)
-    minsimilarity: float = 0.75
+        # The minimum similarity threshold when searching for sound names (1.0 = exact matches only)
+        self.minsimilarity = ConfigItem(default_value=0.75, valid_range=(0.25, 1))
 
-    # How much of a video the /stream command will download (does not apply to /vcstream)
-    maxstreamtime: int = 30
+        # How much of a video the /stream command will download (does not apply to /vcstream)
+        self.maxstreamtime = ConfigItem(default_value=30, valid_range=(5, 3600))
 
-    # Maximum number of dice in one command for dice roller (bigger numbers might reach message length cap)
-    maxdice: int = 100
+        # Maximum number of dice in one command for dice roller (bigger numbers might reach message length cap)
+        self.maxdice = ConfigItem(default_value=100, valid_range=(1, 1000))
 
-    # Maximum number of faces for the dice for dice roller
-    maxfaces: int = 10000
+        # Maximum number of faces for the dice for dice roller
+        self.maxfaces = ConfigItem(default_value=10000, valid_range=(100, 100000))
 
 
 @dataclass
 class Config:
-    """Dataclass that stores user config data for this application.
+    """Class that stores user config data for this application.
 
     Do not instantiate this class directly, call `await Config.load()` to create a config object.
     """
 
-    main: ConfigMain = dataclasses.field(default_factory=ConfigMain)
-    chat: ConfigChat = dataclasses.field(default_factory=ConfigChat)
-    misc: ConfigMisc = dataclasses.field(default_factory=ConfigMisc)
+    main: ConfigMain
+    chat: ConfigChat
+    misc: ConfigMisc
 
     def __init__(self) -> None:
         error_msg = "Use `await Config.load()` instead of creating Config directly."
@@ -270,12 +284,28 @@ class Config:
             for subkey in self.__dict__[key].__dict__:
                 if key in loaded and subkey in loaded[key]:
                     # Try to find subkey in the 'correct' location
-                    self.__dict__[key].__dict__[subkey] = loaded[key][subkey]
+                    target_setting: ConfigItem[Any] = self.__dict__[key].__dict__[subkey]
+                    new_value = loaded[key][subkey]
+
+                    try:
+                        target_setting.validate_new_value(new_value)
+                        target_setting.value = new_value
+                    except ConfigError as e:
+                        logger.error(e)
+
                 else:
-                    # Try to find subkey in 'incorrect' locations, in case dataclasses had their settings moved around
+                    # Try to find subkey in 'incorrect' locations, in case classes had their settings moved around
                     for other_key in loaded:
                         if other_key != key and subkey in loaded[other_key]:
-                            self.__dict__[key].__dict__[subkey] = loaded[other_key][subkey]
+                            target_setting: ConfigItem[Any] = self.__dict__[key].__dict__[subkey]
+                            new_value = loaded[other_key][subkey]
+
+                            try:
+                                target_setting.validate_new_value(new_value)
+                                target_setting.value = new_value
+                            except ConfigError as e:
+                                logger.error(e)
+
                             break
 
         return self
@@ -294,7 +324,7 @@ class Config:
                 if hasattr(group, split_string[1]):
                     group_name = split_string[0]
                     setting_name = split_string[1]
-                    value = getattr(group, setting_name)
+                    value = getattr(group, setting_name).value
 
         elif len(split_string) == 1:
             for group_key in self.__dict__:
@@ -302,30 +332,52 @@ class Config:
                 if hasattr(group, search_string):
                     group_name = group_key
                     setting_name = search_string
-                    value = getattr(group, setting_name)
+                    value = getattr(group, setting_name).value
 
         return group_name, setting_name, value
 
     async def save_config(self) -> None:
-        await write_toml_to_file(PATH_CONFIG_FILE, dataclasses.asdict(self))
+        settings_dict: dict[str, dict[str, Any]] = {}
+        for key in self.__dict__:
+            settings_dict[key] = {}
+            for subkey in self.__dict__[key].__dict__:
+                settings_dict[key][subkey] = self.__dict__[key].__dict__[subkey].value
+        await write_toml_to_file(PATH_CONFIG_FILE, settings_dict)
 
     def update_setting(self, group_name: str, setting_name: str, value: str) -> None:
-        lowercase = value.lower()
-        if lowercase == "true":
-            new_value = True
-        elif lowercase == "false":
-            new_value = False
+        target_setting: ConfigItem[Any] = getattr(getattr(self, group_name), setting_name)
 
-        else:
+        if target_setting.item_type is bool:
+            if value.lower() == "true":
+                new_value = True
+            elif value.lower() == "false":
+                new_value = False
+            else:
+                error_msg = f"Setting type is bool, but got value '{value}' which is not a bool"
+                raise ConfigError(error_msg)
+
+        elif target_setting.item_type is float:
+            try:
+                new_value = float(value)
+            except ValueError as e:
+                error_msg = f"Setting type is float, but got value '{value}' which is not a float"
+                raise ConfigError(error_msg) from e
+
+        elif target_setting.item_type is int:
             try:
                 new_value = int(value)
-            except ValueError:
-                try:
-                    new_value = float(value)
-                except ValueError:
-                    new_value = value
+            except ValueError as e:
+                error_msg = f"Setting type is int, but got value '{value}' which is not an int"
+                raise ConfigError(error_msg) from e
 
-        setattr(getattr(self, group_name), setting_name, new_value)
+        else:
+            new_value = str(value)
+
+        # Can raise ConfigError, must be caught by whatever calls this method
+        target_setting.validate_new_value(new_value)
+
+        # Set value, will not reach this point if above validation fails
+        target_setting.value = new_value
 
 
 async def verify_settings() -> AsyncGenerator[str]:
@@ -345,7 +397,7 @@ async def verify_settings() -> AsyncGenerator[str]:
 async def append_to_gpt_memory(*, user_prompt: str | None = None, bot_response: str | None = None) -> None:
     config = await Config.load()
 
-    if not config.chat.usememory:
+    if not config.chat.usememory.value:
         return
 
     memory = await get_full_chat_memory()
@@ -357,7 +409,7 @@ async def append_to_gpt_memory(*, user_prompt: str | None = None, bot_response: 
         memory.append({"role": "assistant", "content": bot_response})
 
     # We cap the amount of memory stored (configurable) for storage space purposes
-    memory_point = max(0, len(memory) - config.chat.memorysize)
+    memory_point = max(0, len(memory) - config.chat.memorysize.value)
     memory = memory[memory_point:]
 
     # Write the AI's memory to a file so it can be retrieved later
@@ -378,7 +430,7 @@ async def get_recall_chat_memory() -> list[dict[str, str]]:
     config = await Config.load()
     memory_list = await try_read_json(PATH_MEMORY_LIST, [])
 
-    recall_point = max(0, len(memory_list) - config.chat.recallsize)
+    recall_point = max(0, len(memory_list) - config.chat.recallsize.value)
     return memory_list[recall_point:]
 
 

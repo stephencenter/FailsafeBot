@@ -5,6 +5,9 @@ line-length = 118
 # Flag errors (C901) whenever the complexity level exceeds this value
 max-complexity = 15
 
+[lint.pylint]
+max-nested-blocks = 7
+
 [lint]
 preview = true
 select = ["ALL"]
