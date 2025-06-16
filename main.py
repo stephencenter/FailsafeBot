@@ -16,7 +16,7 @@ import command
 import command_list
 import common
 import runway
-import sound_manager
+import sound
 
 
 async def prepare_runway() -> None:
@@ -41,7 +41,7 @@ async def prepare_runway() -> None:
         logger.warning(warning)
 
     # Check for common issues with sound aliases
-    async for warning in sound_manager.verify_aliases():
+    async for warning in sound.verify_aliases():
         logger.warning(warning)
 
     # Check for common issues with settings dataclasses
