@@ -255,6 +255,7 @@ def clean_token(token: str) -> str:
 
 
 async def get_chat_data_files() -> list[Path]:
+    """Load and return list of Telegram chat data .json files."""
     try:
         return [
             common.PATH_MARKOV_INPUT / Path(path)
@@ -267,7 +268,7 @@ async def get_chat_data_files() -> list[Path]:
 
 
 async def load_message_list(chat_files: list[Path]) -> list[str]:
-    # Load messages from list of .json files for use in building Markov chain.
+    """Load and return messages from list of .json files for use in building Markov chain."""
     message_list: list[str] = []
     for file in chat_files:
         logger.info(f"Processing {file}...")

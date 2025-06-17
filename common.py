@@ -28,7 +28,7 @@ from loguru import logger
 # region
 # PROJECT VARIABLES
 APPLICATION_NAME = "FailsafeBot"
-VERSION_NUMBER = "v1.1.17"
+VERSION_NUMBER = "v1.1.18"
 COMMAND_PREFIX = '/'  # May be configurable in the future
 
 # DIRECTORIES
@@ -106,159 +106,6 @@ class ConfigError(Exception):
         self.message = message
 
 
-class ConfigItem[T]:
-    """Defines an individual configuration item, including default value, current value, and valid range."""
-
-    def __init__(self, *, default_value: T, valid_range: tuple[float, float] | None = None) -> None:
-        self.value = default_value
-        self.item_type = type(default_value)
-        self._default_value = default_value
-        self._valid_range = valid_range
-
-        if self.item_type not in {float, int, str, bool}:
-            error_msg = f"Only float, int, str, bool are accepted setting types (got {self.item_type.__name__})"
-            raise ConfigError(error_msg)
-
-        if self._valid_range is not None:
-            if self.item_type not in {float, int}:
-                error_msg = "valid_range != None is only valid for floats and ints."
-                raise ConfigError(error_msg)
-
-            if (num_items := len(self._valid_range)) != 2:
-                error_msg = f"valid_range must have two elements: min and max (got {num_items} elements)"
-
-            if self._valid_range[0] > self._valid_range[1]:
-                error_msg = "Second item of valid_range has to be equal or larger than the first"
-                raise ConfigError(error_msg)
-
-        elif self._valid_range is None and self.item_type in {float, int}:
-            error_msg = "valid_range cannot be None if item is float or int"
-            raise ConfigError(error_msg)
-
-    def __bool__(self) -> NoReturn:
-        msg = "Use ConfigItem.value to access this setting's value"
-        raise ValueError(msg)
-
-    def __str__(self) -> NoReturn:
-        msg = "Use ConfigItem.value to access this setting's value"
-        raise RuntimeError(msg)
-
-    def __repr__(self) -> NoReturn:
-        msg = "Use ConfigItem.value to access this setting's value"
-        raise RuntimeError(msg)
-
-    def validate_new_value(self, new_value: T) -> None:
-        if not isinstance(new_value, self.item_type):
-            error_msg = f"Value for this setting has to be of type {self.item_type.__name__}"
-            raise ConfigError(error_msg)
-
-        if self._valid_range is not None and isinstance(new_value, (float, int)):
-            v_min, v_max = self._valid_range
-
-            if not (v_min <= new_value <= v_max):
-                error_msg = f"New value for this setting is outside valid range of {v_min} to {v_max}."
-                raise ConfigError(error_msg)
-
-
-class ConfigMain:
-    """Config class for core application functionality."""
-
-    def __init__(self) -> None:
-        # Name of the bot, if replytoname is True then the bot will respond to this string
-        self.botname = ConfigItem(default_value="Failsafe")
-
-        # Whether to run the Telegram/Discord bot or skip it
-        self.runtelegram = ConfigItem(default_value=True)
-        self.rundiscord = ConfigItem(default_value=True)
-
-        # Whether certain commands require admin rights to perform
-        self.requireadmin = ConfigItem(default_value=True)
-
-        # Maximum amount of characters to allow in a CommandResponse object's bot_message property
-        self.maxmessagelength = ConfigItem(default_value=1024, valid_range=(32, 4096))
-
-        # Whether a Telegram/Discord chat ID needs to be on the whitelist for commands to function
-        self.whitelisttelegram = ConfigItem(default_value=False)
-        self.whitelistdiscord = ConfigItem(default_value=False)
-
-        # Whether Telegram/Discord superadmin rights will be auto-assigned if none exist (disabled after first use)
-        self.autosupertelegram = ConfigItem(default_value=True)
-        self.autosuperdiscord = ConfigItem(default_value=True)
-
-
-class ConfigChat:
-    """Config class for chatting functionality (text, voice, and general memory)."""
-
-    def __init__(self) -> None:
-        # Whether the bot should respond when their name is said
-        self.replytoname = ConfigItem(default_value=True)
-
-        # Whether the bot should play a sound when the word monkey is said (Discworld adventure game reference)
-        self.replytomonkey = ConfigItem(default_value=False)
-
-        # Chance for the bot to randomly reply to any message in a chat they're in (0 -> 0%, 1.0 -> 100%)
-        self.randreplychance = ConfigItem(default_value=0.05, valid_range=(0, 1))
-
-        # What GPT model to use for AI chatting
-        self.gptmodel = ConfigItem(default_value="gpt-4o-mini")
-
-        # Temperature for GPT chat completions (0 to 2, values outside this will break)
-        self.gpttemp = ConfigItem(default_value=1.0, valid_range=(0, 2))
-
-        # Value to be passed for parameter max_completion_tokens for gpt chat completion (1 token = ~4 chars)
-        self.gptmaxtokens = ConfigItem(default_value=256, valid_range=(1, 4096))
-
-        # Whether the bot will use the memory system for AI chatting
-        self.usememory = ConfigItem(default_value=True)
-
-        # Maximum number of messages to record in memory
-        self.memorysize = ConfigItem(default_value=64, valid_range=(1, 4096))
-
-        # Amount of messages to pull from memory for AI chatting/recall (higher uses more input tokens/money)
-        self.recallsize = ConfigItem(default_value=16, valid_range=(1, 4096))
-
-        # Whether the bot wil record ALL text messages sent in chat to memory, or just messages directed towards it
-        self.recordall = ConfigItem(default_value=False)
-
-        # Minimum number of tokens for the markov chain command /wisdom (higher takes longer exponentially)
-        self.minmarkov = ConfigItem(default_value=2, valid_range=(1, 4096))
-
-        # Maximum number of tokens for the markov chain command /wisdom)
-        self.maxmarkov = ConfigItem(default_value=256, valid_range=(32, 4096))
-
-        # The "soft cap" for elevenlabs text-to-speech input length (higher = higher cost/credit usage)
-        self.saysoftcap = ConfigItem(default_value=256, valid_range=(32, 4096))
-
-        # The voice to use for elevenlabs (defaults to Charlotte)
-        self.sayvoiceid = ConfigItem(default_value="XB0fDUnXU5powFXDhCwa")
-
-        # The base model to use for elevenlabs
-        self.saymodelid = ConfigItem(default_value="eleven_multilingual_v2")
-
-        # Whether the bot will automatically disconnect if they're the only ones in a voice call
-        self.vcautodc = ConfigItem(default_value=True)
-
-
-class ConfigMisc:
-    """Config class for command functionality that isn't covered by other dataclasses."""
-
-    def __init__(self) -> None:
-        # Whether the /system command should use megabytes (will use gigabytes if false)
-        self.usemegabytes = ConfigItem(default_value=False)
-
-        # The minimum similarity threshold when searching for sound names (1.0 = exact matches only)
-        self.minsimilarity = ConfigItem(default_value=0.75, valid_range=(0.25, 1))
-
-        # How much of a video the /stream command will download (does not apply to /vcstream)
-        self.maxstreamtime = ConfigItem(default_value=30, valid_range=(5, 3600))
-
-        # Maximum number of dice in one command for dice roller (bigger numbers might reach message length cap)
-        self.maxdice = ConfigItem(default_value=100, valid_range=(1, 1000))
-
-        # Maximum number of faces for the dice for dice roller
-        self.maxfaces = ConfigItem(default_value=10000, valid_range=(100, 100000))
-
-
 class Config:
     """Class that stores user config data for this application.
 
@@ -276,6 +123,7 @@ class Config:
 
     @classmethod
     async def load(cls) -> Config:
+        """Create Config object and load its contents from a file."""
         self = object.__new__(cls)
         self.main = ConfigMain()
         self.chat = ConfigChat()
@@ -349,6 +197,7 @@ class Config:
         return group_name, setting_name, value
 
     async def save_config(self) -> None:
+        """Write the current state of the Config object to a file."""
         settings_dict: dict[str, dict[str, Any]] = {}
         for key in self.__dict__:
             settings_dict[key] = {}
@@ -393,16 +242,181 @@ class Config:
         target_setting.value = new_value
 
 
+class ConfigItem[T]:
+    """Defines an individual configuration item, including default value, current value, and valid range."""
+
+    def __init__(self, name: str, *, default_value: T, valid_range: tuple[float, float] | None = None) -> None:
+        self.name = name
+        self.value = default_value
+        self.item_type = type(default_value)
+        self._default_value = default_value
+        self._valid_range = valid_range
+
+        if self.item_type not in {float, int, str, bool}:
+            error_msg = f"Only float, int, str, bool are accepted setting types (got {self.item_type.__name__})"
+            raise ConfigError(error_msg)
+
+        if self._valid_range is not None:
+            if self.item_type not in {float, int}:
+                error_msg = "valid_range != None is only valid for floats and ints."
+                raise ConfigError(error_msg)
+
+            if (num_items := len(self._valid_range)) != 2:
+                error_msg = f"valid_range must have two elements: min and max (got {num_items} elements)"
+
+            if self._valid_range[0] > self._valid_range[1]:
+                error_msg = "Second item of valid_range has to be equal or larger than the first"
+                raise ConfigError(error_msg)
+
+        elif self._valid_range is None and self.item_type in {float, int}:
+            error_msg = "valid_range cannot be None if item is float or int"
+            raise ConfigError(error_msg)
+
+    def __bool__(self) -> NoReturn:
+        msg = "Use ConfigItem.value to access this setting's value"
+        raise ValueError(msg)
+
+    def __str__(self) -> NoReturn:
+        msg = "Use ConfigItem.value to access this setting's value"
+        raise RuntimeError(msg)
+
+    def __repr__(self) -> NoReturn:
+        msg = "Use ConfigItem.value to access this setting's value"
+        raise RuntimeError(msg)
+
+    def validate_new_value(self, new_value: T) -> None:
+        if not isinstance(new_value, self.item_type):
+            error_msg = f"Value for this setting has to be of type {self.item_type.__name__}"
+            raise ConfigError(error_msg)
+
+        if self._valid_range is not None and isinstance(new_value, (float, int)):
+            v_min, v_max = self._valid_range
+
+            if not (v_min <= new_value <= v_max):
+                error_msg = f"New value for this setting is outside valid range of {v_min} to {v_max}."
+                raise ConfigError(error_msg)
+
+    def reset_to_default(self) -> None:
+        self.value = self._default_value
+
+
+class ConfigList:
+    """ABC for ConfigMain, ConfigChat, etc."""
+
+
+class ConfigMain(ConfigList):
+    """Config class for core application functionality."""
+
+    def __init__(self) -> None:
+        # Name of the bot, if replytoname is True then the bot will respond to this string
+        self.botname = ConfigItem("botname", default_value="Failsafe")
+
+        # Whether to run the Telegram/Discord bot or skip it
+        self.runtelegram = ConfigItem("runtelegram", default_value=True)
+        self.rundiscord = ConfigItem("rundiscord", default_value=True)
+
+        # Whether certain commands require admin rights to perform
+        self.requireadmin = ConfigItem("requireadmin", default_value=True)
+
+        # Maximum amount of characters to allow in a CommandResponse object's bot_message property
+        self.maxmessagelength = ConfigItem("maxmessagelength", default_value=1024, valid_range=(32, 4096))
+
+        # Whether a Telegram/Discord chat ID needs to be on the whitelist for commands to function
+        self.whitelisttelegram = ConfigItem("whitelisttelegram", default_value=False)
+        self.whitelistdiscord = ConfigItem("whitelistdiscord", default_value=False)
+
+        # Whether Telegram/Discord superadmin rights will be auto-assigned if none exist (disabled after first use)
+        self.autosupertelegram = ConfigItem("autosupertelegram", default_value=True)
+        self.autosuperdiscord = ConfigItem("autosuperdiscord", default_value=True)
+
+
+class ConfigChat(ConfigList):
+    """Config class for chatting functionality (text, voice, and general memory)."""
+
+    def __init__(self) -> None:
+        # Whether the bot should respond when their name is said
+        self.replytoname = ConfigItem("replytoname", default_value=True)
+
+        # Whether the bot should play a sound when the word monkey is said (Discworld adventure game reference)
+        self.replytomonkey = ConfigItem("replytomonkey", default_value=False)
+
+        # Chance for the bot to randomly reply to any message in a chat they're in (0 -> 0%, 1.0 -> 100%)
+        self.randreplychance = ConfigItem("randreplychance", default_value=0.05, valid_range=(0, 1))
+
+        # What GPT model to use for AI chatting
+        self.gptmodel = ConfigItem("gptmodel", default_value="gpt-4o-mini")
+
+        # Temperature for GPT chat completions (0 to 2, values outside this will break)
+        self.gpttemp = ConfigItem("gpttemp", default_value=1.0, valid_range=(0, 2))
+
+        # Value to be passed for parameter max_completion_tokens for gpt chat completion (1 token = ~4 chars)
+        self.gptmaxtokens = ConfigItem("gptmaxtokens", default_value=256, valid_range=(1, 4096))
+
+        # Whether the bot will use the memory system for AI chatting
+        self.usememory = ConfigItem("usememory", default_value=True)
+
+        # Maximum number of messages to record in memory
+        self.memorysize = ConfigItem("memorysize", default_value=64, valid_range=(1, 4096))
+
+        # Amount of messages to pull from memory for AI chatting/recall (higher uses more input tokens/money)
+        self.recallsize = ConfigItem("recallsize", default_value=16, valid_range=(1, 4096))
+
+        # Whether the bot wil record ALL text messages sent in chat to memory, or just messages directed towards it
+        self.recordall = ConfigItem("recordall", default_value=False)
+
+        # Minimum number of tokens for the markov chain command /wisdom (higher takes longer exponentially)
+        self.minmarkov = ConfigItem("minmarkov", default_value=2, valid_range=(1, 4096))
+
+        # Maximum number of tokens for the markov chain command /wisdom)
+        self.maxmarkov = ConfigItem("maxmarkov", default_value=256, valid_range=(32, 4096))
+
+        # The "soft cap" for elevenlabs text-to-speech input length (higher = higher cost/credit usage)
+        self.saysoftcap = ConfigItem("saysoftcap", default_value=256, valid_range=(32, 4096))
+
+        # The voice to use for elevenlabs (defaults to Charlotte)
+        self.sayvoiceid = ConfigItem("sayvoiceid", default_value="XB0fDUnXU5powFXDhCwa")
+
+        # The base model to use for elevenlabs
+        self.saymodelid = ConfigItem("saymodelid", default_value="eleven_multilingual_v2")
+
+        # Whether the bot will automatically disconnect if they're the only ones in a voice call
+        self.vcautodc = ConfigItem("vcautodc", default_value=True)
+
+
+class ConfigMisc(ConfigList):
+    """Config class for command functionality that isn't covered by other dataclasses."""
+
+    def __init__(self) -> None:
+        # Whether the /system command should use megabytes (will use gigabytes if false)
+        self.usemegabytes = ConfigItem("usemegabytes", default_value=False)
+
+        # The minimum similarity threshold when searching for sound names (1.0 = exact matches only)
+        self.minsimilarity = ConfigItem("minsimilarity", default_value=0.75, valid_range=(0.25, 1))
+
+        # How much of a video the /stream command will download (does not apply to /vcstream)
+        self.maxstreamtime = ConfigItem("maxstreamtime", default_value=30, valid_range=(5, 3600))
+
+        # Maximum number of dice in one command for dice roller (bigger numbers might reach message length cap)
+        self.maxdice = ConfigItem("maxdice", default_value=100, valid_range=(1, 1000))
+
+        # Maximum number of faces for the dice for dice roller
+        self.maxfaces = ConfigItem("maxfaces", default_value=10000, valid_range=(100, 100000))
+
+
 async def verify_settings() -> AsyncGenerator[str]:
     seen = {}
     config = await Config.load()
 
     for outer_key, subdict in config.__dict__.items():
-        for subkey in subdict.__dict__:
+        for subkey, value in subdict.__dict__.items():
             if subkey in seen:
                 yield f"Config setting {subkey} is a duplicate between '{seen[subkey]}' and '{outer_key}'"
+
             else:
                 seen[subkey] = outer_key
+
+            if subkey != value.name:
+                yield f"Config setting '{subkey}' has its name incorrectly assigned as '{value.name}'"
 # endregion
 
 

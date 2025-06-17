@@ -585,7 +585,7 @@ DiscordFuncAnn = Callable[[DiscordContextAnn], types.CoroutineType[Any, Any, Non
 # ==========================
 # region
 def requireadmin(function: CommandAnn) -> CommandAnn:
-    # Put this decorator on a function using @requireadmin to prevent its use without admin rights
+    """Wrap function with @requireadmin decorator to prevent use without admin rights."""
     @functools.wraps(function)
     async def admin_wrapper(user_command: UserCommand) -> CommandResponse:
         config = await common.Config.load()
@@ -600,8 +600,10 @@ def requireadmin(function: CommandAnn) -> CommandAnn:
 
 
 def requiresuper(function: CommandAnn) -> CommandAnn:
-    # Put this decorator on a functio using @requiresuper to prevent its use without superadmin rights
-    # This is strictly stronger than admin rights, normal admin rights are insufficent
+    """Wrap function with @requiresuper decorator to prevent use without superadmin rights.
+
+    This is strictly stronger than admin rights, normal admin rights are insufficent
+    """
     @functools.wraps(function)
     async def superadmin_wrapper(user_command: UserCommand) -> CommandResponse:
         config = await common.Config.load()
