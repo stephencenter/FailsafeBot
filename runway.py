@@ -56,7 +56,9 @@ text_files = {
 }
 
 # Paths that we will not create, this is exclusions for the globals checking from common.py
-do_not_create: set[Path] = set()
+do_not_create: set[Path] = {
+    common.PATH_PYPROJECT_TOML,
+}
 
 
 class InterceptHandler(logging.Handler):

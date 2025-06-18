@@ -1165,7 +1165,8 @@ Disk: {v_disk.percent}% - {disk_used} / {disk_total} {label}
 @requireadmin
 async def version_command(_: UserCommand) -> CommandResponse:
     user_message = "What script version are you running?"
-    bot_message = f"Running {common.APPLICATION_NAME} {common.VERSION_NUMBER}"
+    project_info = await common.get_project_info()
+    bot_message = f"Running {project_info['name']} {project_info['version']}"
     return CommandResponse(user_message=user_message, bot_message=bot_message)
 
 

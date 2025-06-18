@@ -1,6 +1,6 @@
 [project]
-name = "failsafe-bot"
-version = "v1.0.7"
+name = "FailsafeBot"
+version = "v1.1.18"
 description = "Telegram and Discord chat bot"
 requires-python = ">=3.12"
 dependencies = [
@@ -12,7 +12,7 @@ dependencies = [
     "toml>=0.10.2",
     "unidecode>=1.3.8",
     "httpx==0.27.2",
-    "openai==1.55.3",
+    "openai>=1.88.0",
     "requests>=2.32.3",
     "strsimpy>=0.2.1",
     "jsonlines>=4.0.0",

@@ -22,7 +22,8 @@ import sound
 async def prepare_runway() -> None:
     # Initialize logging
     runway.init_logging()
-    logger.info(f"Loaded {common.APPLICATION_NAME} {common.VERSION_NUMBER}, logging to {common.PATH_LOGGING_FILE}")
+    project_info = await common.get_project_info()
+    logger.info(f"Loaded {project_info['name']} {project_info['version']}, logging to {common.PATH_LOGGING_FILE}")
 
     # Make sure all files and folders exist that this script needs
     for info in runway.create_project_structure():

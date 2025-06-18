@@ -6,6 +6,7 @@ the rest of this script. This includes important file paths, configuration, and 
 
 from __future__ import annotations  # Python 3.14 feature for deferred annotations
 
+import collections
 import contextlib
 import html
 import json
@@ -26,9 +27,7 @@ from loguru import logger
 # CONSTANTS
 # ==========================
 # region
-# PROJECT VARIABLES
-APPLICATION_NAME = "FailsafeBot"
-VERSION_NUMBER = "v1.1.18"
+# PROJECT CONSTANTS
 COMMAND_PREFIX = '/'  # May be configurable in the future
 
 # DIRECTORIES
@@ -39,6 +38,7 @@ PATH_LOGGING_FOLDER = PATH_DATA_FOLDER / "logging"
 PATH_MARKOV_INPUT = PATH_DATA_FOLDER / "chat_data"  # Folder containing telegram chat logs (.json format) for markov
 
 # CORE FILES
+PATH_PYPROJECT_TOML = Path("pyproject.toml")
 PATH_TELEGRAM_TOKEN = PATH_DATA_FOLDER / "telegram_token.txt"
 PATH_DISCORD_TOKEN = PATH_DATA_FOLDER / "discord_token.txt"
 PATH_ADMIN_LIST = PATH_DATA_FOLDER / "admins.json"
@@ -482,6 +482,15 @@ def make_valid_filename(input_str: str, *, strict: bool) -> str:
 
     valid_chars = [*string.ascii_uppercase, *string.ascii_lowercase, *string.digits, *"-_()'"]
     return ''.join(char for char in input_str if char in valid_chars)
+
+
+async def get_project_info() -> dict[str, str]:
+    project_info: dict[str, str] = collections.defaultdict(lambda: 'Error')
+    loaded_data = (await try_read_toml(PATH_PYPROJECT_TOML, {'project': {'name': 'FailsafeBot'}}))
+
+    project_info.update(loaded_data['project'])
+
+    return project_info
 
 
 # region
