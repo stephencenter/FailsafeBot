@@ -215,21 +215,21 @@ class Config:
             elif value.lower() == "false":
                 new_value = False
             else:
-                error_msg = f"Setting type is bool, but got value '{value}' which is not a bool"
+                error_msg = f"New value '{value}' is incompatible with setting '{target_setting.name}' (true/false)"
                 raise ConfigError(error_msg)
 
         elif target_setting.item_type is float:
             try:
                 new_value = float(value)
             except ValueError as e:
-                error_msg = f"Setting type is float, but got value '{value}' which is not a float"
+                error_msg = f"New value '{value}' is incompatible with setting '{target_setting.name}' (number)"
                 raise ConfigError(error_msg) from e
 
         elif target_setting.item_type is int:
             try:
                 new_value = int(value)
             except ValueError as e:
-                error_msg = f"Setting type is int, but got value '{value}' which is not an int"
+                error_msg = f"New value '{value}' is incompatible with setting '{target_setting.name}' (integer)"
                 raise ConfigError(error_msg) from e
 
         else:
@@ -273,27 +273,27 @@ class ConfigItem[T]:
             raise ConfigError(error_msg)
 
     def __bool__(self) -> NoReturn:
-        msg = "Use ConfigItem.value to access this setting's value"
-        raise ValueError(msg)
+        error_msg = f"Use ConfigItem.value to access {self.name}'s value"
+        raise ValueError(error_msg)
 
     def __str__(self) -> NoReturn:
-        msg = "Use ConfigItem.value to access this setting's value"
-        raise RuntimeError(msg)
+        error_msg = f"Use ConfigItem.value to access {self.name}'s value"
+        raise RuntimeError(error_msg)
 
     def __repr__(self) -> NoReturn:
-        msg = "Use ConfigItem.value to access this setting's value"
-        raise RuntimeError(msg)
+        error_msg = f"Use ConfigItem.value to access {self.name}'s value"
+        raise RuntimeError(error_msg)
 
     def validate_new_value(self, new_value: T) -> None:
         if not isinstance(new_value, self.item_type):
-            error_msg = f"Value for this setting has to be of type {self.item_type.__name__}"
+            error_msg = f"New value for setting '{self.name}' has to be of type {self.item_type.__name__}"
             raise ConfigError(error_msg)
 
         if self._valid_range is not None and isinstance(new_value, (float, int)):
             v_min, v_max = self._valid_range
 
             if not (v_min <= new_value <= v_max):
-                error_msg = f"New value for this setting is outside valid range of {v_min} to {v_max}."
+                error_msg = f"New value for setting '{self.name}' is outside valid range of {v_min} to {v_max}"
                 raise ConfigError(error_msg)
 
     def reset_to_default(self) -> None:
@@ -404,9 +404,8 @@ class ConfigMisc(ConfigList):
 
 
 async def verify_settings() -> AsyncGenerator[str]:
-    seen = {}
     config = await Config.load()
-
+    seen = {}
     for outer_key, subdict in config.__dict__.items():
         for subkey, value in subdict.__dict__.items():
             if subkey in seen:

@@ -27,7 +27,7 @@ ignore = [
     # Replace lambda with function from operator module, very unnecessary
     "FURB118",
 
-    # Use specific rule codes when ignoring type issues (Pylance doesn't support this!)
+    # Use specific rule codes when ignoring type issues (My type checker doesn't support this!)
     "PGH003",
 
     # Too many public methods/return statements, I get it but it's silly
