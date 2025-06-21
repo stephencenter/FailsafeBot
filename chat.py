@@ -230,17 +230,20 @@ async def generate_markov_text(markov_chain: dict[str, dict[str, float]]) -> str
 
 
 def clean_token(token: str) -> str:
-    # Remove paired characters like () and {} if they don't have a match on the other end of the token
+    """Return token with paired characters removed if they don't have a match on the other end of the token.
+
+    Paired characters include (), {}, [], and ""
+    """
     pair_list = [
         ('(', ')'),
         ('[', ']'),
-        ('"', '"'),
         ('{', '}'),
+        ('"', '"'),
     ]
 
     first_char = token[0]
     last_char = token[-1]
-    if first_char == ':' or last_char == ":":
+    if (first_char == ':' != last_char == ":") and len(token) < 5:
         # Don't remove unpaired characters from emoticons like :-) and (-:
         return token
 

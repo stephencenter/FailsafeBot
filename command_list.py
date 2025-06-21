@@ -1130,8 +1130,8 @@ async def restart_command(user_command: UserCommand) -> NoReturn:
     logger.info("Restarting...")
     await user_command.send_text_response("Restarting...")
 
-    # Don't need to return anything because this line halts operation of the program
-    os.execv(sys.executable, ['python', *sys.argv])
+    # This line halts operation of the program, meaning the return will never happen
+    return os.execv(sys.executable, ['python', *sys.argv])
 
 
 @requireadmin

@@ -73,5 +73,9 @@ ignore = [
 ]
 
 "sync.py" = [
-    "S602", "S603"
+    "S602", "S603", "INP001"
+]
+
+"check_free_threading.py" = [
+    "INP001"
 ]

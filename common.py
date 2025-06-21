@@ -13,7 +13,7 @@ import json
 import string
 from collections.abc import AsyncGenerator, AsyncIterator, Iterable
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, Never, NoReturn
 
 import aiofiles
 import aiofiles.os
@@ -117,7 +117,7 @@ class Config:
     chat: ConfigChat
     misc: ConfigMisc
 
-    def __init__(self) -> None:
+    def __init__(self, _: Never) -> None:
         error_msg = "Use `await Config.load()` instead of creating Config directly."
         raise RuntimeError(error_msg)
 
