@@ -47,7 +47,8 @@ async def prepare_runway() -> None:
 
     # Check for common issues with settings dataclasses
     # (for debug purposes, this should never happen in production)
-    async for warning in common.verify_settings():
+    config = await common.Config.load()
+    async for warning in config.verify_settings():
         logger.warning(warning)
 
     async for warning in runway.check_superadmins():

@@ -11,13 +11,14 @@ import contextlib
 import html
 import json
 import string
+import tomllib
 from collections.abc import AsyncGenerator, AsyncIterator, Iterable
 from pathlib import Path
 from typing import Any, Never, NoReturn
 
 import aiofiles
 import aiofiles.os
-import toml
+import tomli_w
 import unidecode
 from loguru import logger
 
@@ -201,8 +202,9 @@ class Config:
         settings_dict: dict[str, dict[str, Any]] = {}
         for key in self.__dict__:
             settings_dict[key] = {}
-            for subkey in self.__dict__[key].__dict__:
-                settings_dict[key][subkey] = self.__dict__[key].__dict__[subkey].value
+
+            for subkey, config_item in self.__dict__[key].__dict__.items():
+                settings_dict[key][subkey] = config_item.value
 
         await write_toml_to_file(PATH_CONFIG_FILE, settings_dict)
 
@@ -241,13 +243,28 @@ class Config:
         # Set value, will not reach this point if above validation fails
         target_setting.value = new_value
 
+    async def verify_settings(self) -> AsyncGenerator[str]:
+        seen = {}
+        for outer_key, subdict in self.__dict__.items():
+            for subkey, value in subdict.__dict__.items():
+                if subkey in seen:
+                    yield f"Config setting {subkey} is a duplicate between '{seen[subkey]}' and '{outer_key}'"
+
+                else:
+                    seen[subkey] = outer_key
+
+                if subkey != value.name:
+                    yield f"Config setting '{subkey}' has its name incorrectly assigned as '{value.name}'"
+
 
 class ConfigItem[T]:
     """Defines an individual configuration item, including default value, current value, and valid range."""
 
-    def __init__(self, name: str, *, default_value: T, valid_range: tuple[float, float] | None = None) -> None:
+    def __init__(self, name: str,
+                 *, default_value: T, description: str, valid_range: tuple[float, float] | None = None) -> None:
         self.name = name
         self.value = default_value
+        self.description = description
         self.item_type = type(default_value)
         self._default_value = default_value
         self._valid_range = valid_range
@@ -308,114 +325,105 @@ class ConfigMain(ConfigList):
     """Config class for core application functionality."""
 
     def __init__(self) -> None:
-        # Name of the bot, if replytoname is True then the bot will respond to this string
-        self.botname = ConfigItem("botname", default_value="Failsafe")
+        self.botname = ConfigItem("botname", default_value="Failsafe",
+            description="Name of the bot, if replytoname is True then the bot will respond to this string")
 
-        # Whether to run the Telegram/Discord bot or skip it
-        self.runtelegram = ConfigItem("runtelegram", default_value=True)
-        self.rundiscord = ConfigItem("rundiscord", default_value=True)
+        self.runtelegram = ConfigItem("runtelegram", default_value=True,
+            description="Whether to run the Telegram bot or not")
 
-        # Whether certain commands require admin rights to perform
-        self.requireadmin = ConfigItem("requireadmin", default_value=True)
+        self.rundiscord = ConfigItem("rundiscord", default_value=True,
+            description="Whether to run the Discord bot or not")
 
-        # Maximum amount of characters to allow in a CommandResponse object's bot_message property
-        self.maxmessagelength = ConfigItem("maxmessagelength", default_value=1024, valid_range=(32, 4096))
+        self.whitelisttelegram = ConfigItem("whitelisttelegram", default_value=False,
+            description="Whether a Telegram chat ID needs to be on the whitelist for commands to function")
 
-        # Whether a Telegram/Discord chat ID needs to be on the whitelist for commands to function
-        self.whitelisttelegram = ConfigItem("whitelisttelegram", default_value=False)
-        self.whitelistdiscord = ConfigItem("whitelistdiscord", default_value=False)
+        self.whitelistdiscord = ConfigItem("whitelistdiscord", default_value=False,
+            description="Whether a Discord chat ID needs to be on the whitelist for commands to function")
 
-        # Whether Telegram/Discord superadmin rights will be auto-assigned if none exist (disabled after first use)
-        self.autosupertelegram = ConfigItem("autosupertelegram", default_value=True)
-        self.autosuperdiscord = ConfigItem("autosuperdiscord", default_value=True)
+        self.autosupertelegram = ConfigItem("autosupertelegram", default_value=True,
+            description="Whether Telegram superadmin will be auto-assigned if none exist (disabled after first use)")
+
+        self.autosuperdiscord = ConfigItem("autosuperdiscord", default_value=True,
+            description="Whether Discord superadmin will be auto-assigned if none exist (disabled after first use)")
+
+        self.requireadmin = ConfigItem("requireadmin", default_value=True,
+            description="Whether certain commands require admin rights to perform")
+
+        self.maxmessagelength = ConfigItem("maxmessagelength", default_value=1024, valid_range=(32, 4096),
+            description="Maximum amount of characters to allow in a CommandResponse object's bot_message property")
 
 
 class ConfigChat(ConfigList):
     """Config class for chatting functionality (text, voice, and general memory)."""
 
     def __init__(self) -> None:
-        # Whether the bot should respond when their name is said
-        self.replytoname = ConfigItem("replytoname", default_value=True)
+        self.replytoname = ConfigItem("replytoname", default_value=True,
+            description="Whether the bot should respond when their name is said")
 
-        # Whether the bot should play a sound when the word monkey is said (Discworld adventure game reference)
-        self.replytomonkey = ConfigItem("replytomonkey", default_value=False)
+        self.replytomonkey = ConfigItem("replytomonkey", default_value=False,
+            description="Whether the bot should play a sound when the word monkey is said (Discworld reference)")
 
-        # Chance for the bot to randomly reply to any message in a chat they're in (0 -> 0%, 1.0 -> 100%)
-        self.randreplychance = ConfigItem("randreplychance", default_value=0.05, valid_range=(0, 1))
+        self.randreplychance = ConfigItem("randreplychance", default_value=0.05, valid_range=(0, 1),
+            description="Chance for the bot to randomly reply to any message in the chat (0 -> 0%, 1.0 -> 100%)")
 
-        # What GPT model to use for AI chatting
-        self.gptmodel = ConfigItem("gptmodel", default_value="gpt-4o-mini")
+        self.gptmodel = ConfigItem("gptmodel", default_value="gpt-4o-mini",
+            description="What GPT model to use for AI chatting")
 
-        # Temperature for GPT chat completions (0 to 2, values outside this will break)
-        self.gpttemp = ConfigItem("gpttemp", default_value=1.0, valid_range=(0, 2))
+        self.gpttemp = ConfigItem("gpttemp", default_value=1.0, valid_range=(0, 2),
+            description="Temperature for GPT chat completions (0 to 2, values outside this will break)")
 
-        # Value to be passed for parameter max_completion_tokens for gpt chat completion (1 token = ~4 chars)
-        self.gptmaxtokens = ConfigItem("gptmaxtokens", default_value=256, valid_range=(1, 4096))
+        self.gptmaxtokens = ConfigItem("gptmaxtokens", default_value=256, valid_range=(1, 4096),
+            description="Value for parameter max_completion_tokens for gpt chat completion (1 token = ~4 chars)")
 
-        # Whether the bot will use the memory system for AI chatting
-        self.usememory = ConfigItem("usememory", default_value=True)
+        self.usememory = ConfigItem("usememory", default_value=True,
+            description="Whether the bot will use the memory system for AI chatting")
 
-        # Maximum number of messages to record in memory
-        self.memorysize = ConfigItem("memorysize", default_value=64, valid_range=(1, 4096))
+        self.memorysize = ConfigItem("memorysize", default_value=64, valid_range=(1, 4096),
+            description="Maximum number of messages to record in memory")
 
-        # Amount of messages to pull from memory for AI chatting/recall (higher uses more input tokens/money)
-        self.recallsize = ConfigItem("recallsize", default_value=16, valid_range=(1, 4096))
+        self.recallsize = ConfigItem("recallsize", default_value=16, valid_range=(1, 4096),
+            description="Amount of messages to pull from memory for AI chatting/recall")
 
-        # Whether the bot wil record ALL text messages sent in chat to memory, or just messages directed towards it
-        self.recordall = ConfigItem("recordall", default_value=False)
+        self.recordall = ConfigItem("recordall", default_value=False,
+            description="Whether the bot will record ALL text messages sent in chat to memory, or just directed ones")
 
-        # Minimum number of tokens for the markov chain command /wisdom (higher takes longer exponentially)
-        self.minmarkov = ConfigItem("minmarkov", default_value=2, valid_range=(1, 4096))
+        self.minmarkov = ConfigItem("minmarkov", default_value=2, valid_range=(1, 4096),
+            description="Minimum number of tokens for the markov chain command /wisdom (higher takes longer)")
 
-        # Maximum number of tokens for the markov chain command /wisdom)
-        self.maxmarkov = ConfigItem("maxmarkov", default_value=256, valid_range=(32, 4096))
+        self.maxmarkov = ConfigItem("maxmarkov", default_value=256, valid_range=(32, 4096),
+            description="Maximum number of tokens for the markov chain command /wisdom")
 
-        # The "soft cap" for elevenlabs text-to-speech input length (higher = higher cost/credit usage)
-        self.saysoftcap = ConfigItem("saysoftcap", default_value=256, valid_range=(32, 4096))
+        self.saysoftcap = ConfigItem("saysoftcap", default_value=256, valid_range=(32, 4096),
+            description="The 'soft cap' for elevenlabs text-to-speech input length")
 
-        # The voice to use for elevenlabs (defaults to Charlotte)
-        self.sayvoiceid = ConfigItem("sayvoiceid", default_value="XB0fDUnXU5powFXDhCwa")
+        self.sayvoiceid = ConfigItem("sayvoiceid", default_value="XB0fDUnXU5powFXDhCwa",
+            description="The voice to use for elevenlabs (defaults to Charlotte)")
 
-        # The base model to use for elevenlabs
-        self.saymodelid = ConfigItem("saymodelid", default_value="eleven_multilingual_v2")
+        self.saymodelid = ConfigItem("saymodelid", default_value="eleven_multilingual_v2",
+            description="The base model to use for elevenlabs")
 
-        # Whether the bot will automatically disconnect if they're the only ones in a voice call
-        self.vcautodc = ConfigItem("vcautodc", default_value=True)
+        self.vcautodc = ConfigItem("vcautodc", default_value=True,
+            description="Whether the bot will automatically disconnect if they're the only ones in a voice call")
 
 
 class ConfigMisc(ConfigList):
     """Config class for command functionality that isn't covered by other dataclasses."""
 
     def __init__(self) -> None:
-        # Whether the /system command should use megabytes (will use gigabytes if false)
-        self.usemegabytes = ConfigItem("usemegabytes", default_value=False)
+        self.usemegabytes = ConfigItem("usemegabytes", default_value=False,
+            description="Whether the /system command should use megabytes (will use gigabytes if false)")
 
-        # The minimum similarity threshold when searching for sound names (1.0 = exact matches only)
-        self.minsimilarity = ConfigItem("minsimilarity", default_value=0.75, valid_range=(0.25, 1))
+        self.minsimilarity = ConfigItem("minsimilarity", default_value=0.75, valid_range=(0.25, 1),
+            description="The minimum similarity threshold when searching for sound names (1.0 = exact matches only)")
 
-        # How much of a video the /stream command will download (does not apply to /vcstream)
-        self.maxstreamtime = ConfigItem("maxstreamtime", default_value=30, valid_range=(5, 3600))
+        self.maxstreamtime = ConfigItem("maxstreamtime", default_value=30, valid_range=(5, 3600),
+            description="How much of a video the /stream command will download (does not apply to /vcstream)")
 
-        # Maximum number of dice in one command for dice roller (bigger numbers might reach message length cap)
-        self.maxdice = ConfigItem("maxdice", default_value=100, valid_range=(1, 1000))
+        self.maxdice = ConfigItem("maxdice", default_value=100, valid_range=(1, 1000),
+            description="Max number of dice at once for /roll (bigger numbers might reach message length cap)")
 
-        # Maximum number of faces for the dice for dice roller
-        self.maxfaces = ConfigItem("maxfaces", default_value=10000, valid_range=(100, 100000))
-
-
-async def verify_settings() -> AsyncGenerator[str]:
-    config = await Config.load()
-    seen = {}
-    for outer_key, subdict in config.__dict__.items():
-        for subkey, value in subdict.__dict__.items():
-            if subkey in seen:
-                yield f"Config setting {subkey} is a duplicate between '{seen[subkey]}' and '{outer_key}'"
-
-            else:
-                seen[subkey] = outer_key
-
-            if subkey != value.name:
-                yield f"Config setting '{subkey}' has its name incorrectly assigned as '{value.name}'"
+        self.maxfaces = ConfigItem("maxfaces", default_value=10000, valid_range=(100, 100000),
+            description="Maximum number of faces for the dice for dice roller")
 # endregion
 
 
@@ -588,11 +596,11 @@ async def try_read_toml(path: str | Path, default: dict[str, Any]) -> dict[str, 
     """
     try:
         async with aiofiles.open(path, encoding='utf-8') as f:
-            data = toml.loads(await f.read())
+            data = tomllib.loads(await f.read())
             return data or default
     except FileNotFoundError:
         logger.error(f"Tried to open file at {path}, but file did not exist")
-    except toml.TomlDecodeError:
+    except tomllib.TOMLDecodeError:
         logger.error(f"Tried to open file at {path}, but failed to decode toml")
     except OSError:
         logger.error(f"Tried to open file at {path}, but encountered an error")
@@ -646,10 +654,14 @@ async def write_json_to_file(path: str | Path, data: Iterable[Any]) -> None:
 
 
 async def write_toml_to_file(path: str | Path, data: dict[str, Any]) -> None:
+    """Write provided dictionary to TOML file.
+
+    Does not preserve style or comments.
+    """
     with contextlib.suppress(FileExistsError):
         await aiofiles.os.mkdir(Path(path).parent)
 
     async with aiofiles.open(path, mode='w', encoding='utf-8') as f:
-        content = toml.dumps(data)
+        content = tomli_w.dumps(data)
         await f.write(content)
 # endregion
