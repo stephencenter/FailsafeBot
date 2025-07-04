@@ -151,7 +151,7 @@ async def get_alias_dict() -> dict[str, str]:
 
 async def new_playcount_dict() -> dict[str, int]:
     """Return a dict where each available sound is a key and all values are 0."""
-    return dict.fromkeys(await get_sound_list(), 0)
+    return {key: 0 for key in await get_sound_list()}  # noqa: C420 (makes type checker angry)
 
 
 async def get_playcount_dict() -> dict[str, dict[str, int]]:
