@@ -168,14 +168,14 @@ class Config:
 
         return self
 
-    def find_setting(self, search_string: str) -> tuple[str | None, str | None, Any]:
+    def find_setting(self, search_string: str) -> tuple[str | None, str | None, ConfigItem[Any] | None]:
         """Take a search string and return the matching group name, setting name, and current value if it exists.
 
         Accepts either the setting name or [group name].[setting name], will return the first match found
         """
-        group_name = None
-        setting_name = None
-        value = None
+        group_name: str | None = None
+        setting_name: str | None = None
+        cfg_item: ConfigItem[Any] | None = None
 
         split_string = search_string.split('.')
         if len(split_string) == 2:
@@ -184,7 +184,7 @@ class Config:
                 if hasattr(group, split_string[1]):
                     group_name = split_string[0]
                     setting_name = split_string[1]
-                    value = getattr(group, setting_name).value
+                    cfg_item = getattr(group, setting_name)
 
         elif len(split_string) == 1:
             for group_key in self.__dict__:
@@ -192,10 +192,10 @@ class Config:
                 if hasattr(group, search_string):
                     group_name = group_key
                     setting_name = search_string
-                    value = getattr(group, setting_name).value
+                    cfg_item = getattr(group, setting_name)
                     break
 
-        return group_name, setting_name, value
+        return group_name, setting_name, cfg_item
 
     async def save_config(self) -> None:
         """Write the current state of the Config object to a file."""
@@ -266,26 +266,26 @@ class ConfigItem[T]:
         self.value = default_value
         self.description = description
         self.item_type = type(default_value)
-        self._default_value = default_value
-        self._valid_range = valid_range
+        self.default_value = default_value
+        self.valid_range = valid_range
 
         if self.item_type not in {float, int, str, bool}:
             error_msg = f"Only float, int, str, bool are accepted setting types (got {self.item_type.__name__})"
             raise ConfigError(error_msg)
 
-        if self._valid_range is not None:
+        if self.valid_range is not None:
             if self.item_type not in {float, int}:
                 error_msg = "valid_range != None is only valid for floats and ints."
                 raise ConfigError(error_msg)
 
-            if (num_items := len(self._valid_range)) != 2:
+            if (num_items := len(self.valid_range)) != 2:
                 error_msg = f"valid_range must have two elements: min and max (got {num_items} elements)"
 
-            if self._valid_range[0] > self._valid_range[1]:
+            if self.valid_range[0] > self.valid_range[1]:
                 error_msg = "Second item of valid_range has to be equal or larger than the first"
                 raise ConfigError(error_msg)
 
-        elif self._valid_range is None and self.item_type in {float, int}:
+        elif self.valid_range is None and self.item_type in {float, int}:
             error_msg = "valid_range cannot be None if item is float or int"
             raise ConfigError(error_msg)
 
@@ -306,15 +306,15 @@ class ConfigItem[T]:
             error_msg = f"New value for setting '{self.name}' has to be of type {self.item_type.__name__}"
             raise ConfigError(error_msg)
 
-        if self._valid_range is not None and isinstance(new_value, (float, int)):
-            v_min, v_max = self._valid_range
+        if self.valid_range is not None and isinstance(new_value, (float, int)):
+            v_min, v_max = self.valid_range
 
             if not (v_min <= new_value <= v_max):
                 error_msg = f"New value for setting '{self.name}' is outside valid range of {v_min} to {v_max}"
                 raise ConfigError(error_msg)
 
     def reset_to_default(self) -> None:
-        self.value = self._default_value
+        self.value = self.default_value
 
 
 class ConfigList:
@@ -373,7 +373,7 @@ class ConfigChat(ConfigList):
             description="Temperature for GPT chat completions (0 to 2, values outside this will break)")
 
         self.gptmaxtokens = ConfigItem("gptmaxtokens", default_value=256, valid_range=(1, 4096),
-            description="Value for parameter max_completion_tokens for gpt chat completion (1 token = ~4 chars)")
+            description="Value for parameter max_completion_tokens for GPT chat completion (1 token = ~4 chars)")
 
         self.usememory = ConfigItem("usememory", default_value=True,
             description="Whether the bot will use the memory system for AI chatting")

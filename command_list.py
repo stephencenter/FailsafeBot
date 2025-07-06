@@ -847,7 +847,7 @@ async def effects_command(user_command: UserCommand) -> CommandResponse:
     return CommandResponse(user_message=user_message, bot_message=bot_message)
 
 
-async def reset_effects_command(user_command: UserCommand) -> CommandResponse:
+async def reseteffects_command(user_command: UserCommand) -> CommandResponse:
     username = await user_command.get_user_name()
     await dice.reset_active_effects(username)
 
@@ -959,7 +959,7 @@ async def memory_command(_: UserCommand) -> CommandResponse:
 # region
 @requireadmin
 async def getconfig_command(user_command: UserCommand) -> CommandResponse:
-    user_message = "Can you tell me the value of that setting?"
+    user_message = "Can you tell me about that setting?"
 
     search_string = user_command.get_first_arg(lowercase=True)
     if search_string is None:
@@ -967,14 +967,30 @@ async def getconfig_command(user_command: UserCommand) -> CommandResponse:
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 
     config = await common.Config.load()
-    group_name, setting_name, value = config.find_setting(search_string)
+    group_name, setting_name, config_item = config.find_setting(search_string)
 
-    user_message = f"Can you tell me the value of the setting {search_string}?"
-    if value is None:
+    user_message = f"Can you tell me about the setting '{search_string}'?"
+    if config_item is None:
         bot_message = f"Couldn't find a setting called '{search_string}'."
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 
-    bot_message = f"Setting '{group_name}.{setting_name}' is currently set to '{value}'."
+    c_type = config_item.item_type.__name__
+    c_value = config_item.value
+    d_value = config_item.default_value
+    v_range = config_item.valid_range
+    c_desc = config_item.description
+
+    if v_range is not None:
+        v_min, v_max = v_range
+        bot_message = f'''Setting '{group_name}.{setting_name}' -- Type: {c_type} -- Valid Range: {v_min} to {v_max}
+Current Value: {c_value} -- Default Value: {d_value}
+\n"{c_desc}"'''
+
+    else:
+        bot_message = f'''Setting '{group_name}.{setting_name}' -- Type: {c_type}
+Current Value: {c_value} -- Default Value: {d_value}
+\n"{c_desc}"'''
+
     return CommandResponse(user_message=user_message, bot_message=bot_message)
 
 
@@ -1006,6 +1022,30 @@ async def setconfig_command(user_command: UserCommand) -> CommandResponse:
     await config.save_config()
 
     bot_message = f"Setting '{group_name}.{setting_name}' has been set to '{new_value}'."
+    return CommandResponse(user_message=user_message, bot_message=bot_message)
+
+
+@requireadmin
+async def resetconfig_command(user_command: UserCommand) -> CommandResponse:
+    user_message = "Can you tell me about that setting?"
+
+    search_string = user_command.get_first_arg(lowercase=True)
+    if search_string is None:
+        bot_message = "You need to provide a setting name to check."
+        return CommandResponse(user_message=user_message, bot_message=bot_message)
+
+    config = await common.Config.load()
+    group_name, setting_name, config_item = config.find_setting(search_string)
+
+    user_message = f"Can you tell me about the setting '{search_string}'?"
+    if group_name is None or setting_name is None or config_item is None:
+        bot_message = f"Couldn't find a setting called '{search_string}'."
+        return CommandResponse(user_message=user_message, bot_message=bot_message)
+
+    config.update_setting(group_name, setting_name, config_item.default_value)
+    await config.save_config()
+
+    bot_message = f"Setting '{group_name}.{setting_name} has been reset to {config_item.default_value}."
     return CommandResponse(user_message=user_message, bot_message=bot_message)
 
 
@@ -1468,12 +1508,13 @@ COMMAND_LIST: list[tuple[str, command.CommandAnn]] = [
     ("statroll", statroll_command),
     ("d10000", d10000_command),
     ("effects", effects_command),
-    ("reseteffects", reset_effects_command),
+    ("reseteffects", reseteffects_command),
     ("trivia", trivia_command),
     ("guess", guess_command),
     ("triviarank", triviarank_command),
     ("getconfig", getconfig_command),
     ("setconfig", setconfig_command),
+    ("resetconfig", resetconfig_command),
     ("configlist", configlist_command),
     ("restart", restart_command),
     ("system", system_command),
