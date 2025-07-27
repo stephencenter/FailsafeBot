@@ -5,6 +5,9 @@ line-length = 118
 # Flag errors (C901) whenever the complexity level exceeds this value
 max-complexity = 15
 
+[lint.pylint]
+max-nested-blocks = 7
+
 [lint]
 preview = true
 select = ["ALL"]
@@ -13,15 +16,18 @@ ignore = [
     "CPY001",
 
     # Documentation stuff, eventually I should remove these and add more documentation
-    "D102", "D103", "D105", "D107", "D413",
+    "D102",  # Missing docstring in public method
+    "D103",  # Missing docstring in public function
+    "D105",  # Missing docstring in magic method
+    "D107",  # Missing dosctring in __init__
 
     # Guidelines for writing docstrings, I do not like these
-    "DOC201", "DOC501",
+    "D413", "DOC201", "DOC501",
 
     # Replace lambda with function from operator module, very unnecessary
     "FURB118",
 
-    # Use specific rule codes when ignoring type issues (Pylance doesn't support this!)
+    # Use specific rule codes when ignoring type issues (My type checker doesn't support this!)
     "PGH003",
 
     # Too many public methods/return statements, I get it but it's silly
@@ -54,13 +60,22 @@ ignore = [
 
 [lint.per-file-ignores]
 "command_list.py" = [
-    "RUF029"  # Async function doesn't need to be async, all false positives in this file
+    "RUF029",  # Async function doesn't need to be async, all false positives in this file
+    "D103"
 ]
 
 "unit_test.py" = [
-    "RUF029"
+    "RUF029",
+    "D102",
+    "D103",
+    "D105",
+    "D107",
 ]
 
 "sync.py" = [
-    "S602", "S603"
+    "S602", "S603", "INP001"
+]
+
+"check_free_threading.py" = [
+    "INP001", "D101"
 ]

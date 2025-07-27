@@ -4,6 +4,7 @@ __pycache__/
 Sounds/
 Data/
 Test/
+Tools/
 sync.py
 *.exe
 *.bat

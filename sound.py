@@ -16,6 +16,7 @@ import strsimpy
 import yt_dlp
 from loguru import logger
 
+import command
 import common
 
 
@@ -74,7 +75,7 @@ async def download_audio_from_url(url: str) -> Path | None:
         }],
         'postprocessor_args': [
             '-ss', '0',
-            '-t', str(config.misc.maxstreamtime),
+            '-t', str(config.misc.maxstreamtime.value),
         ],
         'prefer_ffmpeg': True,
         'quiet': True,
@@ -105,23 +106,24 @@ async def download_audio_from_url(url: str) -> Path | None:
 
 
 async def save_new_sound(sound_name: str, sound_file: bytearray) -> None:
+    """Write the provided bytearray to an .mp3 file with the provided sound_name."""
     sound_path = (common.PATH_SOUNDS_FOLDER / sound_name).with_suffix('.mp3')
 
     await common.write_bytes_to_file(sound_path, sound_file)
 
 
 def del_sound_file(sound_name: str) -> None:
+    """Delete the sound file with the given name from the file system."""
     sound_path = (common.PATH_SOUNDS_FOLDER / sound_name).with_suffix('.mp3')
     sound_path.unlink()
 
 
 async def get_sound_dict() -> dict[str, Path]:
-    # Create the sound dictionary. The keys will be the names of each sound, and the values will be the
-    # path to that sound's file
+    """Return a dictionary where each key is a sound name and each value is the path to its sound file."""
     sound_dict: dict[str, Path] = {}
 
     for f in await aiofiles.os.listdir(common.PATH_SOUNDS_FOLDER):
-        file = common.PATH_SOUNDS_FOLDER / Path(f)
+        file: Path = common.PATH_SOUNDS_FOLDER / Path(f)
         if file.suffix == '.mp3':
             sound_dict[file.stem] = file
 
@@ -129,19 +131,27 @@ async def get_sound_dict() -> dict[str, Path]:
 
 
 async def get_sound_list() -> list[str]:
-    sound_list = [Path(file).stem
-                  for file in await aiofiles.os.listdir(common.PATH_SOUNDS_FOLDER) if file.endswith('.mp3')]
+    """Return an alphabetically sorted list of all sounds available in the Sounds directory."""
+    sound_list = [
+        Path(file).stem
+        for file in await aiofiles.os.listdir(common.PATH_SOUNDS_FOLDER)
+        if file.endswith('.mp3')
+    ]
     return sorted(sound_list)
 
 
 async def get_alias_dict() -> dict[str, str]:
-    # Load a dictionary where the keys are aliases, and the values are the
-    # sounds those aliases correspond to
+    """Load the alias dict from a file and return it.
+
+    The alias dict is a dictionary where the keys are aliases, and the values are the
+    sound names those aliases correspond to
+    """
     return await common.try_read_json(common.PATH_SOUND_ALIASES, {})
 
 
 async def new_playcount_dict() -> dict[str, int]:
-    return dict.fromkeys(await get_sound_list(), 0)
+    """Return a dict where each available sound is a key and all values are 0."""
+    return {key: 0 for key in await get_sound_list()}  # noqa: C420 (makes type checker angry)
 
 
 async def get_playcount_dict() -> dict[str, dict[str, int]]:
@@ -158,6 +168,7 @@ async def get_playcount_dict() -> dict[str, dict[str, int]]:
 
 
 async def fix_playcount_dict(playcount_dict: dict[str, dict[str, int]]) -> tuple[dict[str, dict[str, int]], bool]:
+    """Return the provided playcount dict with any errors fixed."""
     sound_list = await get_sound_list()
     alias_dict = await get_alias_dict()
 
@@ -189,7 +200,8 @@ async def fix_playcount_dict(playcount_dict: dict[str, dict[str, int]]) -> tuple
     return playcount_dict, changed
 
 
-async def increment_playcount(user_command: common.UserCommand, name: str) -> None:
+async def increment_playcount(user_command: command.UserCommand, name: str) -> None:
+    """Increments the playcount in the current chat for the given sound name."""
     sound_name = await coalesce_sound_name(name)
     if sound_name is None:
         error_msg = f"Invalid sound name {name} provided."
@@ -205,7 +217,7 @@ async def increment_playcount(user_command: common.UserCommand, name: str) -> No
     await common.write_json_to_file(common.PATH_PLAYCOUNTS, playcounts)
 
 
-async def get_chat_playcounts(user_command: common.UserCommand) -> dict[str, int]:
+async def get_chat_playcounts(user_command: command.UserCommand) -> dict[str, int]:
     """Return the number of times each sound has been played within the user's current chat."""
     playcount_dict = await get_playcount_dict()
     chat_id = user_command.get_chat_id()
@@ -213,7 +225,7 @@ async def get_chat_playcounts(user_command: common.UserCommand) -> dict[str, int
     return playcount_dict.get(chat_id, await new_playcount_dict())
 
 
-async def get_sound_chat_playcount(user_command: common.UserCommand, name: str) -> int | None:
+async def get_sound_chat_playcount(user_command: command.UserCommand, name: str) -> int | None:
     """Return the number of times the provided sound has been played within the user's current chat.
 
     Returns None if the sound does not exist.
@@ -229,9 +241,8 @@ async def get_sound_chat_playcount(user_command: common.UserCommand, name: str) 
 async def get_global_playcounts() -> dict[str, int]:
     """Return the total number of times each sound has been played globally, in all chats."""
     playcount_dict = await get_playcount_dict()
-    sound_list = await get_sound_list()
+    global_playcounts = await new_playcount_dict()
 
-    global_playcounts = dict.fromkeys(sound_list, 0)
     for chat_id in playcount_dict:
         for sound in playcount_dict[chat_id]:
             global_playcounts[sound] += playcount_dict[chat_id][sound]
@@ -256,15 +267,24 @@ async def get_sound_global_playcount(name: str) -> int | None:
     return total
 
 
-async def is_existing_sound(sound_name: str) -> bool:
-    return sound_name in await get_sound_dict()
+async def is_existing_sound(name: str) -> bool:
+    """Return True if the provided name is a valid sound name (i.e. has a matching .mp3 file), False otherwise.
+
+    Does NOT return True if the provided name only matches an alias.
+    """
+    return name in await get_sound_dict()
 
 
-async def is_existing_alias(alias: str) -> bool:
-    return alias in await get_alias_dict()
+async def is_existing_alias(name: str) -> bool:
+    """Return True if the provided name is a valid sound alias, False otherwise..
+
+    Does NOT return True if the provided name only matches a sound name.
+    """
+    return name in await get_alias_dict()
 
 
 async def is_sound_or_alias(name: str) -> bool:
+    """Return True if the provided name is a valid sound name or alias, False otherwise."""
     return await is_existing_sound(name) or await is_existing_alias(name)
 
 
@@ -282,28 +302,28 @@ async def coalesce_sound_name(name: str) -> str | None:
     return None
 
 
-async def get_sound_by_name(name: str, *, strict: bool) -> Path | list[str] | None:
-    # Get the dictionary of all sounds and the paths they're located at
+async def get_sound_candidates(search_string: str, max_candidates: int = 5) -> list[tuple[str, Path]]:
     sound_dict = await get_sound_dict()
 
-    if (sound_name := await coalesce_sound_name(name)) is not None:
-        return sound_dict[sound_name]
-
-    # If strict = True, then we require an exact match for sound/alias name
-    if strict:
-        return None
+    # If we have an exact match we return it immediately
+    if (sound_name := await coalesce_sound_name(search_string)) is not None:
+        item = (sound_name, sound_dict[sound_name])
+        return [item]
 
     # Find sounds/aliases that are close matches to the provided string
-    candidates = await search_sounds(name)
+    matches = await search_sounds(search_string)
+
+    candidates: list[tuple[str, Path]] = []
+    for item in matches:
+        sound_name = await coalesce_sound_name(item)
+        if sound_name is None:
+            continue
+
+        candidates.append((sound_name, sound_dict[sound_name]))
 
     # If there's more than 5 matches, then the search term is too general and we reject it
-    max_candidates = 5
-    if not candidates or len(candidates) > max_candidates:
-        return None
-
-    # If there's only 1 match, then we assume that's the intended sound and return it
-    if len(candidates) == 1:
-        return await get_sound_by_name(candidates[0], strict=True)  # Call recursively to handle aliases
+    if len(candidates) > max_candidates:
+        return []
 
     return candidates
 
@@ -369,6 +389,7 @@ async def del_sound_alias(alias_to_delete: str) -> str:
 async def search_sounds(search_string: str) -> list[str]:
     config = await common.Config.load()
     calculator = strsimpy.Damerau()
+    similarity_threshold = min(config.misc.minsimilarity.value, 1.0)
 
     search_results: list[str] = []
     for sound_name in await get_sound_list():
@@ -376,6 +397,11 @@ async def search_sounds(search_string: str) -> list[str]:
             if search_string in alias:
                 search_results.append(alias)
                 break
+
+            # If similarity threshold is 1.0 then only exact matches are accepted, so the similarity
+            # check is skipped
+            if similarity_threshold >= 1.0:
+                continue
 
             search_length = len(search_string)
             alias_length = len(alias)
@@ -388,7 +414,7 @@ async def search_sounds(search_string: str) -> list[str]:
             larger_length = max(search_length, alias_length)
             similarity = (larger_length - distance) / larger_length
 
-            if similarity >= config.misc.minsimilarity:
+            if similarity >= similarity_threshold:
                 search_results.append(alias)
                 break
 
@@ -396,6 +422,7 @@ async def search_sounds(search_string: str) -> list[str]:
 
 
 def is_valid_audio(data: bytearray) -> bool:
+    """Return True if provided bytearray has a supported audio mimetype (mp3, ogg, wav), False otherwise."""
     file_type = filetype.guess(data)
     if file_type is None:
         return False

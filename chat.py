@@ -20,7 +20,7 @@ from elevenlabs.core.api_error import ApiError as ElevenLabsApiError
 from loguru import logger
 
 import common
-from common import UserCommand
+from command import UserCommand
 
 MAX_GPT_ATTEMPTS = 3
 NULL_TOKEN = "[NULL_TOKEN]"
@@ -63,9 +63,9 @@ async def get_gpt_response(user_command: UserCommand) -> str:
     while attempt_counter < MAX_GPT_ATTEMPTS:
         gpt_completion = await openai_client.chat.completions.create(
             messages=messages,  # type: ignore
-            model=config.chat.gptmodel,
-            temperature=config.chat.gpttemp,
-            max_completion_tokens=config.chat.gptmaxtokens,
+            model=config.chat.gptmodel.value,
+            temperature=config.chat.gpttemp.value,
+            max_completion_tokens=config.chat.gptmaxtokens.value,
         )
 
         response = gpt_completion.choices[0].message.content
@@ -135,8 +135,8 @@ async def get_elevenlabs_response(input_text: str, *, save_to_file: bool = False
     # Get text-to-speech response from elevenlabs
     audio_stream = elevenlabs_client.text_to_speech.convert(
         text=input_text,
-        voice_id=config.chat.sayvoiceid,
-        model_id=config.chat.saymodelid,
+        voice_id=config.chat.sayvoiceid.value,
+        model_id=config.chat.saymodelid.value,
     )
 
     # Save sound to temp file
@@ -151,7 +151,7 @@ async def get_elevenlabs_response(input_text: str, *, save_to_file: bool = False
 
 async def cap_elevenlabs_prompt(text_prompt: str) -> str:
     config = await common.Config.load()
-    soft_cap = config.chat.saysoftcap
+    soft_cap = config.chat.saysoftcap.value
     hard_cap = int(soft_cap * 1.5)
 
     text_length = len(text_prompt)
@@ -180,16 +180,16 @@ async def handle_elevenlabs_error(error: ElevenLabsApiError) -> str:
             f"ElevenLabs API Key in '{common.PATH_ELEVENLABS_KEY}' is invalid!",
 
         'voice_not_found':
-            f"ElevenLabs Voice ID '{config.chat.sayvoiceid}' is invalid!",
+            f"ElevenLabs Voice ID '{config.chat.sayvoiceid.value}' is invalid!",
 
         'model_not_found':
-            f"ElevenLabs Model ID '{config.chat.saymodelid}' is invalid!",
+            f"ElevenLabs Model ID '{config.chat.saymodelid.value}' is invalid!",
 
         'quota_exceeded':
             "ElevenLabs account is out of credits!",
 
         'free_users_not_allowed':
-            f"Voice with ID '{config.chat.sayvoiceid}' needs an active ElevenLabs subscription to use.",
+            f"Voice with ID '{config.chat.sayvoiceid.value}' needs an active ElevenLabs subscription to use.",
     }
 
     status = error.body['detail']['status']
@@ -205,20 +205,20 @@ async def handle_elevenlabs_error(error: ElevenLabsApiError) -> str:
 async def generate_markov_text(markov_chain: dict[str, dict[str, float]]) -> str:
     # Markov-powered Text Generation Command
     config = await common.Config.load()
-    if config.chat.minmarkov > config.chat.maxmarkov:
+    if config.chat.minmarkov.value > config.chat.maxmarkov.value:
         error_message = "Markov minimum length cannot be greater than maximum length (config issue)"
         raise ValueError(error_message)
 
     chosen_tokens: list[str] = []
     rng = np.random.default_rng()
-    while (num_tokens := len(chosen_tokens)) < config.chat.maxmarkov:
+    while (num_tokens := len(chosen_tokens)) < config.chat.maxmarkov.value:
         prev_token: str = chosen_tokens[-1] if chosen_tokens else NULL_TOKEN
 
         token_list, probabilities = list(markov_chain[prev_token].keys()), list(markov_chain[prev_token].values())
         new_token: str = rng.choice(token_list, p=probabilities)
 
         if new_token == NULL_TOKEN:
-            if num_tokens < config.chat.minmarkov:
+            if num_tokens < config.chat.minmarkov.value:
                 chosen_tokens.clear()
                 continue
             break
@@ -230,17 +230,20 @@ async def generate_markov_text(markov_chain: dict[str, dict[str, float]]) -> str
 
 
 def clean_token(token: str) -> str:
-    # Remove paired characters like () and {} if they don't have a match on the other end of the token
+    """Return token with paired characters removed if they don't have a match on the other end of the token.
+
+    Paired characters include (), {}, [], and ""
+    """
     pair_list = [
         ('(', ')'),
         ('[', ']'),
-        ('"', '"'),
         ('{', '}'),
+        ('"', '"'),
     ]
 
     first_char = token[0]
     last_char = token[-1]
-    if first_char == ':' or last_char == ":":
+    if (first_char == ':' != last_char == ":") and len(token) < 5:
         # Don't remove unpaired characters from emoticons like :-) and (-:
         return token
 
@@ -255,6 +258,7 @@ def clean_token(token: str) -> str:
 
 
 async def get_chat_data_files() -> list[Path]:
+    """Load and return list of Telegram chat data .json files."""
     try:
         return [
             common.PATH_MARKOV_INPUT / Path(path)
@@ -267,7 +271,7 @@ async def get_chat_data_files() -> list[Path]:
 
 
 async def load_message_list(chat_files: list[Path]) -> list[str]:
-    # Load messages from list of .json files for use in building Markov chain.
+    """Load and return messages from list of .json files for use in building Markov chain."""
     message_list: list[str] = []
     for file in chat_files:
         logger.info(f"Processing {file}...")
@@ -306,8 +310,6 @@ def build_markov_chain(message_list: list[str]) -> dict[str, dict[str, float]]:
         token_list = [NULL_TOKEN, *token_list, NULL_TOKEN]
 
         for prev, curr in itertools.pairwise(token_list):
-            if prev == NULL_TOKEN and curr == NULL_TOKEN:
-                logger.debug(token_list)
             markov_chain[prev][curr] += 1
 
     markov_chain = dict(sorted(markov_chain.items(), key=lambda item: sum(item[1].values()), reverse=True))
@@ -328,7 +330,7 @@ async def parse_response_list_item(user_command: UserCommand, text: str) -> str:
 
     # Replace any instance of BOT_NAME_TOKEN with the name of the bot this message will be sent by
     config = await common.Config.load()
-    bot_name = config.main.botname
+    bot_name = config.main.botname.value
     text = text.replace(BOT_NAME_TOKEN, bot_name)
 
     """
