@@ -123,7 +123,7 @@ async def get_sound_dict() -> dict[str, Path]:
     sound_dict: dict[str, Path] = {}
 
     for f in await aiofiles.os.listdir(common.PATH_SOUNDS_FOLDER):
-        file = common.PATH_SOUNDS_FOLDER / Path(f)
+        file: Path = common.PATH_SOUNDS_FOLDER / Path(f)
         if file.suffix == '.mp3':
             sound_dict[file.stem] = file
 
@@ -302,28 +302,28 @@ async def coalesce_sound_name(name: str) -> str | None:
     return None
 
 
-async def get_sound_by_name(name: str, *, strict: bool) -> Path | list[str] | None:
-    # Get the dictionary of all sounds and the paths they're located at
+async def get_sound_candidates(search_string: str, max_candidates: int = 5) -> list[tuple[str, Path]]:
     sound_dict = await get_sound_dict()
 
-    if (sound_name := await coalesce_sound_name(name)) is not None:
-        return sound_dict[sound_name]
-
-    # If strict = True, then we require an exact match for sound/alias name
-    if strict:
-        return None
+    # If we have an exact match we return it immediately
+    if (sound_name := await coalesce_sound_name(search_string)) is not None:
+        item = (sound_name, sound_dict[sound_name])
+        return [item]
 
     # Find sounds/aliases that are close matches to the provided string
-    candidates = await search_sounds(name)
+    matches = await search_sounds(search_string)
+
+    candidates: list[tuple[str, Path]] = []
+    for item in matches:
+        sound_name = await coalesce_sound_name(item)
+        if sound_name is None:
+            continue
+
+        candidates.append((sound_name, sound_dict[sound_name]))
 
     # If there's more than 5 matches, then the search term is too general and we reject it
-    max_candidates = 5
-    if not candidates or len(candidates) > max_candidates:
-        return None
-
-    # If there's only 1 match, then we assume that's the intended sound and return it
-    if len(candidates) == 1:
-        return await get_sound_by_name(candidates[0], strict=True)  # Call recursively to handle aliases
+    if len(candidates) > max_candidates:
+        return []
 
     return candidates
 

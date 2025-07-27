@@ -14,7 +14,7 @@ import string
 import tomllib
 from collections.abc import AsyncGenerator, AsyncIterator, Iterable
 from pathlib import Path
-from typing import Any, Never, NoReturn
+from typing import Any, Never
 
 import aiofiles
 import aiofiles.os
@@ -289,17 +289,15 @@ class ConfigItem[T]:
             error_msg = "valid_range cannot be None if item is float or int"
             raise ConfigError(error_msg)
 
-    def __bool__(self) -> NoReturn:
-        error_msg = f"Use ConfigItem.value to access {self.name}'s value"
-        raise ValueError(error_msg)
+    def __bool__(self) -> bool:
+        if self.item_type is bool:
+            return bool(self.value)
 
-    def __str__(self) -> NoReturn:
         error_msg = f"Use ConfigItem.value to access {self.name}'s value"
         raise RuntimeError(error_msg)
 
-    def __repr__(self) -> NoReturn:
-        error_msg = f"Use ConfigItem.value to access {self.name}'s value"
-        raise RuntimeError(error_msg)
+    def __repr__(self) -> str:
+        return str(self.value)
 
     def validate_new_value(self, new_value: T) -> None:
         if not isinstance(new_value, self.item_type):
@@ -348,6 +346,9 @@ class ConfigMain(ConfigList):
 
         self.requireadmin = ConfigItem("requireadmin", default_value=True,
             description="Whether certain commands require admin rights to perform")
+
+        self.startupchecks = ConfigItem("startupchecks", default_value=True,
+            description="Whether tests should be performed upon startup to detect common issues")
 
         self.maxmessagelength = ConfigItem("maxmessagelength", default_value=1024, valid_range=(32, 4096),
             description="Maximum amount of characters to allow in a CommandResponse object's bot_message property")

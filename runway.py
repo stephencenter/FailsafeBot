@@ -10,7 +10,7 @@ startup.
 import logging
 import sys
 import types
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Callable, Generator
 from pathlib import Path
 
 import aiohttp
@@ -19,6 +19,7 @@ from loguru import logger
 from telegram.error import Conflict as TelegramConflict
 from telegram.error import NetworkError
 
+import command_list
 import common
 
 # Directories to check for and create if they don't exist
@@ -126,6 +127,17 @@ def init_logging() -> None:
         logger.opt(exception=(exc_type, exc_value, exc_traceback)).error("Unhandled exception")
 
     sys.excepthook = log_exceptions
+
+
+def check_unregistered_commands() -> Generator[str]:
+    cmd_list = [*(cmd[1] for cmd in command_list.COMMAND_LIST), *(cmd[1] for cmd in command_list.FILE_COMMAND_LIST)]
+    for obj in command_list.__dict__.values():
+        if not isinstance(obj, Callable):
+            continue
+
+        obj_name = obj.__name__
+        if obj_name.endswith("_command") and obj not in cmd_list:
+            yield f"Function '{obj_name}' is not registered in COMMAND_LIST or FILE_COMMAND_LIST"
 
 
 def check_for_untracked_paths() -> Generator[str]:

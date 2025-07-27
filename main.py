@@ -17,6 +17,7 @@ import command_list
 import common
 import runway
 import sound
+import unit_test
 
 
 async def prepare_runway() -> None:
@@ -29,30 +30,32 @@ async def prepare_runway() -> None:
     for info in runway.create_project_structure():
         logger.info(info)
 
-    # Clear temp folder if it isn't already
+    # Ensure temp folder is empty
     for info in runway.clear_temp_folder():
         logger.info(info)
 
-    # Check for any paths defined in common.py that weren't included in the above check
-    # (for debug purposes, this should never happen in production)
-    for warning in runway.check_for_untracked_paths():
-        logger.warning(warning)
-
-    for warning in command_list.check_unregistered_commands():
-        logger.warning(warning)
-
-    # Check for common issues with sound aliases
-    async for warning in sound.verify_aliases():
-        logger.warning(warning)
-
-    # Check for common issues with settings dataclasses
-    # (for debug purposes, this should never happen in production)
     config = await common.Config.load()
-    async for warning in config.verify_settings():
-        logger.warning(warning)
+    if config.main.startupchecks.value:
+        for warning in runway.check_unregistered_commands():
+            logger.warning(warning)
 
-    async for warning in runway.check_superadmins():
-        logger.warning(warning)
+        async for warning in sound.verify_aliases():
+            logger.warning(warning)
+
+        async for warning in runway.check_superadmins():
+            logger.warning(warning)
+
+        # For debug purposes, this should never happen in production
+        for warning in runway.check_for_untracked_paths():
+            logger.warning(warning)
+
+        # For debug purposes, this should never happen in production
+        async for warning in config.verify_settings():
+            logger.warning(warning)
+
+        async for result in unit_test.perform_tests():
+            if not result.passed:
+                logger.warning(result.result_string)
 
 
 async def try_start_telegram_bot() -> command.TelegramBotAnn | None:

@@ -9,7 +9,7 @@ import io
 import os
 import random
 import sys
-from collections.abc import AsyncIterator, Callable, Generator
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import NoReturn
 
@@ -47,20 +47,22 @@ async def sound_command(user_command: UserCommand) -> CommandResponse:
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 
     # Parse the arguments the user provided for the sound name
-    sound_results = await sound.get_sound_by_name(sound_name, strict=False)
+    sound_results = await sound.get_sound_candidates(sound_name)
 
     user_message = f"Can you play the {sound_name} sound for me?"
 
     # Alert the user if the sound they requested does not exist
-    if sound_results is None:
+    if not sound_results:
         bot_message = random.choice(common.TXT_SOUND_NOT_FOUND)
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 
-    if isinstance(sound_results, list):
+    if len(sound_results) > 1:
         num_candidates = len(sound_results)
-        candidate_string = ', '.join(sound_results)
+        candidate_string = ', '.join(item[0] for item in sound_results)
         bot_message = f"There are {num_candidates} potential matches: {candidate_string}"
         return CommandResponse(user_message=user_message, bot_message=bot_message)
+
+    sound_name, sound_path = sound_results[0]
 
     # The bot has a 1 in 1000 chance of refusing to play a sound.
     # Have to keep the users on their toes
@@ -70,7 +72,7 @@ async def sound_command(user_command: UserCommand) -> CommandResponse:
     await sound.increment_playcount(user_command, sound_name)
 
     bot_message = f"Sure, here's the {sound_name} sound."
-    return SoundResponse(user_message=user_message, bot_message=bot_message, file_path=sound_results)
+    return SoundResponse(user_message=user_message, bot_message=bot_message, file_path=sound_path)
 
 
 async def randomsound_command(user_command: UserCommand) -> CommandResponse:
@@ -581,21 +583,24 @@ async def vcsound_command(user_command: UserCommand) -> CommandResponse:
     user_message = f"Can you play the {sound_name} sound in the voice channel?"
 
     # Alert the user if the sound they requested does not exist
-    sound_results = await sound.get_sound_by_name(sound_name, strict=False)
-    if sound_results is None:
-        return CommandResponse(user_message=user_message, bot_message=random.choice(common.TXT_SOUND_NOT_FOUND))
+    sound_results = await sound.get_sound_candidates(sound_name)
+    if not sound_results:
+        bot_message = random.choice(common.TXT_SOUND_NOT_FOUND)
+        return CommandResponse(user_message=user_message, bot_message=bot_message)
 
-    if isinstance(sound_results, list):
+    if len(sound_results) > 1:
         num_candidates = len(sound_results)
-        candidate_string = ', '.join(sound_results)
+        candidate_string = ', '.join(item[0] for item in sound_results)
         bot_message = f"There are {num_candidates} potential matches: {candidate_string}"
         return CommandResponse(user_message=user_message, bot_message=bot_message)
+
+    sound_name, sound_path = sound_results[0]
 
     # Stop the voice client if it's already playing a sound or stream
     if bot_voice_client.is_playing():
         bot_voice_client.stop()
 
-    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_results))   # type: ignore
+    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_path))  # type: ignore
     bot_voice_client.play(source, after=lambda e: logger.error(e) if e else None)
 
     await sound.increment_playcount(user_command, sound_name)
@@ -1171,7 +1176,7 @@ async def restart_command(user_command: UserCommand) -> NoReturn:
     await user_command.send_text_response("Restarting...")
 
     # This line halts operation of the program, meaning the return will never happen
-    return os.execv(sys.executable, ['python', *sys.argv])
+    os.execv(sys.executable, ['python', *sys.argv])
 
 
 @requireadmin
@@ -1535,14 +1540,3 @@ COMMAND_LIST: list[tuple[str, command.CommandAnn]] = [
 FILE_COMMAND_LIST: list[tuple[str, command.CommandAnn]] = [
     ("addsound", addsound_command),
 ]
-
-
-def check_unregistered_commands() -> Generator[str]:
-    cmd_list = [*(cmd[1] for cmd in COMMAND_LIST), *(cmd[1] for cmd in FILE_COMMAND_LIST)]
-    for obj in globals().values():
-        if not isinstance(obj, Callable):
-            continue
-
-        obj_name = obj.__name__
-        if obj_name.endswith("_command") and obj not in cmd_list:
-            yield f"Function '{obj_name}' is not registered in COMMAND_LIST or FILE_COMMAND_LIST"

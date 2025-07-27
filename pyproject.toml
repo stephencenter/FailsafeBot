@@ -1,6 +1,6 @@
 [project]
 name = "FailsafeBot"
-version = "v1.1.18"
+version = "v1.1.19"
 description = "Telegram and Discord chat bot"
 requires-python = ">=3.12"
 dependencies = [
@@ -12,6 +12,7 @@ dependencies = [
     "ffmpeg-python>=0.2.0",
     "httpx==0.27.2",
     "loguru>=0.7.3",
+    "multidict>=6.6.3",
     "numpy>=2.1.1",
     "openai>=1.88.0",
     "psutil>=6.0.0",
