@@ -1032,17 +1032,17 @@ async def setconfig_command(user_command: UserCommand) -> CommandResponse:
 
 @requireadmin
 async def resetconfig_command(user_command: UserCommand) -> CommandResponse:
-    user_message = "Can you tell me about that setting?"
+    user_message = "Can you reset that setting to default?"
 
     search_string = user_command.get_first_arg(lowercase=True)
     if search_string is None:
-        bot_message = "You need to provide a setting name to check."
+        bot_message = "You need to provide a setting name to reset."
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 
     config = await common.Config.load()
     group_name, setting_name, config_item = config.find_setting(search_string)
 
-    user_message = f"Can you tell me about the setting '{search_string}'?"
+    user_message = f"Can you reset the setting '{search_string}' to default?"
     if group_name is None or setting_name is None or config_item is None:
         bot_message = f"Couldn't find a setting called '{search_string}'."
         return CommandResponse(user_message=user_message, bot_message=bot_message)
