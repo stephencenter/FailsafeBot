@@ -14,6 +14,7 @@ import ffmpeg
 import filetype
 import strsimpy
 import yt_dlp
+from aiopath import AsyncPath
 from loguru import logger
 
 import command
@@ -106,10 +107,10 @@ async def save_new_sound(sound_name: str, sound_file: bytearray) -> None:
     await common.write_bytes_to_file(sound_path, sound_file)
 
 
-def del_sound_file(sound_name: str) -> None:
+async def del_sound_file(sound_name: str) -> None:
     """Delete the sound file with the given name from the file system."""
-    sound_path = (common.PATH_SOUNDS_FOLDER / sound_name).with_suffix('.mp3')
-    sound_path.unlink()
+    sound_path = AsyncPath(common.PATH_SOUNDS_FOLDER / sound_name)
+    await sound_path.with_suffix('.mp3').unlink()
 
 
 async def get_sound_dict() -> dict[str, Path]:

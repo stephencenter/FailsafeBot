@@ -178,7 +178,7 @@ async def delsound_command(user_command: UserCommand) -> CommandResponse:
         bot_message = random.choice(common.TXT_SOUND_NOT_FOUND)
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 
-    sound.del_sound_file(sound_to_delete)
+    await sound.del_sound_file(sound_to_delete)
 
     bot_message = f"The sound '{sound_to_delete}' has been banished to oblivion."
     return CommandResponse(user_message=user_message, bot_message=bot_message)
