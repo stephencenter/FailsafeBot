@@ -17,6 +17,7 @@ import discord
 import ffmpeg
 import httpx
 import psutil
+from aiopath import AsyncPath
 from discord import Member, VoiceState
 from discord.ext.commands import CommandInvokeError, CommandNotFound
 from elevenlabs.core.api_error import ApiError as ElevenLabsApiError
@@ -494,8 +495,8 @@ async def say_command(user_command: UserCommand) -> CommandResponse:
         error_message = "Failed to retrieve ElevenLabs key from file."
         return CommandResponse(user_message=user_message, bot_message=error_message)
 
-    if not isinstance(elevenlabs_response, Path | str):
-        error_message = f"ElevenLabs response was {type(elevenlabs_response)}, expected str or Path"
+    if not isinstance(elevenlabs_response, Path):
+        error_message = f"ElevenLabs response type was {type(elevenlabs_response)}, expected a Path"
         raise TypeError(error_message)
 
     bot_message = "Fine, I'll say your stupid phrase."
@@ -600,7 +601,7 @@ async def vcsound_command(user_command: UserCommand) -> CommandResponse:
     if bot_voice_client.is_playing():
         bot_voice_client.stop()
 
-    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_path))  # type: ignore
+    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(str(sound_path)))
     bot_voice_client.play(source, after=lambda e: logger.error(e) if e else None)
 
     await sound.increment_playcount(user_command, sound_name)
@@ -623,7 +624,7 @@ async def vcrandom_command(user_command: UserCommand) -> CommandResponse:
     if bot_voice_client.is_playing():
         bot_voice_client.stop()
 
-    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_path))  # type: ignore
+    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(str(sound_path)))
     bot_voice_client.play(source, after=lambda e: logger.error(e) if e else None)
 
     await sound.increment_playcount(user_command, sound_name)
@@ -858,6 +859,34 @@ async def reseteffects_command(user_command: UserCommand) -> CommandResponse:
 
     user_message = "Can you reset my active d10000 effects?"
     return CommandResponse(user_message=user_message, bot_message=f"Active effects reset for {username}.")
+
+
+async def eightball_command(user_command: UserCommand) -> CommandResponse:
+    response_options = [
+        "It is certain.",
+        "It is decidedly so.",
+        "Without a doubt.",
+        "Yes definitely.",
+        "You may rely on it.",
+        "As I see it, yes.",
+        "Most likely.",
+        "Outlook good.",
+        "Yes.",
+        "Signs point to yes.",
+        "Reply hazy, try again.",
+        "Ask again later.",
+        "Better not tell you now.",
+        "Cannot predict now.",
+        "Concentrate and ask again.",
+        "Don't count on it.",
+        "My reply is no.",
+        "My sources say no.",
+        "Outlook not so good.",
+        "Very doubtful.",
+    ]
+
+    user_message: str = user_command.get_user_message()
+    return CommandResponse(user_message=user_message, bot_message=random.choice(response_options))
 # endregion
 
 
@@ -1360,7 +1389,7 @@ async def getchatid_command(user_command: UserCommand) -> CommandResponse:
 
 @requiresuper
 async def getfile_command(user_command: UserCommand) -> CommandResponse:
-    file_path = Path(user_command.get_user_message())
+    file_path = AsyncPath(user_command.get_user_message())
     user_message = "Can you send me that file?"
 
     if str(file_path) == '.':
@@ -1368,7 +1397,7 @@ async def getfile_command(user_command: UserCommand) -> CommandResponse:
         return CommandResponse(user_message=user_message, bot_message=bot_message)
 
     user_message = f"Can you send me the file at {file_path}"
-    if file_path.exists() and file_path.is_file():
+    if await file_path.exists() and await file_path.is_file():
         return FileResponse(user_message=user_message, bot_message="Sure, here you go.", file_path=file_path)
 
     return CommandResponse(user_message=user_message, bot_message="Couldn't find a file at that path.")
@@ -1383,7 +1412,7 @@ async def discord_register_events(discord_bot: command.DiscordBotAnn) -> None:
     # This function assigns all of the event handlers to the discord bot
 
     @discord_bot.event
-    async def on_message(message: discord.Message) -> None:  # type: ignore
+    async def on_message(message: discord.Message) -> None:  # pyright: ignore[reportUnusedFunction]
         if message.author.bot:
             return
 
@@ -1396,7 +1425,7 @@ async def discord_register_events(discord_bot: command.DiscordBotAnn) -> None:
         await message_handler(context)
 
     @discord_bot.event
-    async def on_voice_state_update(_member: Member, _before: VoiceState, _after: VoiceState) -> None:  # type: ignore
+    async def on_voice_state_update(_member: Member, _before: VoiceState, _after: VoiceState) -> None:  # pyright: ignore[reportUnusedFunction]
         # This function automatically disconnects the bot if it's the only
         # member remaining in a voice channel
         config = await common.Config.load()
@@ -1417,7 +1446,7 @@ async def discord_register_events(discord_bot: command.DiscordBotAnn) -> None:
             await discord_bot.voice_clients[0].disconnect(force=False)
 
     @discord_bot.event
-    async def on_command_error(_: command.DiscordContextAnn, error: CommandInvokeError) -> None:  # type: ignore
+    async def on_command_error(_: command.DiscordContextAnn, error: CommandInvokeError) -> None:  # pyright: ignore[reportUnusedFunction]
         error = getattr(error, "original", error)
 
         # Suppress the error that happens if you try to use a command that doesn't exist
@@ -1514,6 +1543,7 @@ COMMAND_LIST: list[tuple[str, command.CommandAnn]] = [
     ("d10000", d10000_command),
     ("effects", effects_command),
     ("reseteffects", reseteffects_command),
+    ("8ball", eightball_command),
     ("trivia", trivia_command),
     ("guess", guess_command),
     ("triviarank", triviarank_command),

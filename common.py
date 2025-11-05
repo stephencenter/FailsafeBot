@@ -368,7 +368,7 @@ class ConfigChat(ConfigList):
             description="Chance for the bot to randomly reply to any message in the chat (0 -> 0%, 1.0 -> 100%)")
 
         self.gptmodel = ConfigItem("gptmodel", default_value="gpt-4o-mini",
-            description="What GPT model to use for AI chatting")
+            description="The GPT model to use for AI chatting")
 
         self.gpttemp = ConfigItem("gpttemp", default_value=1.0, valid_range=(0, 2),
             description="Temperature for GPT chat completions (0 to 2, values outside this will break)")

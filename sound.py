@@ -44,23 +44,20 @@ def stream_audio_from_url(url: str) -> dict[str, Any] | None:
         'logger': SilenceYTDL,
     }
 
-    with yt_dlp.YoutubeDL(ytdl_parameters) as ytdl:
-        data = ytdl.extract_info(url, download=False)  # type: ignore
-
-        if data is None:
-            return None
+    with yt_dlp.YoutubeDL(ytdl_parameters) as ytdl:  # pyright: ignore[reportArgumentType]
+        data = ytdl.extract_info(url, download=False)
 
         # If a playlist was provided, take the first entry
         if 'entries' in data:
             if data['entries']:
-                data = data['entries'][0]  # type: ignore
+                data = data['entries'][0]
             else:
                 return None
 
-        if not isinstance(data, dict):
+        if not data:
             return None
 
-        return data  # type: ignore
+        return dict(data)
 
 
 async def download_audio_from_url(url: str) -> Path | None:
@@ -84,23 +81,20 @@ async def download_audio_from_url(url: str) -> Path | None:
         'logger': SilenceYTDL,
     }
 
-    with yt_dlp.YoutubeDL(ytdl_parameters) as ytdl:
-        data = ytdl.extract_info(url, download=True)  # type: ignore
-
-        if data is None:
-            return None
+    with yt_dlp.YoutubeDL(ytdl_parameters) as ytdl:  # pyright: ignore[reportArgumentType]
+        data = ytdl.extract_info(url, download=True)
 
         # If a playlist was provided, take the first entry
         if 'entries' in data:
             if data['entries']:
-                data = data['entries'][0]  # type: ignore
+                data = data['entries'][0]
             else:
                 return None
 
-        if not isinstance(data, dict):
+        if not data:
             return None
 
-        original_filename = Path(ytdl.prepare_filename(data))  # type: ignore
+        original_filename = Path(ytdl.prepare_filename(data))
         return original_filename.with_suffix('.mp3')
 # endregion
 

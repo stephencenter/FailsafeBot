@@ -62,7 +62,7 @@ async def get_gpt_response(user_command: UserCommand) -> str:
     re_attempt_text = "Failed to get GPT response, trying again..."
     while attempt_counter < MAX_GPT_ATTEMPTS:
         gpt_completion = await openai_client.chat.completions.create(
-            messages=messages,  # type: ignore
+            messages=messages,  # pyright: ignore[reportArgumentType]
             model=config.chat.gptmodel.value,
             temperature=config.chat.gpttemp.value,
             max_completion_tokens=config.chat.gptmaxtokens.value,

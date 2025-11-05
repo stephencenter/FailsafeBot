@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import discord
+from aiopath import AsyncPath
 from discord.errors import HTTPException
 from discord.ext.commands import Bot as DiscordBot
 from discord.ext.commands import Context as DiscordContext
@@ -396,7 +397,7 @@ class UserCommand:
 
         # Delete the file that was sent if it was a temporary file
         if response.temp:
-            Path(response.file_path).unlink()
+            await AsyncPath(response.file_path).unlink()
 
     async def send_sound_response(self, response: SoundResponse, text: str | None) -> None:
         if isinstance(self.context, TelegramContext) and isinstance(self.update, TelegramUpdate):
@@ -417,7 +418,7 @@ class UserCommand:
 
         # Delete the file that was sent if it was a temporary file
         if response.temp:
-            Path(response.file_path).unlink()
+            await AsyncPath(response.file_path).unlink()
 
     def is_telegram(self) -> bool:
         """Return whether this UserCommand object was sent to a Telegram bot or not."""
@@ -491,7 +492,7 @@ class CommandResponse:
 class FileResponse(CommandResponse):
     """Subclass of CommandResponse for when the response has a file attached."""
 
-    file_path: str | Path  # Path of file relative to script
+    file_path: Path  # Path of file relative to script
     temp: bool = field(default=False)  # Whether the file should be deleted after its sent
     record_memory: bool = field(default=True)
     send_chat: bool = field(default=False)
@@ -595,7 +596,7 @@ def requireadmin(function: CommandAnn) -> CommandAnn:
 
         return await function(user_command)
 
-    admin_wrapper.requireadmin = True  # type: ignore | Used to flag whether a function requries admin rights or not
+    admin_wrapper.requireadmin = True  # pyright: ignore[reportAttributeAccessIssue]
     return admin_wrapper
 
 
@@ -613,7 +614,7 @@ def requiresuper(function: CommandAnn) -> CommandAnn:
 
         return await function(user_command)
 
-    superadmin_wrapper.requiresuper = True  # type: ignore | Used to flag whether a function requries superadmin rights or not
+    superadmin_wrapper.requiresuper = True  # pyright: ignore[reportAttributeAccessIssue]
     return superadmin_wrapper
 
 

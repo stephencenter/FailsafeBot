@@ -25,7 +25,8 @@
       "**.csv": true,
       "**desktop.ini": true,
       "Test/": true,
-      "**/target": true
+      "**/target": true,
+      "Tools/wheels": true
    },
 
    "python.analysis.typeCheckingMode": "strict",
